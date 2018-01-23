@@ -25,3 +25,5 @@ ori_tuning.tavg_response = tavg_response;
 ori_tuning.mean_tavg_response = mean_tavg_response;
 ori_tuning.mean_tavg_response_hi = mean_tavg_response_hi;
 ori_tuning.mean_tavg_response_lo = mean_tavg_response_lo;
+ori_tuning.toplot = 1:size(response,1);
+save([ROIfile '_tuning_object'],ori_tuning)
