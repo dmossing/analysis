@@ -138,8 +138,19 @@ def plotstacked(arr,offset=1):
 
 def trialize(arr,frm,nbefore=15,nafter=30):
     triallen = np.diff(frm,axis=1)
-    triallen = np.round(triallen.mean())
+    triallen = np.round(triallen.mean()).astype('int')
     trialwise = np.zeros((frm.shape[0],triallen+nbefore+nafter))
     for i in range(trialwise.shape[0]):
         trialwise[i,:] = arr[frm[i,0]-nbefore:frm[i,0]+triallen+nafter]
     return trialwise
+
+def resample(signal1,trig1,trig2):
+        assert(trig1.sum()==trig2.sum())
+        frametrig1 = np.where(trig1)[0]
+        frametrig2 = np.where(trig2)[0]
+        signal2 = np.zeros_like(trig2)
+        for i,tr in enumerate(frametrig1[:-1]):
+            ptno1 = frametrig1[i+1]-frametrig1[i]
+            ptno2 = frametrig2[i+1]-frametrig2[i]
+            signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
+        return signal2[frametrig2[0]:frametrig2[-1]]
