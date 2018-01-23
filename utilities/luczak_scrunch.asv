@@ -1,0 +1,29 @@
+function [L,idx] = luczak_scrunch(M)
+% M is an NxN matrix describing pairwise relationships between N variables.
+% L is the same matrix, with the row and column indices shuffled to scrunch
+% M along the diagonal.
+
+assert(size(M,1)==size(M,2));
+N = size(M,1);
+
+%% fit sorted off-diagonal coefficients in each row to a single exponential. 
+
+Msorted = fliplr(sortrows(M(~eye(N))); % sort off-diagonals in each row of M in descending order
+to_fit = mean(Msorted(:,1:end-1),1);
+f = fit(1:N-1,to_fit,'exp1');
+
+%% construct a Toeplitz matrix with exp. decaying coefficients.
+
+T = zeros(N);
+for k=1:N-1
+    T((k*N+1):(N+1):end) = f.a*exp(k*f.b);
+end
+T = T + T';
+
+%% reshuffle rows and columns to minimize distance of M from T
+
+% need to figure out how to do this in MATLAB!
+
+distfun
+Mp = M;
+Mp(eye(N)) = 0;
