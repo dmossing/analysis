@@ -3,7 +3,7 @@ function run_alignment(foldname,lookfor)
         lookfor = '';
     end
     lookfor
-    d = dir([foldname '/*' lookfor '*.sbx'])
+    d = dir([foldname '/*.sbx'])
     for i=1:numel(d)
         fname = d(i).name
         filebase = strsplit(fname,'.sbx');
