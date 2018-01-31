@@ -35,13 +35,13 @@ catch
     info.frame = info.frame(info.frame<=maxframe);
 end
 load([stimfile '.mat'],'result')
-try
-    [NeuropilWeight, ROIdata] = determineNeuropilWeight(ROIdata);
-    Data = Data-repmat(NeuropilWeight,1,size(Neuropil,2)).*Neuropil;
-    Data = Data(:,1:end-1);
-catch
-    Data = Data(:,1:end-1);
-end
+% try
+NeuropilWeight = determineNeuropilWeight(ROIdata); % , ROIdata]
+Data = Data-repmat(NeuropilWeight,1,size(Neuropil,2)).*Neuropil;
+Data = Data(:,1:end-1);
+% catch
+%     Data = Data(:,1:end-1);
+% end
 dFoF = bsxfun(@rdivide, bsxfun(@minus, Data, ...
     prctile(Data, 30, 2)), prctile(Data, 30, 2));
 ROIno = size(dFoF,1);
