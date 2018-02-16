@@ -14,7 +14,7 @@ end
 try
     nslices = info.otparam(3);  % get the number of slices
 catch
-    nslices = 2;
+    nslices = 4;
 end
 
 d = dir(sprintf('%s.sbx',fn));   % get the number of bytes in file
