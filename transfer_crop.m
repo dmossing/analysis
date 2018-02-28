@@ -1,15 +1,19 @@
 function transfer_crop(fns1,fns2)
 fold1 = '';
 fold2 = '';
-if isdir(fns1)
-    d = dir([fns1 '/*.sbx']);
-    fold1 = fns1;
-    fns1 = {d(:).name};
+if isstr(fns1)
+    if isdir(fns1)
+        d = dir([fns1 '/*.sbx']);
+        fold1 = fns1;
+        fns1 = {d(:).name};
+    end
 end
-if isdir(fns2)
-    d = dir([fns2 '/*.sbx']);
-    fold2 = fns2;
-    fns2 = {d(:).name};
+if isstr(fns2)
+    if isdir(fns2)
+        d = dir([fns2 '/*.sbx']);
+        fold2 = fns2;
+        fns2 = {d(:).name};
+    end
 end
 assert(numel(fns1)==numel(fns2))
 for i=1:numel(fns1)

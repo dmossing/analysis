@@ -1,9 +1,14 @@
 function fixframes(foldname)
 fns = dir([foldname '/*ot*.rois']);
 fns = {fns(:).name};
-depthno = numel(fns);
-for i=1:depthno
-    fns{i} = fns{i}(1:end-5);
+prefix = cell(size(fns));
+for i=1:numel(fns)
+    temp = strsplit(fns{i},'_ot_');
+    prefix{i} = temp{1};
+end
+depthno = numel(fns)/numel(unique(prefix));
+for i=1:numel(fns)
+    fns{i} = [foldname '/' fns{i}(1:end-5)];
     load([fns{i} '.rois'],'-mat','ROIdata')
     load([fns{i} '.mat'],'info')
     if ~isfield(info,'frameCorrected') || ~info.frameCorrected

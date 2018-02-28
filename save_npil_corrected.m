@@ -5,7 +5,7 @@ end
 fnames = dir([foldname '/*.rois']);
 fnames = {fnames(:).name};
 for i=1:numel(fnames)
-    name = fnames{i};
+    name = [foldname '/' fnames{i}];
     load(name,'-mat','Data','Neuropil','ROIdata')
     if newoption
         [corrected,baseline,neuropilMultiplier] = neuropilRR(Data,Neuropil);

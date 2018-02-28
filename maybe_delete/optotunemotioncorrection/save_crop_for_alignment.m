@@ -1,21 +1,23 @@
 function save_crop_for_alignment(fns)
-if isdir(fns)
-    d = dir([fns '/*.sbx']);
-    fns = {d(:).name};
+if isstring(fns)
+    if isdir(fns)
+        d = dir([fns '/*.sbx']);
+        fns = {d(:).name};
+    end
 end
 for i=1:numel(fns)
     fname = fns{i};
-	if fname(end-3:end) == '.sbx'
-		fname = fname(1:end-4);
-	end
+    if fname(end-3:end) == '.sbx'
+        fname = fname(1:end-4);
+    end
     load([fname '.mat'])
     imgtocrop = sbxreadpacked(fname,1,1);
     if numel(size(imgtocrop))==3
         imgtocrop = squeeze(imgtocrop(1,:,:));
     end
     [~, ~, rect] = crop(imgtocrop, true);
-%     [~, ~, rect] = crop(load2P([fname '.sbx'],'Frames',2), true);
-%     [~, ~, rect] = crop(sbxreadpacked(fname,1,1), true);
+    %     [~, ~, rect] = crop(load2P([fname '.sbx'],'Frames',2), true);
+    %     [~, ~, rect] = crop(sbxreadpacked(fname,1,1), true);
     %         rect = round([rect(3),rect(3)+rect(4),rect(1),rect(1)+rect(2)]);
     rect = [rect(2),rect(2)+rect(4),rect(1),rect(1)+rect(3)];
     rect(1) = max(rect(1),1);

@@ -20,15 +20,21 @@ def norm01(arr,dim=1):
 def zscore(arr):
     # zscore each row of arr
     if len(arr.shape)==1:
-        mn = arr.mean()
-        st = arr.std()
+        mn = np.nanmean(arr)
+        st = np.nanstd(arr)
+#        mn = arr.mean()
+#        st = arr.std()
     elif len(arr.shape)==2:
-        mn = arr.mean(1)[:,np.newaxis]
-        st = arr.std(1)[:,np.newaxis]
+        mn = np.nanmean(arr,axis=1)[:,np.newaxis]
+        st = np.nanstd(arr,axis=1)[:,np.newaxis]
+        #mn = arr.mean(1)[:,np.newaxis]
+        #st = arr.std(1)[:,np.newaxis]
     elif len(arr.shape)==3:
         aux = arr.reshape((arr.shape[0],-1))
-        mn = aux.mean(1)[:,np.newaxis,np.newaxis]
-        st = aux.std(1)[:,np.newaxis,np.newaxis]
+        mn = np.nanmean(aux,axis=1)[:,np.newaxis,np.newaxis]
+        st = np.nanstd(aux,axis=1)[:,np.newaxis,np.newaxis]
+        #mn = aux.mean(1)[:,np.newaxis,np.newaxis]
+        #st = aux.std(1)[:,np.newaxis,np.newaxis]
     return (arr-mn)/st
 
 def threeand(a,b,c):
@@ -137,11 +143,13 @@ def plotstacked(arr,offset=1):
     plt.plot(arr+addto)
 
 def trialize(arr,frm,nbefore=15,nafter=30):
+    if len(frm.shape)==1:
+        frm = frm.reshape((-1,2))
     triallen = np.diff(frm,axis=1)
     triallen = np.round(triallen.mean()).astype('int')
-    trialwise = np.zeros((frm.shape[0],triallen+nbefore+nafter))
-    for i in range(trialwise.shape[0]):
-        trialwise[i,:] = arr[frm[i,0]-nbefore:frm[i,0]+triallen+nafter]
+    trialwise = np.zeros((arr.shape[0],frm.shape[0],triallen+nbefore+nafter))
+    for i in range(trialwise.shape[1]):
+        trialwise[:,i,:] = arr[:,frm[i,0]-nbefore:frm[i,0]+triallen+nafter]
     return trialwise
 
 def resample(signal1,trig1,trig2):
