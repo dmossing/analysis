@@ -6,7 +6,7 @@ for i=1:numel(fns)
     temp = strsplit(fns{i},'_ot_');
     prefix{i} = temp{1};
 end
-depthno = numel(fns)/numel(unique(prefix));
+depthno = 4; % numel(fns)/numel(unique(prefix)); % TEMPORARY 3/21/18
 for i=1:numel(fns)
     fns{i} = [foldname '/' fns{i}(1:end-5)];
     load([fns{i} '.rois'],'-mat','ROIdata')

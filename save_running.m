@@ -18,10 +18,18 @@ for i=1:numel(fnames)
             load([roifoldname '/' strrep(othername,'.bin','.rois')],'-mat','Data')
             load([roifoldname '/' strrep(othername,'.bin','.mat')],'info')
         end
-        dxdt = resamplebytrigs(dx_dt,size(Data,2),find(stim_trigger),info.frame(info.event_id==1));
+        frm = info.frame(info.event_id==1);
+        frm_run = find(stim_trigger);
+        [ufrm,uidx] = unique(frm);
+        if numel(ufrm)~=numel(frm)
+            frm = frm(uidx);
+            frm_run = frm_run(uidx);
+        end
+        dxdt = resamplebytrigs(dx_dt,size(Data,2),frm_run,frm); %find(stim_trigger),info.frame(info.event_id==1));
         %     save([runfoldname '/' strrep(name,'.bin','_running.mat')],'dxdt')
+        save([roifoldname '/' strrep(othername,'.bin','.rois')],'-mat','-append','dxdt')
         trialrun = trialize(dxdt,info.frame(info.event_id==1),nbefore,nafter);
-        save([roifoldname '/' strrep(othername,'.bin','.rois')],'-mat','-append','dxdt','trialrun')
+        save([roifoldname '/' strrep(othername,'.bin','.rois')],'-mat','-append','trialrun')
     catch
         warning(['unable to save running data for ' fnames{i}])
     end

@@ -97,21 +97,46 @@ addpath(genpath('~/Documents/code/adesnaq'))
 % %     'M7254/ot/M7254_125_005_ot_002','M7254/ot/M7254_125_004_ot_002';
 % %     'M7254/ot/M7254_125_005_ot_003','M7254/ot/M7254_125_004_ot_003'};
 
-fns_all = {'M7307/ot/M7307_120_002_ot_000','M7307/ot/M7307_120_003_ot_000'; ...
-    'M7307/ot/M7307_120_002_ot_001','M7307/ot/M7307_120_003_ot_001'; ...
-    'M7307/ot/M7307_120_002_ot_002','M7307/ot/M7307_120_003_ot_002'; ...
-    'M7307/ot/M7307_120_002_ot_003','M7307/ot/M7307_120_003_ot_003'};
+% fns_all = {'M7307/ot/M7307_120_002_ot_000','M7307/ot/M7307_120_003_ot_000'; ...
+%     'M7307/ot/M7307_120_002_ot_001','M7307/ot/M7307_120_003_ot_001'; ...
+%     'M7307/ot/M7307_120_002_ot_002','M7307/ot/M7307_120_003_ot_002'; ...
+%     'M7307/ot/M7307_120_002_ot_003','M7307/ot/M7307_120_003_ot_003'};
 
-fns_all = dir('*.segment');
-fns_all = {fns_all(:).name};
-for i=1:numel(fns_all)
-    fns_all{i} = strrep(fns_all{i},'.segment','');
-end
-fns_all = fns_all(:);
+% fns_all = {'M7874_140_002_ot_000','M7874_140_003_ot_000', ...
+% 'M7874_140_004_ot_000'};
+
+% fns_all = {'M7194_999_000_ot_000';'M7194_999_000_ot_001'; ...
+% 'M7194_999_000_ot_002';'M7194_999_000_ot_003'};
+% fns_all = {'M7955_000_000_ot_000','M7955_000_001_ot_000', ...
+% 'M7955_000_002_ot_000'};
+% fns_all = {'M7955_000_000_ot_000','M7955_000_001_ot_000'}; %, ...
+% fns_all = {'M7955_000_002_ot_000','M7955_000_003_ot_000'};%
+% fns_all = {'M7955_000_002_ot_001','M7955_000_003_ot_001'};%
+% fns_all = {'M7955_000_002_ot_002','M7955_000_003_ot_002'; ...
+%     'M7955_000_002_ot_003','M7955_000_003_ot_003'};
+% fns_all = {'M8570_150_002_ot_001','M8570_151_001_ot_001','M8570_151_002_ot_001'; ...
+%     'M8570_150_002_ot_002','M8570_151_001_ot_002','M8570_151_002_ot_002'; ...
+%     'M8570_150_002_ot_003','M8570_151_001_ot_003','M8570_151_002_ot_003'};
+
+fns_all = {'M7955_000_001_ot_000', 'M7955_000_001_ot_001',...
+    'M7955_000_001_ot_002', 'M7955_000_001_ot_003'};
+
+% fns_all = {'M7955_150_000_ot_000','M7955_150_001_ot_000';
+%     'M7955_150_000_ot_001','M7955_150_001_ot_001';
+%     'M7955_150_000_ot_002','M7955_150_001_ot_002';
+%     'M7955_150_000_ot_003','M7955_150_001_ot_003'};
+
+
+% fns_all = dir('*.segment');
+% fns_all = {fns_all(:).name};
+% for i=1:numel(fns_all)
+%     fns_all{i} = strrep(fns_all{i},'.segment','');
+% end
+% fns_all = fns_all(:);
 
 %%
 
-j = 4;
+j = 1;
 
 fns = fns_all(j,:);
 
@@ -161,6 +186,7 @@ end
 for j=1:size(fns_all,1)
     % extract dFoF signals
     fns = fns_all(j,:);
+    N = numel(fns);
     for i=1:N
         ROIFile = [fns{i}, '.rois'];
         ROIdata = sbxDistribute(fns{i}, 'Save', 'SaveFile', ROIFile); % intialize struct
@@ -178,7 +204,7 @@ for j=1:size(fns_all,1)
         Frames = idDepth(sbxfname,[],'Depth',Depth)';
 %         frameno = size(T,1);
 %         [~, Data, Neuropil, ~] = extractSignals([fns{i},'.sbx'], ROIFile, 'all', 'Save', 'SaveFile', ROIFile, 'MotionCorrect', [fns{i},'.align'], 'Frames', Frames);
-        [~, Data, Neuropil, ~] = extractSignals(sbxfname, ROIFile, 'all', 'Save', 'SaveFile', ROIFile, 'MotionCorrect', [fns{i},'.align'], 'Frames', Frames);
+        [~, Data, Neuropil, ~] = extractSignals(sbxfname, ROIFile, 'all', 'Save', 'SaveFile', ROIFile, 'MotionCorrect', [fns{i},'.align']); %, 'Frames', Frames);
         save(ROIFile, 'Data', 'Neuropil', '-mat', '-append');
     end
 end

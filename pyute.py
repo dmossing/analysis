@@ -156,7 +156,7 @@ def resample(signal1,trig1,trig2):
         assert(trig1.sum()==trig2.sum())
         frametrig1 = np.where(trig1)[0]
         frametrig2 = np.where(trig2)[0]
-        signal2 = np.zeros_like(trig2)
+        signal2 = np.zeros(trig2.shape,dtype=signal1.dtype)
         for i,tr in enumerate(frametrig1[:-1]):
             ptno1 = frametrig1[i+1]-frametrig1[i]
             ptno2 = frametrig2[i+1]-frametrig2[i]
