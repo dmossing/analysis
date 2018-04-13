@@ -65,14 +65,20 @@ def shapeup(arr,variables):
     star = tuple([len(np.unique(var)) for var in variables])
     return arr[:,x].reshape((arr.shape[0],)+star+(-1,)+(arr.shape[-1],))
 
-def overlay_mg(a,b):
+def overlay_mg(a,b,normalize=True):
     # overlay 2 grayscale images, with image a as magenta and image b as green
-    #imr = (a-a.min())/(a.max()-a.min())
-    imr = norm01(a,dim=None)
-    #img = (b-b.min())/(b.max()-b.min())
-    img = norm01(b,dim=None)
-    #imb = ((a+b)-(a+b).min())/((a+b).max()-(a+b).min())
-    imb = norm01(a+b,dim=None)
+    if normalize:
+        imr = norm01(a,dim=None)
+        img = norm01(b,dim=None)
+        imb = norm01(a,dim=None)
+    else:
+        aux = np.concatenate((a[:,:,np.newaxis],b[:,:,np.newaxis]),axis=2)
+        aux = norm01(aux,dim=None)
+        a1 = aux[:,:,0]
+        b1 = aux[:,:,1] 
+        imr = a1
+        img = b1
+        imb = a1
     return np.dstack((imr,img,imb))
 
 def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):

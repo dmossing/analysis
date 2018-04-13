@@ -21,7 +21,9 @@ d = dir(sprintf('%s.sbx',fn));   % get the number of bytes in file
 nb = d(1).bytes;
 bytesperslice = nb/nslices;
 
-fid = fopen(d(1).name,'r');
+[filepath,name,ext] = fileparts(fn);
+
+fid = fopen([filepath d(1).name],'r');
 fids = zeros(1,nslices);
 sname = cell(1,nslices);
 

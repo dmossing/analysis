@@ -14,7 +14,7 @@ for i=1:numel(fnames)
             load([roifoldname '/' strrep(name,'.bin','.rois')],'-mat','Data')
             load([roifoldname '/' strrep(name,'.bin','.mat')],'info')
         catch
-            othername = strrep(name,'.bin','_ot_000.bin');
+            othername = strrep(name,'.bin','_ot_001.bin');
             load([roifoldname '/' strrep(othername,'.bin','.rois')],'-mat','Data')
             load([roifoldname '/' strrep(othername,'.bin','.mat')],'info')
         end
