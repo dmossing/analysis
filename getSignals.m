@@ -1,6 +1,6 @@
 function getSignals(fname)
-addpath(genpath('~/Documents/code/downloads/EvansCode'))
-addpath(genpath('~/Documents/code/downloads/ROISelection'))
+%addpath(genpath('~/Documents/code/downloads/EvansCode'))
+%addpath(genpath('~/Documents/code/downloads/ROISelection'))
 i = 1;
 fns{i} = fname;
 ROIFile = [fns{i}, '.rois'];

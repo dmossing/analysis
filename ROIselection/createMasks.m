@@ -44,7 +44,7 @@ while index<=length(varargin)
 end
 
 if ~exist('ROIMasks', 'var') || isempty(ROIMasks)
-    [ROIMasks,p] = uigetfile({'*.rois;*.segment'},'Select ROI file:',directory);
+    %[ROIMasks,p] = uigetfile({'*.rois;*.segment'},'Select ROI file:',directory);
     if isnumeric(ROIMasks)
         return
     end

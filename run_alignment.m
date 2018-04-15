@@ -27,7 +27,7 @@ function run_alignment(foldname,lookfor)
                     sbxAlignmaster([foldname '/' filebase],depth,info.rect);
                 catch
                     rect = [1 info.sz(1) 1 info.sz(2)];
-                    sbxAlignmaster([foldname '/' filebase],depth,rect);
+                    sbxAlignmaster([foldname '/' filebase],depth,rect)
                 end
             end
 %        catch
