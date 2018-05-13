@@ -1,5 +1,7 @@
 function fig = gen_roi_targeting_image(filename,roi_indices,img,texton,ax)
 
+figure
+
 if isstr(filename)
     load([filename '.rois'],'-mat','ROIdata');
     msk = make_msk(ROIdata.rois);
@@ -27,7 +29,6 @@ for i=1:roino
     mskbd(i) = b(1);
 end
 
-% figure
 imagesc(ax,img)
 hold on
 for i=1:roino

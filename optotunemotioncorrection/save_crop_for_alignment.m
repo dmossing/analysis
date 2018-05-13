@@ -1,7 +1,10 @@
 function save_crop_for_alignment(fns)
-if isdir(fns)
-    d = dir([fns '/*.sbx']);
-    fns = {d(:).name};
+try
+    if isdir(fns)
+        d = dir([fns '/*.sbx']);
+        fns = {d(:).name};
+    end
+catch
 end
 for i=1:numel(fns)
     fname = fns{i};

@@ -23,7 +23,7 @@ bytesperslice = nb/nslices;
 
 [filepath,name,ext] = fileparts(fn);
 
-fid = fopen([filepath d(1).name],'r');
+fid = fopen([filepath '/' d(1).name],'r');
 fids = zeros(1,nslices);
 sname = cell(1,nslices);
 
