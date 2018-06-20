@@ -52,13 +52,13 @@ config.header = {info};
 
 % Save frame dimensions
 if info.scanmode
-    config.Height = info.recordsPerBuffer;
+    config.Height = double(info.recordsPerBuffer);
 else
-    config.Height = 2*info.recordsPerBuffer;
+    config.Height = double(2*info.recordsPerBuffer);
 end
 if isfield(info,'scanbox_version') && info.scanbox_version >= 2
     try
-        config.Width = info.sz(2);
+        config.Width = double(info.sz(2));
     catch
         config.Width = 796;
     end
@@ -104,7 +104,7 @@ end
 % config.info = [];
 % config.MotionCorrected = false;
 try 
-    config.Depth = info.otparam(3); %should be (3), testing what happens if this goes back
+    config.Depth = double(info.otparam(3)); %should be (3), testing what happens if this goes back
 catch
     config.Depth = 1; % current default
 end

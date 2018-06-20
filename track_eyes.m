@@ -49,11 +49,17 @@ for i=1:numel(d)
 end
 ctr = zeros(frameno,2);
 area = zeros(frameno,1);
-img = imread([foldname '/' d(1).name]);
-figure;
-imshow(img)
-h = impoly;
-msk = h.createMask;
+if exist([foldname '/msk.mat'])
+    load([foldname '/msk.mat'],'msk')
+else
+    msk = draw_msk([foldname '/' d(1).name]);
+%     img = imread([foldname '/' d(1).name]);
+%     figure;
+%     imshow(img)
+%     h = impoly;
+%     msk = h.createMask;
+end
+
 % hg = hist(img(msk),0:255);
 % figure;
 % plot(hg)
@@ -99,3 +105,10 @@ for i=1:frameno
 end
 ctr(idxframe,:) = ctr;
 area(idxframe) = area;
+
+function msk = draw_msk(filename)
+img = imread(filename);
+figure;
+imshow(img)
+h = impoly;
+msk = h.createMask;

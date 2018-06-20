@@ -258,7 +258,7 @@ def gen_trialwise(datafiles,nbefore=0,nafter=0,blcutoff=5,blspan=3000,ds=10,rg=N
    #                 strialwise = s.copy()
     return trialwise,ctrialwise,strialwise,dfof
 
-def fit_2d_gaussian(locs,ret):
+def fit_2d_gaussian(locs,ret,verbose=False):
     
     def twoD_Gaussian(xy, xo, yo, amplitude, sigma_x, sigma_y, theta, offset):
         x = xy[0]
@@ -287,7 +287,8 @@ def fit_2d_gaussian(locs,ret):
             sqerror[i] = ((modeled-data)**2/popt[2]**2).sum()
             params[i] = popt
         except:
-            print("couldn't do "+str(i))
+            if verbose:
+                print("couldn't do "+str(i))
     paramdict = {}
     paramdict['sqerror'] = sqerror
     paramdict['xo'] = params[:,0]

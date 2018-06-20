@@ -9,3 +9,4 @@ end
 if nargin > 1 && ~isempty(runfoldname)
     save_running(runfoldname,foldname)
 end
+save_msk(foldname)
