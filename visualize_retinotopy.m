@@ -9,6 +9,7 @@ function visualize_retinotopy(maximg,xray)
 % maximg = prctile(reshape(xray,size(xray,1),size(xray,2),[]),95,3);
 subplot(1,2,1)
 imagesc(maximg)
+axis tight equal off
 anonMove = @(x,y) mouseMove(x,y,maximg,xray);
 set (gcf, 'WindowButtonMotionFcn', anonMove);
 
@@ -24,6 +25,7 @@ y = ceil(C(1,2));
 try
     subplot(1,2,2)
     imagesc(squeeze(xray(y,x,:,:)));
+    axis tight equal off
 catch
 end
 % h.CData = newimg;

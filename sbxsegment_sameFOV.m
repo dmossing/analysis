@@ -189,9 +189,39 @@ addpath(genpath('~/Documents/code/adesnaq'))
 %     'M8961_135_004_ot_002', 'M8961_135_005_ot_002', 'M8961_135_003_ot_002'; 
 %     'M8961_135_004_ot_003', 'M8961_135_005_ot_003', 'M8961_135_003_ot_003'};
 
-% /home/mossing/scratch/2Pdata/180618/M8956/ot
-fnbase = 'M8956_145';
-expts = {'003','002','004'};
+% % /home/mossing/scratch/2Pdata/180618/M8956/ot
+% fnbase = 'M8956_145';
+% expts = {'003','002','004'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% % /home/mossing/scratch/2Pdata/180618/M8956/ot
+% fnbase = 'M9053_150';
+% expts = {'005','006'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% % /home/mossing/scratch/2Pdata/180714/M9053/ot
+% fnbase = 'M9053_140';
+% expts = {'004','003','005'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% % /home/mossing/scratch/2Pdata/180715/M8959/ot
+% fnbase = 'M8959_080';
+% expts = {'004','003','005'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% % /home/mossing/scratch/2Pdata/180713/M8959/ot
+% fnbase = 'M9053_125';
+% expts = {'002','001','003'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% /home/mossing/scratch/2Pdata/180719/M8961/ot
+fnbase = 'M8961_150';
+expts = {'007','006','008'};
 ots = {'000','001','002','003'};
 fns_all = cell(numel(ots),numel(expts));
 

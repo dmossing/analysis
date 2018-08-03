@@ -11,6 +11,7 @@ import h5py
 import scipy.ndimage.filters as sfi
 from oasis.functions import deconvolve
 import scipy.optimize as sop
+import scipy.ndimage.measurements as snm
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -275,13 +276,25 @@ def fit_2d_gaussian(locs,ret,verbose=False):
     xx,yy = np.meshgrid(locs[0],locs[1])
     x = xx.flatten()
     y = yy.flatten()
-    initial_guess = (0,0,ret[0].max(),10,10,0,0)
+    msk_surr = np.zeros(ret.shape[1:3],dtype='bool')
+    msk_surr[0,:] = 1
+    msk_surr[:,0] = 1
+    msk_surr[-1,:] = 1
+    msk_surr[:,-1] = 1 
+    i = 0
+    if ret[i][msk_surr].mean()<ret[i].mean():
+        initial_guess = (0,0,ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
+    else:
+        initial_guess = (0,0,ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
     params = np.zeros((ret.shape[0],)+(len(initial_guess),))
     sqerror = np.zeros((ret.shape[0],))
     for i in range(ret.shape[0]):
         try:
             data = ret[i].flatten()
-            initial_guess = (0,0,data.max(),10,10,0,0)
+            if ret[i][msk_surr].mean()<ret[i].mean():
+                initial_guess = (0,0,ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
+            else:
+                initial_guess = (0,0,ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
             popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0 = initial_guess)
             modeled = twoD_Gaussian((x,y),*popt)
             sqerror[i] = ((modeled-data)**2/popt[2]**2).sum()
@@ -299,3 +312,62 @@ def fit_2d_gaussian(locs,ret,verbose=False):
     paramdict['theta'] = params[:,5]
     paramdict['offset'] = params[:,6]
     return paramdict
+
+def add_to_array(starting,to_add):
+    if starting.size:
+        return np.concatenate((starting,to_add),axis=0)
+    else:
+        return to_add
+
+def imshow_in_rows(arr,rowlen=10,scale=0.5):
+    nrows = np.ceil(arr.shape[0]/rowlen)
+    plt.figure(figsize=(scale*rowlen,scale*nrows))
+    for k in range(arr.shape[0]):
+        plt.subplot(nrows,rowlen,k+1)
+        plt.imshow(arr[k])
+        plt.axis('off')
+
+def imshow_in_pairs(arr1,arr2,rowlen=10,scale=0.5):
+    nrows = np.ceil(arr1.shape[0]/rowlen)
+    rowlen = rowlen*2
+    plt.figure(figsize=(scale*rowlen,scale*nrows))
+    for k in range(arr1.shape[0]):
+        mn = np.minimum(arr1[k].min(),arr2[k].min())
+        mx = np.maximum(arr1[k].max(),arr2[k].max())
+        plt.subplot(nrows,rowlen,2*k+1)
+        plt.imshow(arr1[k],vmin=mn,vmax=mx)
+        plt.axis('off')
+        plt.subplot(nrows,rowlen,2*k+2)
+        plt.imshow(arr2[k],vmin=mn,vmax=mx)
+        plt.axis('off')
+
+def dist_from_center(ret,gridsize=5,center=(0,0)):
+    com = np.zeros((ret.shape[0],2))
+    for i in range(ret.shape[0]):
+        com[i] = snm.center_of_mass(norm01(ret[i],dim=None))-np.array((ret.shape[1]-1)/2) # center def. as 0,0
+    d = gridsize*np.sqrt(np.sum((com-np.array(center))**2,axis=1))
+    return d
+
+def dict_select(dict_of_arrs,dict_of_inds):
+    keylist = list(dict_of_inds.keys())
+    total_inds = 0
+    for key in keylist:
+        total_inds = total_inds + dict_of_inds[key].sum()
+    template = dict_of_arrs[keylist[0]]
+    summary_arr = np.zeros((total_inds,)+template.shape[1:],dtype=template.dtype)
+    total_inds = 0
+    for key in keylist:
+        inds = dict_of_inds[key]
+        old_total_inds = total_inds
+        total_inds = total_inds+inds.sum()
+        summary_arr[old_total_inds:total_inds] = dict_of_arrs[key][inds]
+    return summary_arr
+
+def get_dict_of_booleans(dict_of_vals,fn):
+    dict_of_booleans = {}
+    for key in dict_of_vals.keys():
+        dict_of_booleans[key] = fn(dict_of_vals[key])
+    return dict_of_booleans
+
+def fn_select(dict_of_arrs,dict_of_vals,fn):
+    return dict_select(dict_of_arrs,get_dict_of_booleans(dict_of_vals,fn))

@@ -36,10 +36,14 @@ for i=1:numel(fnames)
         %     save([runfoldname '/' strrep(name,'.bin','_running.mat')],'dxdt')
         for j=1:ndepths
             save([roifoldname '/' othernames{j}],'-mat','-append','dxdt')
-            trialrun = trialize(dxdt,info.frame(info.event_id==1),nbefore,nafter);
-            save([roifoldname '/' othernames{j}],'-mat','-append','trialrun')
+            try
+                trialrun = trialize(dxdt,info.frame(info.event_id==1),nbefore,nafter);
+                save([roifoldname '/' othernames{j}],'-mat','-append','trialrun')
+            catch
+                disp(['could not trialize depth #' num2str(j)])
+            end
         end
-        catch
+    catch
         warning(['unable to save running data for ' fnames{i}])
     end
 end
