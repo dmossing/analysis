@@ -33,8 +33,8 @@ temp = squeeze(sbxread(filebase,1,1));
 % if ~mod(rect(4)-rect(3),2)
 %     rect(4) = rect(4)-1;
 % end
-options.big = true;
-options.append = true;
+options.big = false;
+options.append = false;
 
 % how many frames to load into memory at once
 ctr = 0;
@@ -61,9 +61,13 @@ for i=(1+twochan):chunksize:info.max_idx
     if twochan
         rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
         rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
-        mysaveastiff(rejig,tifffile,i==1);
+        %         mysaveastiff(rejig,tifffile,i==1);
+        saveastiff(rejig,tifffile,options); 
+        
     else
-        mysaveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,i==1);
+        %         mysaveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,i==1);
+        saveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,options); 
+        
     end
     ctr = ctr+1;
 end
