@@ -264,8 +264,8 @@ else % No GPU
         NeuropilMasks{rindex} = find(ROIdata.rois(ROIindex(rindex)).neuropilmask);
     end
     
-    parfor_progress(numel(FrameIndex));
-    for findex = FrameIndex %parfor
+    %parfor_progress(numel(FrameIndex));
+    parfor findex = FrameIndex %parfor
         
         % Load Frame
         [img, loadObj] = load2P(ImageFiles, 'Type', 'Direct', 'Frames', findex, 'Verbose', false); %direct
@@ -283,10 +283,10 @@ else % No GPU
         end
         
         % Update status
-        parfor_progress;
+        %parfor_progress;
         
     end %findex
-    parfor_progress(0);
+    %parfor_progress(0);
     
 end %GPU
 fprintf('\nFinished extracting signals for %d ROI(s) from %d frame(s)\nSession took: %.1f minutes\n', numROIs, numFrames, toc/60)

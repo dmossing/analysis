@@ -1,4 +1,4 @@
-function [m,v,T] = sbxAligniterative(fname,m0,rg1,rg2,thestd,gl,l,Frames,rect)
+function [m,v,T] = sbxAligniterative(fname,m0,rg1,rg2,thestd,gl,l,Frames,rect,c)
 
 
 
@@ -21,7 +21,7 @@ numFrames = size(Frames,2);
 
 T = zeros(numFrames,2);
 
-A = sbxreadpacked(fname,0,1);
+A = sbxchan0(sbxreadpacked(fname,0,1),c);
 
 m = zeros(length(rg1),length(rg2));
 
@@ -35,7 +35,7 @@ l = l(rg1,rg2);
 
 parfor ii = 1:numFrames
 
-    A = sbxreadpacked(fname,Frames(1,ii)-1,1);
+    A = sbxchan0(sbxreadpacked(fname,Frames(1,ii)-1,1),c);
     
     A = double(A(rg1,rg2));
 

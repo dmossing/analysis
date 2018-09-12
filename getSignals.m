@@ -14,6 +14,10 @@ else
     Depth = str2num(strbase{2}(1));
     strbase = strbase{1};
     config = load2PConfig([strbase, '.sbx']);
+    stopat = 0;
+    if stopat
+        config.Frames = min(config.Frames,stopat);
+    end
 %     Frames = idDepth([strbase,'.sbx'],[],'Depth',1)';
     [~, Data, Neuropil, ~] = extractSignals([strbase,'.sbx'], ROIFile, 'all', 'Save', 'MotionCorrect', [fns{i},'.align'], 'Depth',Depth); % 'SaveFile', ROIFile, % 'Frames', 1:config.Frames-1,
 end
