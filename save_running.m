@@ -1,7 +1,7 @@
 function save_running(runfoldname,roifoldname,nbefore,nafter)
 if nargin < 3
-    nbefore = 15;
-    nafter = 30;
+    nbefore = 4;
+    nafter = 8;
 end
 fnames = dir([runfoldname '/*.bin']);
 fnames = {fnames(:).name};
@@ -23,7 +23,11 @@ for i=1:numel(fnames)
                 othernames{j} = d(j).name;
             end
             load([roifoldname '/' othernames{1}],'-mat','Data')
-            load([roifoldname '/' strrep(othernames{1},'.rois','.mat')],'info')
+            try
+                load([roifoldname '/' strrep(othernames{1},'.rois','.mat')],'info')
+            catch
+                load([roifoldname '/' strrep(othernames{1},'_ot_000.rois','.mat')],'info')
+            end
         end
         frm = info.frame(info.event_id==1);
         frm_run = find(stim_trigger);

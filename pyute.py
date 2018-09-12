@@ -12,6 +12,7 @@ import scipy.ndimage.filters as sfi
 from oasis.functions import deconvolve
 import scipy.optimize as sop
 import scipy.ndimage.measurements as snm
+import re
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -182,8 +183,93 @@ def resample(signal1,trig1,trig2):
             signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
         return signal2[frametrig2[0]:frametrig2[-1]]
 
-def gen_trialwise(datafiles,nbefore=0,nafter=0,blcutoff=5,blspan=3000,ds=10,rg=None):
-    def tack_on(to_add,trialwise,ctrialwise,strialwise,dfof):
+#def gen_trialwise(datafiles,nbefore=0,nafter=0,blcutoff=5,blspan=3000,ds=10,rg=None):
+#    def tack_on(to_add,trialwise,ctrialwise,strialwise,dfof):
+#        to_add[np.isnan(to_add)] = 0
+#        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
+#        baseline = np.repeat(baseline,ds,axis=1)
+#        if baseline.shape[1]>to_add.shape[1]:
+#            baseline = baseline[:,:to_add.shape[1]]
+#        c = np.zeros_like(to_add)
+#        s = np.zeros_like(to_add)
+#        this_dfof = np.zeros_like(to_add)
+#        for i in range(c.shape[0]):
+#            this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+#            c[i],s[i],_,_,_  = deconvolve(this_dfof[i],penalty=1)
+#            to_add[np.isnan(to_add)] = 0
+#            to_add = trialize(to_add,frm,nbefore,nafter)
+#        c = trialize(c,frm,nbefore,nafter)
+#        s = trialize(s,frm,nbefore,nafter)
+#        try:
+#            trialwise = np.concatenate((trialwise,to_add),axis=0)
+#            ctrialwise = np.concatenate((ctrialwise,c),axis=0)
+#            strialwise = np.concatenate((strialwise,s),axis=0)
+#            dfof = np.concatenate((dfof,this_dfof),axis=0)
+#        except:
+#            trialwise = to_add.copy()
+#            ctrialwise = c.copy()
+#            strialwise = s.copy()
+#            dfof = this_dfof.copy()
+#        return trialwise,ctrialwise,strialwise,dfof
+#        
+#    trialwise = np.array(())
+#    ctrialwise = np.array(())
+#    strialwise = np.array(())
+#    dfof = np.array(())
+#    try:
+#        for datafile in datafiles:
+#            if not rg is None:
+#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]
+#            else:
+#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]
+#            to_add = sio.loadmat(datafile,squeeze_me=True)['corrected']
+#            trialwise,ctrialwise,strialwise,dfof = tack_on(to_add,trialwise,ctrialwise,strialwise,dfof)   
+#    except:
+#        for datafile in datafiles:
+#            if not rg is None:
+#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]
+#            else:
+#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]
+#            with h5py.File(datafile,mode='r') as f:
+#                to_add = f['corrected'][:].T[:,1:]
+#                print(to_add.shape)
+#                trialwise,ctrialwise,strialwise,dfof = tack_on(to_add,trialwise,ctrialwise,strialwise,dfof)   
+#   #             baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
+#   #             baseline = np.repeat(baseline,ds,axis=1)
+#   #             if baseline.shape[1]>to_add.shape[1]:
+#   #                 baseline = baseline[:,:to_add.shape[1]]
+#   #             c = np.zeros_like(to_add)
+#   #             s = np.zeros_like(to_add)
+#   #             to_add[np.isnan(to_add)] = 0
+#   #             for i in range(c.shape[0]):
+#   #                 dfof = (to_add[i]-baseline[i,:])/baseline[i,:]
+#   #                 try:
+#   #                     c[i],s[i],_,_,_  = deconvolve(dfof,penalty=1)
+#   #                 except:
+#   #                     print("in "+datafile+" couldn't do "+str(i))
+#   #             to_add = trialize(to_add,frm,nbefore,nafter)
+#   #             c = trialize(c,frm,nbefore,nafter)
+#   #             s = trialize(s,frm,nbefore,nafter)
+#   #             try:
+#   #                 trialwise = np.concatenate((trialwise,to_add),axis=0)
+#   #                 ctrialwise = np.concatenate((ctrialwise,c),axis=0)
+#   #                 strialwise = np.concatenate((strialwise,s),axis=0)
+#   #             except:
+#   #                 trialwise = to_add.copy()
+#   #                 ctrialwise = c.copy()
+#   #                 strialwise = s.copy()
+#    return trialwise,ctrialwise,strialwise,dfof
+
+def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds=10,rg=None):
+    
+    def tack_on(to_add,existing):
+        try:
+            existing = np.concatenate((existing,to_add),axis=0)
+        except:
+            existing = to_add.copy()
+        return existing
+    
+    def process(to_add):
         to_add[np.isnan(to_add)] = 0
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
         baseline = np.repeat(baseline,ds,axis=1)
@@ -195,68 +281,31 @@ def gen_trialwise(datafiles,nbefore=0,nafter=0,blcutoff=5,blspan=3000,ds=10,rg=N
         for i in range(c.shape[0]):
             this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
             c[i],s[i],_,_,_  = deconvolve(this_dfof[i],penalty=1)
-            to_add[np.isnan(to_add)] = 0
-            to_add = trialize(to_add,frm,nbefore,nafter)
+        to_add = trialize(to_add,frm,nbefore,nafter)
         c = trialize(c,frm,nbefore,nafter)
         s = trialize(s,frm,nbefore,nafter)
-        try:
-            trialwise = np.concatenate((trialwise,to_add),axis=0)
-            ctrialwise = np.concatenate((ctrialwise,c),axis=0)
-            strialwise = np.concatenate((strialwise,s),axis=0)
-            dfof = np.concatenate((dfof,this_dfof),axis=0)
-        except:
-            trialwise = to_add.copy()
-            ctrialwise = c.copy()
-            strialwise = s.copy()
-            dfof = this_dfof.copy()
-        return trialwise,ctrialwise,strialwise,dfof
+        return to_add,c,s,this_dfof
         
     trialwise = np.array(())
     ctrialwise = np.array(())
     strialwise = np.array(())
     dfof = np.array(())
-    try:
-        for datafile in datafiles:
-            if not rg is None:
-                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]
-            else:
-                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]
+    for datafile in datafiles:
+        if not rg is None:
+            frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]-1
+        else:
+            frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]-1
+        try:
             to_add = sio.loadmat(datafile,squeeze_me=True)['corrected']
-            trialwise,ctrialwise,strialwise,dfof = tack_on(to_add,trialwise,ctrialwise,strialwise,dfof)   
-    except:
-        for datafile in datafiles:
-            if not rg is None:
-                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]
-            else:
-                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]
+        except:
             with h5py.File(datafile,mode='r') as f:
-                to_add = f['corrected'][:].T[:,1:]
-                print(to_add.shape)
-                trialwise,ctrialwise,strialwise,dfof = tack_on(to_add,trialwise,ctrialwise,strialwise,dfof)   
-   #             baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-   #             baseline = np.repeat(baseline,ds,axis=1)
-   #             if baseline.shape[1]>to_add.shape[1]:
-   #                 baseline = baseline[:,:to_add.shape[1]]
-   #             c = np.zeros_like(to_add)
-   #             s = np.zeros_like(to_add)
-   #             to_add[np.isnan(to_add)] = 0
-   #             for i in range(c.shape[0]):
-   #                 dfof = (to_add[i]-baseline[i,:])/baseline[i,:]
-   #                 try:
-   #                     c[i],s[i],_,_,_  = deconvolve(dfof,penalty=1)
-   #                 except:
-   #                     print("in "+datafile+" couldn't do "+str(i))
-   #             to_add = trialize(to_add,frm,nbefore,nafter)
-   #             c = trialize(c,frm,nbefore,nafter)
-   #             s = trialize(s,frm,nbefore,nafter)
-   #             try:
-   #                 trialwise = np.concatenate((trialwise,to_add),axis=0)
-   #                 ctrialwise = np.concatenate((ctrialwise,c),axis=0)
-   #                 strialwise = np.concatenate((strialwise,s),axis=0)
-   #             except:
-   #                 trialwise = to_add.copy()
-   #                 ctrialwise = c.copy()
-   #                 strialwise = s.copy()
+                to_add = f['corrected'][:].T
+        to_add,c,s,this_dfof = process(to_add)
+        trialwise = tack_on(to_add,trialwise)
+        ctrialwise = tack_on(c,ctrialwise)
+        strialwise = tack_on(s,strialwise)
+        dfof = tack_on(this_dfof,dfof)
+
     return trialwise,ctrialwise,strialwise,dfof
 
 def fit_2d_gaussian(locs,ret,verbose=False):
@@ -349,6 +398,7 @@ def dist_from_center(ret,gridsize=5,center=(0,0)):
     return d
 
 def dict_select(dict_of_arrs,dict_of_inds):
+    # arrays are stored in a dict, and sets of indices to them are stored in a dict. Create a stitched together array (along axis 0) containing the concatenated arr[ind]
     keylist = list(dict_of_inds.keys())
     total_inds = 0
     for key in keylist:
@@ -364,10 +414,132 @@ def dict_select(dict_of_arrs,dict_of_inds):
     return summary_arr
 
 def get_dict_of_booleans(dict_of_vals,fn):
+    # fn returns a logical. Go through a dict of arrs, and select which entries satisfy fn(arr)
     dict_of_booleans = {}
     for key in dict_of_vals.keys():
         dict_of_booleans[key] = fn(dict_of_vals[key])
     return dict_of_booleans
 
 def fn_select(dict_of_arrs,dict_of_vals,fn):
+    # fn returns a logical. Select the entries in arrs in dict A, where the entries of arrs in dict B satisfy fn(arrB)
     return dict_select(dict_of_arrs,get_dict_of_booleans(dict_of_vals,fn))
+
+def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,nafter=8,continuous=False):
+    
+    def convert_frame_line(frame,line,nlines,nplanes,continuous=False,matlab_format=True):
+        
+        def repeat_internal_values(x):
+            return np.concatenate((x,np.repeat(x[1:-1],2),x[-1]),axis=None)
+        
+        if matlab_format:
+            frame = frame-1
+            line = line-1
+        if continuous: # no dead time between stims; the end of one is the start of the next
+            frame = repeat_internal_values(frame)
+            line = repeat_internal_values(line)
+        frame = frame.reshape((-1,2))
+        line = line.reshape((-1,2))
+        new_frame = np.floor(frame/nplanes).astype('int')
+        new_line = line + np.remainder(frame,nplanes)*nlines
+        new_nlines = nlines*nplanes
+        
+        return new_frame,new_line,new_nlines
+    
+    frame,line,nlines = convert_frame_line(frame,line,nlines,nplanes,continuous=continuous)
+    
+    trigtime = frame+line/nlines
+    triallen = np.diff(trigtime,axis=1)
+    trigrate = np.mean(triallen)
+    interpbetweentrigs = int(np.round(trigrate))
+    roitime = roilines/nlines
+    desired_offsets = np.arange(-nbefore,interpbetweentrigs+nafter) # frames relative to each trigger to sample
+    
+    trialwise = np.zeros((traces.shape[0],trigtime.shape[0],desired_offsets.size))
+    for cell in range(traces.shape[0]):
+        for trial in range(trigtime.shape[0]):
+            desired_frames = frame[trial,0]+desired_offsets
+            trialwise[cell,trial] = np.interp(trigtime[trial,0]+desired_offsets,desired_frames+roitime[cell],traces[cell][desired_frames])
+    
+    return trialwise
+
+def loadmat(filename,desired_vars):
+    
+    # take either a single string as input, or a tuple/list of strings. In the first case, the variable value is returned. In the second case, a tuple is returned.
+    tuple_flag = True
+    if type(desired_vars) is list:
+        desired_vars = tuple(desired_vars)
+    if not type(desired_vars) is tuple:
+        tuple_flag = False
+        desired_vars = (desired_vars,)
+        
+    try:
+        matfile = sio.loadmat(filename,squeeze_me=True)
+        to_return = tuple([matfile[var] for var in desired_vars])
+    except:
+        with h5py.File(filename,mode='r') as f:
+            to_return = tuple([f[var][:].T for var in desired_vars])
+            
+    if not tuple_flag:
+        to_return = to_return[0]
+        
+    return to_return
+
+def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds=10,rg=None):
+    
+    def tack_on(to_add,existing):
+        try:
+            existing = np.concatenate((existing,to_add),axis=0)
+        except:
+            existing = to_add.copy()
+        return existing
+    
+    def process(to_add,roilines):
+        to_add = to_add.astype(np.float64)
+        to_add[np.isnan(to_add)] = 0
+        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
+        baseline = np.repeat(baseline,ds,axis=1)
+        if baseline.shape[1]>to_add.shape[1]:
+            baseline = baseline[:,:to_add.shape[1]]
+        c = np.zeros_like(to_add)
+        s = np.zeros_like(to_add)
+        this_dfof = np.zeros_like(to_add)
+        for i in range(c.shape[0]):
+            try:
+                this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+                c[i],s[i],_,_,_  = deconvolve(this_dfof[i],penalty=1)
+            except:
+                print("couldn't do "+str(i))
+        to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        c = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        s = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        return to_add,c,s,this_dfof
+        
+    trialwise = np.array(())
+    ctrialwise = np.array(())
+    strialwise = np.array(())
+    dfof = np.array(())
+    for datafile in datafiles:
+        thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
+        info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
+        frm = info['frame'][()]
+        line = info['line'][()]
+        if not rg is None:
+            frm = frm[rg[0]:rg[1]]
+            line = line[rg[0]:rg[1]]
+        (to_add,ctr) = loadmat(datafile,('corrected','ctr'))
+        nlines = loadmat(datafile,'msk').shape[0]
+        roilines = ctr[0] + nlines*thisdepth
+        to_add,c,s,this_dfof = process(to_add,roilines)
+        trialwise = tack_on(to_add,trialwise)
+        ctrialwise = tack_on(c,ctrialwise)
+        strialwise = tack_on(s,strialwise)
+        dfof = tack_on(this_dfof,dfof)
+
+    return trialwise,ctrialwise,strialwise,dfof
+
+def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt):
+    errorplus = ub_tgt-mn_tgt
+    errorminus = mn_tgt-lb_tgt
+    errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
+    for i in range(mn_tgt.shape[0]):
+        plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:])
