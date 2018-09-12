@@ -1,11 +1,12 @@
 function [] = sbxComputeci(fname,Depth,rect)
 
+    channel = 1; % always compute these stats on the green channel
 
     if ~exist('rect','var')
         rect = [];
     end
     if isequal(rect,true)
-        [~, ~, rect] = crop(sbxreadpacked(fname,0,1), rect);
+        [~, ~, rect] = crop(sbxchan0(sbxreadpacked(fname,0,1),channel), rect);
     end
     
     
@@ -29,7 +30,7 @@ function [] = sbxComputeci(fname,Depth,rect)
     %%
     global info
 
-    A = sbxreadpacked(fname,0,1);
+    A = sbxchan0(sbxreadpacked(fname,0,1),channel);
     if ~isempty(rect)
 %        rect([1,2]) = floor(rect([1,2]));
 %        rect([3,4]) = ceil(rect([3,4]));
@@ -73,7 +74,15 @@ function [] = sbxComputeci(fname,Depth,rect)
     imsize = [info.recordsPerBuffer,796];   % size(info.S,2)
 %     imsize = [numel(rg1) numel(rg2)];
 
-    nframes = numel(Frames);
+    stopat = 0;
+    if stopat
+        nframes = min(numel(Frames),stopat);
+    else
+        nframes = numel(Frames);
+    end
+
+    Frames = Frames(1:nframes);
+
 
 
 
@@ -134,6 +143,8 @@ end
 
 function [c,xray] = doOneBlock(fname,imsize,res,winsize,T,Q,s,nframes,rg,thestd,Frames,mask)
 
+    channel = 1;
+
     xray = zeros([imsize*res,winsize,winsize],'double');
 
     c = zeros(imsize(1),imsize(2),2);
@@ -150,7 +161,7 @@ function [c,xray] = doOneBlock(fname,imsize,res,winsize,T,Q,s,nframes,rg,thestd,
 
     for nn = rg
 
-        A = double(sbxreadpacked(fname,Frames(nn)-1,1));
+        A = double(sbxchan0(sbxreadpacked(fname,Frames(nn)-1,1),channel));
          
         A = A.*mask./thestd;
 

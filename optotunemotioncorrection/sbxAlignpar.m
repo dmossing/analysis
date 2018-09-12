@@ -1,4 +1,4 @@
-function [m,v,T] = sbxAlignpar(fname,thestd,gl,l,Frames,numDepths,rect)
+function [m,v,T] = sbxAlignpar(fname,thestd,gl,l,Frames,numDepths,rect,c)
 
 
 
@@ -14,7 +14,7 @@ function [m,v,T] = sbxAlignpar(fname,thestd,gl,l,Frames,numDepths,rect)
         rect = [];
     end
     
-    A = sbxreadpacked(fname,1,1);
+    A = sbxchan0(sbxreadpacked(fname,1,1),c);
     
     global info
 
@@ -67,7 +67,7 @@ function [m,v,T] = sbxAlignpar(fname,thestd,gl,l,Frames,numDepths,rect)
 
         subrg = rgs{ii};
 
-        [ms(:,:,ii),vs(:,:,ii),Ts{ii}] = sbxalignsub(fname,subrg,rg1,rg2,thestd,gl,l,numDepths);   
+        [ms(:,:,ii),vs(:,:,ii),Ts{ii}] = sbxalignsub(fname,subrg,rg1,rg2,thestd,gl,l,numDepths,c);   
 
     end
 
@@ -159,13 +159,13 @@ end
 
 
 
-function [m,v,T] = sbxalignsub(fname,idx,rg1,rg2,thestd,gl,l,numDepths)
+function [m,v,T] = sbxalignsub(fname,idx,rg1,rg2,thestd,gl,l,numDepths,c)
 
     if(size(idx,2)==1)
 
 
 
-        A = double(sbxreadpacked(fname,idx(1,1),1));
+        A = double(sbxchan0(sbxreadpacked(fname,idx(1,1),1),c));
         
         A = A(rg1,rg2);
 
@@ -187,7 +187,7 @@ function [m,v,T] = sbxalignsub(fname,idx,rg1,rg2,thestd,gl,l,numDepths)
 
 
 
-        A = double(sbxreadpacked(fname,idx(1,1),1));
+        A = double(sbxchan0(sbxreadpacked(fname,idx(1,1),1),c));
         
         A = A(rg1,rg2);
 
@@ -197,7 +197,7 @@ function [m,v,T] = sbxalignsub(fname,idx,rg1,rg2,thestd,gl,l,numDepths)
 
         
 
-        B = double(sbxreadpacked(fname,idx(1,2),1));
+        B = double(sbxchan0(sbxreadpacked(fname,idx(1,2),1),c));
 
         B = B(rg1,rg2);
 
@@ -233,9 +233,9 @@ function [m,v,T] = sbxalignsub(fname,idx,rg1,rg2,thestd,gl,l,numDepths)
 
         idx1 = idx(:,floor(end/2)+1 : end);
 
-        [A,v1,T0] = sbxalignsub(fname,idx0,rg1,rg2,thestd,gl,l,numDepths);
+        [A,v1,T0] = sbxalignsub(fname,idx0,rg1,rg2,thestd,gl,l,numDepths,c);
 
-        [B,v2,T1] = sbxalignsub(fname,idx1,rg1,rg2,thestd,gl,l,numDepths);
+        [B,v2,T1] = sbxalignsub(fname,idx1,rg1,rg2,thestd,gl,l,numDepths,c);
 
 
 

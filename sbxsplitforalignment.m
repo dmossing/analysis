@@ -7,7 +7,7 @@ if exist(fn,'dir')
     d = dir([firstfold '/*.sbx']);
     fnames = {d(:).name};
     for i = 1:numel(fnames)
-        fn = [firstfold '/' fnames{i}(1:end-4)]; % just the name
+        fn = [firstfold '/' fnames{i}(1:end-4)] % just the name
         sbxsplit(fn) 
         d = dir([fn '_ot_*.sbx']);
         depthno = numel(d);
