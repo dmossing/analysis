@@ -17,7 +17,7 @@ for i=1:numel(d)
         Neuropil = zeros(nroi,nt);
         for k=1:nroi
             Data(k,:) = double(allROIdata{j}.rois(k).rawdata);
-            Neuropil(k,:) = double(allROIdata{j}.rois(k).rawdata);
+            Neuropil(k,:) = double(allROIdata{j}.rois(k).rawneuropil);
         end
         ROIdata = allROIdata{j};
         planeno = ddigit(str2num(nonproc(end))-1,3);

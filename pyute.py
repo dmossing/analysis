@@ -16,6 +16,7 @@ import re
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
+    dim = np.minimum(dim,len(arr.shape)-1)
     try:
         mnm = arr.min(dim)[:,np.newaxis]
         mxm = arr.max(dim)[:,np.newaxis]
@@ -260,7 +261,7 @@ def resample(signal1,trig1,trig2):
 #   #                 strialwise = s.copy()
 #    return trialwise,ctrialwise,strialwise,dfof
 
-def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds=10,rg=None):
+def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None):
     
     def tack_on(to_add,existing):
         try:
@@ -270,17 +271,24 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds=10,rg=N
         return existing
     
     def process(to_add):
-        to_add[np.isnan(to_add)] = 0
-        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-        baseline = np.repeat(baseline,ds,axis=1)
-        if baseline.shape[1]>to_add.shape[1]:
-            baseline = baseline[:,:to_add.shape[1]]
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        this_dfof = np.zeros_like(to_add)
-        for i in range(c.shape[0]):
-            this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
-            c[i],s[i],_,_,_  = deconvolve(this_dfof[i],penalty=1)
+        to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
+        if to_add.max():
+            baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
+            topline = sfi.percentile_filter(to_add[:,::ds],99,(1,int(blspan/ds))) # dan added 18/10/30
+            baseline = np.maximum(baseline,topline/10) # dan added 18/10/30
+            baseline = np.repeat(baseline,ds,axis=1)
+            if baseline.shape[1]>to_add.shape[1]:
+                baseline = baseline[:,:to_add.shape[1]]
+            c = np.zeros_like(to_add)
+            s = np.zeros_like(to_add)
+            this_dfof = np.zeros_like(to_add)
+            for i in range(c.shape[0]):
+                this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+                c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+        else:
+            this_dfof = np.zeros_like(to_add)
+            c = np.zeros_like(to_add)
+            s = np.zeros_like(to_add)
         to_add = trialize(to_add,frm,nbefore,nafter)
         c = trialize(c,frm,nbefore,nafter)
         s = trialize(s,frm,nbefore,nafter)
@@ -292,7 +300,8 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds=10,rg=N
     dfof = np.array(())
     for datafile in datafiles:
         if not rg is None:
-            frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]-1
+            frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]-1
+            frm = frm[rg[0]:frm.size+rg[1]]
         else:
             frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]-1
         try:
@@ -344,7 +353,8 @@ def fit_2d_gaussian(locs,ret,verbose=False):
                 initial_guess = (0,0,ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
             else:
                 initial_guess = (0,0,ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
-            popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0 = initial_guess)
+            popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0 = initial_guess,bounds=((x.min(),y.min(),-np.inf,0,0,0,0),(x.max(),y.max(),np.inf,x.max(),y.max(),2*np.pi,np.inf)))
+            # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
             modeled = twoD_Gaussian((x,y),*popt)
             sqerror[i] = ((modeled-data)**2/popt[2]**2).sum()
             params[i] = popt
@@ -374,6 +384,14 @@ def imshow_in_rows(arr,rowlen=10,scale=0.5):
     for k in range(arr.shape[0]):
         plt.subplot(nrows,rowlen,k+1)
         plt.imshow(arr[k])
+        plt.axis('off')
+
+def plot_in_rows(arr,rowlen=10,scale=0.5):
+    nrows = np.ceil(arr.shape[0]/rowlen)
+    plt.figure(figsize=(scale*rowlen,scale*nrows))
+    for k in range(arr.shape[0]):
+        plt.subplot(nrows,rowlen,k+1)
+        plt.plot(arr[k])
         plt.axis('off')
 
 def imshow_in_pairs(arr1,arr2,rowlen=10,scale=0.5):
@@ -460,7 +478,8 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
             desired_frames = frame[trial,0]+desired_offsets
             trialwise[cell,trial] = np.interp(trigtime[trial,0]+desired_offsets,desired_frames+roitime[cell],traces[cell][desired_frames])
     
-    return trialwise
+    #return trialwise
+    return trialize(traces,frame,nbefore=nbefore,nafter=nafter) # TEMPORARY!! SEEING IF INTERPOLATION IS THE PROBLEM. Seems not to be at first glance...
 
 def loadmat(filename,desired_vars):
     
@@ -484,7 +503,7 @@ def loadmat(filename,desired_vars):
         
     return to_return
 
-def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds=10,rg=None):
+def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None,frame_adjust=None):
     
     def tack_on(to_add,existing):
         try:
@@ -494,8 +513,9 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds
         return existing
     
     def process(to_add,roilines):
-        to_add = to_add.astype(np.float64)
-        to_add[np.isnan(to_add)] = 0
+        to_add_copy = to_add.copy()
+        to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
+        to_add[to_add<0] = 0
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
         baseline = np.repeat(baseline,ds,axis=1)
         if baseline.shape[1]>to_add.shape[1]:
@@ -504,11 +524,15 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds
         s = np.zeros_like(to_add)
         this_dfof = np.zeros_like(to_add)
         for i in range(c.shape[0]):
-            try:
-                this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
-                c[i],s[i],_,_,_  = deconvolve(this_dfof[i],penalty=1)
-            except:
-                print("couldn't do "+str(i))
+            #try:
+            fudge = 1e-2*np.percentile(to_add[i],99)
+            if to_add[i].max()>0:
+                this_dfof[i] = (to_add[i]-baseline[i,:])/(fudge+baseline[i,:])
+            else:
+                print('roi '+str(i)+' all zeros')
+            c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+            #except:
+            #    print("couldn't do "+str(i))
         to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         c = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         s = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
@@ -524,9 +548,14 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds
         frm = info['frame'][()]
         line = info['line'][()]
         if not rg is None:
-            frm = frm[rg[0]:rg[1]]
-            line = line[rg[0]:rg[1]]
+            frm = frm[rg[0]:frm.size+rg[1]]
+            line = line[rg[0]:line.size+rg[1]]
+        if not frame_adjust is None:
+            frm = frame_adjust(frm)
+            line = frame_adjust(line)
         (to_add,ctr) = loadmat(datafile,('corrected','ctr'))
+        print(datafile)
+        print(to_add.shape)
         nlines = loadmat(datafile,'msk').shape[0]
         roilines = ctr[0] + nlines*thisdepth
         to_add,c,s,this_dfof = process(to_add,roilines)
@@ -537,9 +566,72 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=5,blspan=3000,ds
 
     return trialwise,ctrialwise,strialwise,dfof
 
-def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt):
+def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
     for i in range(mn_tgt.shape[0]):
-        plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:])
+        plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
+
+def plot_errorbars_in_rows(x,mn_tgt,lb_tgt,ub_tgt,rowlen=10,scale=0.5):
+    nrows = np.ceil(mn_tgt.shape[0]/rowlen)
+    plt.figure(figsize=(scale*rowlen,scale*nrows))
+    for k in range(mn_tgt.shape[0]):
+        plt.subplot(nrows,rowlen,k+1)
+        errorplus = ub_tgt[k]-mn_tgt[k]
+        errorminus = mn_tgt[k]-lb_tgt[k]
+        errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
+        for i in range(mn_tgt[k].shape[0]):
+            plt.errorbar(x,mn_tgt[k][i],yerr=errors[:,i,:])
+            #plt.plot(mn_tgt[k])
+        plt.axis('off')
+
+def parse_options(opt,opt_keys,*args):
+    # create a dict opt with keys opt_keys specifying the options listed
+    # options specified in *args will overwrite the original entries of opt if they are not None
+
+    if opt is None:
+        opt = {}
+
+    for i,key in enumerate(opt_keys):
+        if not args[i] is None or not key in opt:
+            opt[key] = args[i]
+
+    for key in opt_keys:
+        if not key in opt:
+            opt[key] = None
+
+    return opt
+
+def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None):
+    opt_keys = ['c','linestyle','linewidth']
+    opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth)
+    c,linestyle,linewidth = [opt[key] for key in opt_keys]
+
+    errorplus = ub_tgt-mn_tgt
+    errorminus = mn_tgt-lb_tgt
+    errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
+    plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle,linewidth=linewidth)
+    plt.scatter(x,mn_tgt,c=c)
+
+def get_dict_ind(opt,i):
+    opt_temp = {}
+    for key in opt.keys():
+        isarr = type(opt[key]) is np.ndarray
+        if not type(opt[key]) is list and not isarr:
+            opt_temp[key] = opt[key]
+        else:
+            if isarr and i>=opt[key].shape[0]:
+                opt_temp[key] = opt[key]
+            else:
+                opt_temp[key] = opt[key][i]
+    return opt_temp
+
+def plot_nothing(plot_options):
+    opt_keys = ['c','linestyle','linewidth']
+    opt = parse_options(plot_options,opt_keys,None,None,None)
+    c,linestyle,linewidth = [opt[key] for key in opt_keys]
+    plt.plot(0,0,c=c,linestyle=linestyle,linewidth=linewidth)
+

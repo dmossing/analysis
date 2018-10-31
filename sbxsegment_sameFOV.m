@@ -220,16 +220,23 @@ addpath(genpath('~/Documents/code/adesnaq'))
 % fns_all = cell(numel(ots),numel(expts));
 
 % /home/mossing/scratch/2Pdata/180719/M8961/ot
-fnbase = 'M8961_150';
-expts = {'007','006','008'};
-ots = {'000','001','002','003'};
-fns_all = cell(numel(ots),numel(expts));
+% fnbase = 'M8961_150';
+% expts = {'007','006','008'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
 
-for i=1:numel(expts)
-    for j=1:numel(ots)
-        fns_all{j,i} = [fnbase '_' expts{i} '_ot_' ots{j}];
-    end
-end
+% /home/mossing/scratch/2Pdata/180627/M8961/ot only coarse inverted
+% retinotopy
+% fnbase = 'M8961_150';
+% expts = {'007','006','008'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% for i=1:numel(expts)
+%     for j=1:numel(ots)
+%         fns_all{j,i} = [fnbase '_' expts{i} '_ot_' ots{j}];
+%     end
+% end
 
 % fns_all = dir('*.segment');
 % fns_all = {fns_all(:).name};

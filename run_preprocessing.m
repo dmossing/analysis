@@ -12,7 +12,7 @@ catch
     warning('could not trialize')
 end
 if nargin > 1 && ~isempty(runfoldname)
-    save_running(runfoldname,foldname)
+    save_running(runfoldname,foldname,floorframes)
 end
 save_msk(foldname)
 save_roilines(foldname)
