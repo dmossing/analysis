@@ -93,7 +93,7 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
 
     if 'range' in result.dtype.names:
         gridsize = 5
-        ctr = np.array((result['range'][0:2].mean(),result['range'][2:].mean())) # ctr: x center of range, y center of range
+        ctr = np.array((result['range'][0:2].mean(),-result['range'][2:].mean())) # ctr: x center of range, y center of range # fixed 18/10/30; for expts. after 18/10/30, this will have to be switched!
     else: 
         gridsize = 10
         ctr = np.array((0,0))
