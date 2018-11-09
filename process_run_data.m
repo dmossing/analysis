@@ -1,4 +1,6 @@
 function [dx_dt,stim_trigger] = process_run_data(fname)
+% fname a string
+% returns vectors sampled at the same rate as the running data; need to align them to scanbox data using the stimulus triggers
 
 % read in data
 fid = fopen(fname);
