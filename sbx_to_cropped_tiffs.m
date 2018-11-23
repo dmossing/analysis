@@ -39,7 +39,7 @@ options.append = false;
 % how many frames to load into memory at once
 ctr = 0;
 for i=(1+twochan):chunksize:info.max_idx
-    tifffile = strrep(sbxfile,'.sbx',['_t' ddigit(ctr,2) '.tiff']);
+    tifffile = strrep(sbxfile,'.sbx',['_t' ddigit(ctr,2) '.tif']);
     if exist(tifffile,'file')
         delete(tifffile)
         disp('deleted old vsn')
