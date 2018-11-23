@@ -605,16 +605,16 @@ def parse_options(opt,opt_keys,*args):
 
     return opt
 
-def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None):
-    opt_keys = ['c','linestyle','linewidth']
-    opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth)
-    c,linestyle,linewidth = [opt[key] for key in opt_keys]
+def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None,markersize=None):
+    opt_keys = ['c','linestyle','linewidth','markersize']
+    opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
+    c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
 
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
     plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle,linewidth=linewidth)
-    plt.scatter(x,mn_tgt,c=c)
+    plt.scatter(x,mn_tgt,c=c,s=markersize)
 
 def get_dict_ind(opt,i):
     opt_temp = {}

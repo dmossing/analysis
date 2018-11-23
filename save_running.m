@@ -1,4 +1,10 @@
 function save_running(runfoldname,roifoldname,floorframes,nbefore,nafter)
+% runfoldname a .bin filename
+% roifoldname a .rois filename
+% floorframes: for multiplane data, true if you want trialrun to be sampled at the volume imaging rate, false if you want it sampled at the plane imaging rate
+% nbefore/nafter: when splitting up the running data, the number of frames before and after the trigger frames to add
+% trialrun: trialwise running traces, ntrials x nframes
+
 if nargin < 4
     nbefore = 4;
     nafter = 8;

@@ -41,7 +41,7 @@ def gen_movie(delta=100,scaley=0.5,spacebetween=5,source_fold=None,source_file=N
         rgb = np.dstack((red_frame,green_frame,red_frame))
         plt.imsave(target_fold+'/{0:04d}.tif'.format(t),rgb)
 
-def gen_transform(delta,scaley,shp):
+def gen_transform(delta=100,scaley=0.5,shp=(512,796)):
     (Ny,Nx) = shp
     trmat = np.array(((1-delta/Nx,-delta/Ny,delta),(0,scaley,0),(0,0,1)))
     tr = skt.AffineTransform(np.linalg.inv(trmat))

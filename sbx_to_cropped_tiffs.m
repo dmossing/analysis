@@ -1,6 +1,8 @@
 function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize)
+% splits up a .sbx file into one or multiple .tifs
+% sbxfile a string
 if nargin < 2 || isempty(chunksize)
-    chunksize = 10000;
+    chunksize = 10000; % number of frames per split up .tif
 end
 if isempty(strfind(sbxfile,'.sbx'))
     sbxfile = [sbxfile '.sbx'];
@@ -9,7 +11,7 @@ filebase = sbxfile(1:end-4);
 global info
 load(filebase,'info')
 if isfield(info,'rect')
-    rect = info.rect;
+    rect = info.rect; % information necessary if image needs to be cropped
 else
     rect = [1 info.sz(1) 1 info.sz(2)];
 end
