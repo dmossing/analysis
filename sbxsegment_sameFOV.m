@@ -232,10 +232,16 @@ addpath(genpath('~/Documents/code/adesnaq'))
 % ots = {'000','001','002','003'};
 % fns_all = cell(numel(ots),numel(expts));
 
-% /home/mossing/scratch/2Pdata/181030/M9826/ot
-fnbase = 'M9826_050';
-expts = {'001','002'};
-ots = {'000','001','002','003'};
+% % /home/mossing/scratch/2Pdata/181030/M9826/ot
+% fnbase = 'M9826_050';
+% expts = {'001','002'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% /home/mossing/scratch/2Pdata/181109/M9826/ot
+fnbase = 'M9826_065';
+expts = {'005','004'};
+ots = {'000','001'};
 fns_all = cell(numel(ots),numel(expts));
 
 for i=1:numel(expts)
@@ -253,7 +259,7 @@ end
 
 %%
 
-j = 4;
+j = 1;
 
 fns = fns_all(j,:);
 

@@ -284,6 +284,7 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
             this_dfof = np.zeros_like(to_add)
             for i in range(c.shape[0]):
                 this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+                this_dfof[i][np.isnan(this_dfof[i])] = 0
                 c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
         else:
             this_dfof = np.zeros_like(to_add)
@@ -525,7 +526,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         this_dfof = np.zeros_like(to_add)
         for i in range(c.shape[0]):
             #try:
-            fudge = 1e-2*np.percentile(to_add[i],99)
+            fudge = 1e-2*np.nanmax(to_add[i])
             if to_add[i].max()>0:
                 this_dfof[i] = (to_add[i]-baseline[i,:])/(fudge+baseline[i,:])
             else:

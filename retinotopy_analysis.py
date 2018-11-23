@@ -216,6 +216,7 @@ def gen_traces(datafiles,blcutoff=blcutoff,blspan=blspan): #nbefore=nbefore,naft
             for i in range(c.shape[0]):
 #                 dfof = (to_add[i]-baseline[i,np.newaxis])/baseline[i,np.newaxis]
                 dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+                dfof[i][np.isnan(dfof[i])] = 0
                 #try:
                 c[i],s[i],_,_,_  = deconvolve(dfof[i].astype(np.float64),penalty=1,sn=5e-3)
 #                except:

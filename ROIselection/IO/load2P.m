@@ -7,7 +7,7 @@ function [Images, loadObj, Config] = load2P(ImageFiles, varargin)
 % for file selection.
 % ARGUMENTS:
 % 'Type' -> follow with 'Direct' to load frames directly to RAM, or
-% 'MemMap' to use memory mapping. 
+% 'MemMap' to use memory mapping.
 % 'Frames' -> follow with vector specifying the frame indices to load, cell
 % array of a single vector specifying frame indices to load from each file,
 % or cell array of N vectors specifying the exact frame indices to load
@@ -18,7 +18,7 @@ function [Images, loadObj, Config] = load2P(ImageFiles, varargin)
 % 'Depths' -> follow with vector of depth indices to load
 % 'Double' -> makes output Images of class double
 
-LoadType = 'Direct'; % 'MemMap' or 'Direct' or 'Buffered' 
+LoadType = 'Direct'; % 'MemMap' or 'Direct' or 'Buffered'
 Frames = [1, inf]; % indices of frames to load in 'Direct' mode, or 'all'
 Channels = inf;
 Double = false;
@@ -113,9 +113,9 @@ end
 %% Load images
 switch LoadType
     
-%% Load Direct
+    %% Load Direct
     case 'Direct'
-
+        
         % Determine Dimensions are Equal Across Files
         if range([Config(:).Height]) ~= 0 || range([Config(:).Width]) ~= 0 || range([Config(:).Depth]) ~= 0
             error('Data need to be the same size...');
@@ -174,7 +174,7 @@ switch LoadType
         end
         
         % Load Images
-%         Images = zeros(Config(1).Height, Config(1).Width, Config(1).Depth, numel(Channels), sum(numFrames), 'uint16');
+        %         Images = zeros(Config(1).Height, Config(1).Width, Config(1).Depth, numel(Channels), sum(numFrames), 'uint16');
         Images = zeros(Config(1).Height, Config(1).Width, 1, numel(Channels), sum(numFrames), 'uint16');
         startFrame = cumsum([1,numFrames(1:end-1)]);
         for index = 1:numFiles
@@ -186,7 +186,9 @@ switch LoadType
                             = readSbx(ImageFiles{index}, [], 'Type', 'Direct', 'Frames', FrameIndex{index}, 'Channels', Channels, 'Verbose', Verbose);
                     case '.tif'
                         Images(:,:,:,:,startFrame(index):startFrame(index)+numFrames(index)-1)...
-                            = readScim(ImageFiles{index}, 'Frames', FrameIndex{index}, 'Channels', Channels, 'Verbose', Verbose);
+                            = readTif(ImageFiles{index}, 'Frames', FrameIndex{index}, 'Channels', Channels, 'Verbose', Verbose, 'Config', Config);
+                        
+                        %                             = readScim(ImageFiles{index}, 'Frames', FrameIndex{index}, 'Channels', Channels, 'Verbose', Verbose);
                     case '.imgs'
                         Images(:,:,:,:,startFrame(index):startFrame(index)+numFrames(index)-1)...
                             = readImgs(ImageFiles{index}, 'Type', 'Direct', 'Frames', FrameIndex{index}, 'Channels', Channels);
@@ -198,9 +200,9 @@ switch LoadType
         if Double && ~isa(Images, 'double')
             Images = double(Images);
         end
-
         
-%% Load MemMap
+        
+        %% Load MemMap
     case 'MemMap'
         
         if numFiles > 1

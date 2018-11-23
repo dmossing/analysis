@@ -28,7 +28,8 @@ for index = 1:numFiles
         case '.sbx'
             Config(index) = parseSbxHeader(DataFiles{index});
         case '.tif'
-            Config(index) = parseScimHeader(DataFiles{index});
+%             Config(index) = parseScimHeader(DataFiles{index});
+            Config(index) = parseTifInfoSuite2p(DataFiles{index});
         case '.imgs'
             Config(index) = parseImgsHeader(DataFiles{index});
         otherwise
