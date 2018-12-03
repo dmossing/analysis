@@ -6,6 +6,7 @@
 % if nargin < 3 || isempty(progress)
 %     if ~exist(saveto)
 %         progress='new';
+
 %     else
 %         progress='continue';
 %     end
@@ -16,9 +17,9 @@
 % else
 %     load(saveto,'startat');
 % end
+addpath(genpath('/home/mossing/Documents/code/downloads/EvansCode/'))
 addpath(genpath('~/Documents/code/adesnal'))
 addpath(genpath('~/Documents/code/adesnaq'))
-
 %%
 % fns_all = {'M7307_185_000_ot_000','M7307_185_001_ot_000';
 %     'M7307_185_000_ot_001','M7307_185_001_ot_001';
@@ -238,10 +239,16 @@ addpath(genpath('~/Documents/code/adesnaq'))
 % ots = {'000','001','002','003'};
 % fns_all = cell(numel(ots),numel(expts));
 
-% /home/mossing/scratch/2Pdata/181109/M9826/ot
-fnbase = 'M9826_065';
-expts = {'005','004'};
-ots = {'000','001'};
+% % % /home/mossing/scratch/2Pdata/181109/M9826/ot
+% fnbase = 'M9826_065';
+% expts = {'005'}; %,'004'};
+% ots = {'000','001','002','003'};
+% fns_all = cell(numel(ots),numel(expts));
+
+% /home/mossing/scratch/2Pdata/181115/M9826/ot
+fnbase = 'M9826_100';
+expts = {'004'}; %,'003','002'};
+ots = {'000','001','002','003'};
 fns_all = cell(numel(ots),numel(expts));
 
 for i=1:numel(expts)
@@ -259,13 +266,13 @@ end
 
 %%
 
-j = 1;
+j = 4;
 
 fns = fns_all(j,:);
 
 N = numel(fns);
 
-i = 2;
+i = 1;
 
 %%
 % for i=startat:N
@@ -311,7 +318,7 @@ for j=1:size(fns_all,1)
     % extract dFoF signals
     fns = fns_all(j,:);
     N = numel(fns);
-    for i=1:N
+    for i=1:Na
         ROIFile = [fns{i}, '.rois'];
         ROIdata = sbxDistribute(fns{i}, 'Save', 'SaveFile', ROIFile); % intialize struct
         createMasks(ROIdata, 'Save', 'SaveFile', ROIFile); % create ROI masks

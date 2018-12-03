@@ -1,10 +1,13 @@
-function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,green_only)
+function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,alignfile,green_only)
 % splits up a .sbx file into one or multiple .tifs
 % sbxfile a string
 if nargin < 2 || isempty(chunksize)
     chunksize = 10000; % number of frames per split up .tif
 end
-if nargin < 3 || isempty(green_only)
+if nargin < 3 || isempty(alignfile)
+    alignfile = '';
+end
+if nargin < 4 || isempty(green_only)
     green_only = false;
 end
 if isempty(strfind(sbxfile,'.sbx'))
@@ -43,6 +46,10 @@ options.append = false;
 
 % how many frames to load into memory at once
 ctr = 0;
+if alignfile
+    alignfile = strrep(sbxfile,'.sbx','.align');
+    load(alignfile,'-mat','T');
+end
 for i=(1+twochan):chunksize:info.max_idx
     tifffile = strrep(sbxfile,'.sbx',['_t' ddigit(ctr,2) '.tif']);
     if exist(tifffile,'file')
@@ -51,6 +58,7 @@ for i=(1+twochan):chunksize:info.max_idx
     end
     i
     startat = i;
+    tstartat = startat/(1+twochan);
     if startat+chunksize>=info.max_idx
         % stop yourself from going overboard, and keep the same # in each plane
         try
@@ -69,13 +77,21 @@ for i=(1+twochan):chunksize:info.max_idx
         else
             rejig = permute(z(1,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]); 
         end
+        rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
+        if alignfile
+            rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
+        end
         rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
         %         mysaveastiff(rejig,tifffile,i==1);
         saveastiff(rejig,tifffile,options); 
         
     else
+        rejig = z(rect(1):rect(2),rect(3):rect(4),:);
+        if alignfile
+            rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
+        end
         %         mysaveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,i==1);
-        saveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,options); 
+        saveastiff(rejig,tifffile,options); 
         
     end
     ctr = ctr+1;
