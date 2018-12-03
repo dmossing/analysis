@@ -1,8 +1,11 @@
-function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize)
+function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,green_only)
 % splits up a .sbx file into one or multiple .tifs
 % sbxfile a string
 if nargin < 2 || isempty(chunksize)
     chunksize = 10000; % number of frames per split up .tif
+end
+if nargin < 3 || isempty(green_only)
+    green_only = false;
 end
 if isempty(strfind(sbxfile,'.sbx'))
     sbxfile = [sbxfile '.sbx'];
@@ -61,7 +64,11 @@ for i=(1+twochan):chunksize:info.max_idx
     z = squeeze(sbxread(filebase,startat,newchunksize));
     %z = sbxreadpacked(filebase,startat,newchunksize);
     if twochan
-        rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
+        if ~green_only
+            rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
+        else
+            rejig = permute(z(1,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]); 
+        end
         rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
         %         mysaveastiff(rejig,tifffile,i==1);
         saveastiff(rejig,tifffile,options); 
