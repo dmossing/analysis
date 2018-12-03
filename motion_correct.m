@@ -1,5 +1,11 @@
 function im = motion_correct(im,T)
-for t=1:size(im,3)
-        %     mred1 = mred+double(circshift(imgred(:,:,1,1,i),-T(i,:)));
-    im(:,:,t) = circshift(im(:,:,t),T(t,:));
+sz = size(im);
+nsz = numel(sz);
+indices = cell(nsz,1);
+for i=1:nsz,
+    indices{i} = ':';
+end
+for t=1:sz(end)
+    indices{end} = t;
+    im(indices{:}) = circshift(im(indices{:}),[T(t,:) zeros(1,nsz-3)]);
 end

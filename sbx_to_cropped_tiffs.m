@@ -1,8 +1,11 @@
-function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize)
+function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,alignfile)
 % splits up a .sbx file into one or multiple .tifs
 % sbxfile a string
 if nargin < 2 || isempty(chunksize)
     chunksize = 10000; % number of frames per split up .tif
+end
+if nargin < 3 || isempty(alignfile)
+    alignfile = '';
 end
 if isempty(strfind(sbxfile,'.sbx'))
     sbxfile = [sbxfile '.sbx'];
@@ -40,6 +43,10 @@ options.append = false;
 
 % how many frames to load into memory at once
 ctr = 0;
+if alignfile
+    alignfile = strrep(sbxfile,'.sbx','.align');
+    load(alignfile,'-mat','T');
+end
 for i=(1+twochan):chunksize:info.max_idx
     tifffile = strrep(sbxfile,'.sbx',['_t' ddigit(ctr,2) '.tif']);
     if exist(tifffile,'file')
@@ -48,6 +55,7 @@ for i=(1+twochan):chunksize:info.max_idx
     end
     i
     startat = i;
+    tstartat = startat/(1+twochan);
     if startat+chunksize>=info.max_idx
         % stop yourself from going overboard, and keep the same # in each plane
         try
@@ -62,13 +70,16 @@ for i=(1+twochan):chunksize:info.max_idx
     %z = sbxreadpacked(filebase,startat,newchunksize);
     if twochan
         rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
+        rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
         rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
         %         mysaveastiff(rejig,tifffile,i==1);
         saveastiff(rejig,tifffile,options); 
         
     else
+        rejig = z(rect(1):rect(2),rect(3):rect(4),:);
+        rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
         %         mysaveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,i==1);
-        saveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,options); 
+        saveastiff(rejig,tifffile,options); 
         
     end
     ctr = ctr+1;

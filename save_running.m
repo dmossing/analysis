@@ -47,7 +47,7 @@ for i=1:numel(fnames)
         end
         frm = info.frame(info.event_id==1);
         frm_run = find(stim_trigger);
-        [ufrm,uidx] = unique(frm);
+        [ufrm,uidx] = sort(unique(frm));
         if numel(ufrm)~=numel(frm)
             frm = frm(uidx);
             frm_run = frm_run(uidx);

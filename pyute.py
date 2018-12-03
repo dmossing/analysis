@@ -479,8 +479,8 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
             desired_frames = frame[trial,0]+desired_offsets
             trialwise[cell,trial] = np.interp(trigtime[trial,0]+desired_offsets,desired_frames+roitime[cell],traces[cell][desired_frames])
     
-    #return trialwise
-    return trialize(traces,frame,nbefore=nbefore,nafter=nafter) # TEMPORARY!! SEEING IF INTERPOLATION IS THE PROBLEM. Seems not to be at first glance...
+    return trialwise
+    #return trialize(traces,frame,nbefore=nbefore,nafter=nafter) # TEMPORARY!! SEEING IF INTERPOLATION IS THE PROBLEM. Seems not to be at first glance...
 
 def loadmat(filename,desired_vars):
     
