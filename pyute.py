@@ -357,7 +357,7 @@ def fit_2d_gaussian(locs,ret,verbose=False):
             popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0 = initial_guess,bounds=((x.min(),y.min(),-np.inf,0,0,0,0),(x.max(),y.max(),np.inf,x.max(),y.max(),2*np.pi,np.inf)))
             # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
             modeled = twoD_Gaussian((x,y),*popt)
-            sqerror[i] = ((modeled-data)**2/popt[2]**2).sum()
+            sqerror[i] = ((modeled-data)**2).mean()/np.var(data)
             params[i] = popt
         except:
             if verbose:
@@ -463,6 +463,12 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
         new_nlines = nlines*nplanes
         
         return new_frame,new_line,new_nlines
+
+    frame = frame.astype('<i4')
+
+    if np.min(np.diff(frame)) < 0:
+        brk = np.argmin(np.diff(frame))+1
+        frame[brk:] = frame[brk:] + 65536
     
     frame,line,nlines = convert_frame_line(frame,line,nlines,nplanes,continuous=continuous)
     
@@ -516,33 +522,37 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
     def process(to_add,roilines):
         to_add_copy = to_add.copy()
         to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
-        to_add[to_add<0] = 0
+#        to_add[to_add<0] = 0
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
         baseline = np.repeat(baseline,ds,axis=1)
         if baseline.shape[1]>to_add.shape[1]:
             baseline = baseline[:,:to_add.shape[1]]
+        to_correct = to_add<0
+        to_add[to_correct] = to_add[to_correct] - baseline[to_correct]
+        baseline[to_correct] = 0
         c = np.zeros_like(to_add)
         s = np.zeros_like(to_add)
         this_dfof = np.zeros_like(to_add)
         for i in range(c.shape[0]):
             #try:
-            fudge = 1e-2*np.nanmax(to_add[i])
+            fudge = 5e-2*np.nanmax(to_add[i])
             if to_add[i].max()>0:
-                this_dfof[i] = (to_add[i]-baseline[i,:])/(fudge+baseline[i,:])
+                this_dfof[i] = (to_add[i]-baseline[i,:])/np.maximum(fudge,baseline[i,:])
             else:
                 print('roi '+str(i)+' all zeros')
             c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
             #except:
             #    print("couldn't do "+str(i))
         to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        c = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        s = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        return to_add,c,s,this_dfof
+        cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        return to_add,cc,ss,this_dfof,s
         
     trialwise = np.array(())
     ctrialwise = np.array(())
     strialwise = np.array(())
     dfof = np.array(())
+    straces = np.array(())
     for datafile in datafiles:
         thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
         info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
@@ -559,13 +569,14 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         print(to_add.shape)
         nlines = loadmat(datafile,'msk').shape[0]
         roilines = ctr[0] + nlines*thisdepth
-        to_add,c,s,this_dfof = process(to_add,roilines)
+        to_add,c,s,this_dfof,this_straces = process(to_add,roilines)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
         strialwise = tack_on(s,strialwise)
         dfof = tack_on(this_dfof,dfof)
+        straces = tack_on(this_straces,straces)
 
-    return trialwise,ctrialwise,strialwise,dfof
+    return trialwise,ctrialwise,strialwise,dfof,straces
 
 def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     if colors is None:
@@ -575,6 +586,20 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
+
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None):
+    mn_tgt = np.nanmean(arr,0)
+    lb_tgt,ub_tgt = bootstrap(arr,fn=np.nanmean,pct=pct)
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
+    for i in range(mn_tgt.shape[0]):
+        plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
+
+def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
+    for i in range(mn_tgt.shape[0]):
+        plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
 
 def plot_errorbars_in_rows(x,mn_tgt,lb_tgt,ub_tgt,rowlen=10,scale=0.5):
     nrows = np.ceil(mn_tgt.shape[0]/rowlen)

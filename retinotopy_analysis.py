@@ -24,15 +24,15 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
         nbydepth[i] = corrected.shape[0]
 #         with h5py.File(datafile,mode='r') as f:
 #             nbydepth[i] = (f['corrected'][:].T.shape[0])
-    trialwise,ctrialwise,strialwise,dfof = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,straces = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
 
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
 
     infofile = sio.loadmat(datafiles[0][:-12]+'.mat',squeeze_me=True)
-    retfile = sio.loadmat(retfile,squeeze_me=True)
+    #retfile = sio.loadmat(retfile,squeeze_me=True)
 
-    locinds = retfile['locinds']
+    locinds = result['locinds'] #retfile['locinds']
 
     has_inverse = False
     try:
@@ -132,7 +132,7 @@ def analyze_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>100,rg=(
     infofile = sio.loadmat(datafiles[0][:-5]+'.mat',squeeze_me=True)
     retfile = sio.loadmat(retfile,squeeze_me=True)
 
-    locinds = retfile['locinds']
+    locinds = result['locinds'] #retfile['locinds']
 
     frame = infofile['info'][()]['frame'][()]
     frame = np.unique(frame[rg[0]:frame.size+rg[1]]) # this format for all the retinotopic mapping through 12/12
@@ -258,15 +258,15 @@ def ontarget_by_retinotopy(ret_vars,ctr=None,rg=5,pcutoff=1e-2):
         pval_ret = ret_vars['pval_ret']
     except:
         pval_ret = ret_vars['pval']
-    return np.logical_and((xo+ctr_ret[0]-ctr[0])**2+(-yo+ctr_ret[1]-ctr[1])**2<rg**2,pval_ret<pcutoff),np.hstack((xo,yo))
+    return np.logical_and((xo+ctr_ret[0]-ctr[0])**2+(-yo+ctr_ret[1]-ctr[1])**2<rg**2,pval_ret<pcutoff),np.hstack((xo,yo)) # assumes upside down retinotopy center; true through 18/10/30
 
-def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda x:x>100):
+def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda x:x>100,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
 
-    datafoldbase = '/home/mossing/scratch/2Pdata/'
+    #datafoldbase = '/home/mossing/scratch/2Pdata/'
     datafold = datafoldbase+thisfold+'ot/'
     datafiles = [thisfile+'_ot_'+number+'.rois' for number in ['000','001','002','003']]
 
-    stimfoldbase = '/home/mossing/scratch/visual_stim/'
+    #stimfoldbase = '/home/mossing/scratch/visual_stim/'
     stimfold = stimfoldbase+thisfold
     stimfile = thisfile+'.mat'
 
@@ -279,11 +279,16 @@ def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda 
 
     ret,paramdict,pval,trialrun,has_inverse = analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=criterion,rg=rg,nbefore=nbefore,nafter=nafter)
     nbydepth = get_nbydepth(datafiles)
-    trialwise,ctrialwise,strialwise,_ = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,_,_ = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
 #     traces,ctraces,straces,dfof,baseline = rt.gen_traces(datafiles)
     spont = strialwise[:,trialrun>100,:nbefore].mean(-1).mean(-1)
 
-    retfile_load = sio.loadmat(retfile)
+    try:
+        retfile_load = sio.loadmat(retfile)
+    except:
+        print('retinotopy file not accessible')
+        retfile_load = {}
+
     if has_inverse:
         retfile_load['paramdict_normal'] = paramdict[0]
         retfile_load['paramdict_inv'] = paramdict[1]
@@ -296,7 +301,11 @@ def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda 
     print('saving here '+retfile)
     return ret,paramdict,pval,trialrun,has_inverse,nbydepth,spont
 
-def analyze_everything(folds=None,files=None,rgs=None,criteria=None,nbefore=4,nafter=4):
+def analyze_everything(folds=None,files=None,rgs=None,criteria=None,nbefore=4,nafter=4,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
+    if isinstance(datafoldbase,str):
+        datafoldbase = [datafoldbase]*len(folds)
+    if isinstance(stimfoldbase,str):
+        stimfoldbase = [stimfoldbase]*len(folds)
     ret = {}
     paramdict = {}
     pval = {}
@@ -304,8 +313,8 @@ def analyze_everything(folds=None,files=None,rgs=None,criteria=None,nbefore=4,na
     has_inverse = {}
     nbydepth = {}
     spont = {}
-    for thisfold,thisfile,rg,criterion in zip(folds,files,rgs,criteria):
-        ret[thisfold],paramdict[thisfold],pval[thisfold],trialrun[thisfold],has_inverse[thisfold],nbydepth[thisfold],spont[thisfold] = do_process(thisfold,thisfile,rg=rg,nbefore=nbefore,nafter=nafter,criterion=criterion)
+    for thisfold,thisfile,rg,criterion,thisdatafoldbase,thisstimfoldbase in zip(folds,files,rgs,criteria,datafoldbase,stimfoldbase):
+        ret[thisfold],paramdict[thisfold],pval[thisfold],trialrun[thisfold],has_inverse[thisfold],nbydepth[thisfold],spont[thisfold] = do_process(thisfold,thisfile,rg=rg,nbefore=nbefore,nafter=nafter,criterion=criterion,datafoldbase=thisdatafoldbase,stimfoldbase=thisstimfoldbase)
     return ret,paramdict,pval,trialrun,has_inverse,nbydepth,spont
 
 def plot_peak_aligned(retx,xo,gridsize=10,alpha=1e-2,c='b'):

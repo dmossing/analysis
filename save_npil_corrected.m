@@ -12,8 +12,8 @@ for i=1:numel(fnames)
 %         save(strrep(name,'.rois','_corrected'),'corrected','baseline','neuropilMultiplier')
         save(name,'-mat','-append','corrected','neuropilMultiplier')
     else
-        %temporary for halo data with light artifact!
-        neuropilMultiplier = ones(numel(ROIdata.rois),1); %determineNeuropilWeight(ROIdata);
+        %commented out temporary soln for halo data with light artifact!
+        neuropilMultiplier = determineNeuropilWeight(ROIdata); % ones(numel(ROIdata.rois),1); %
         corrected = Data-repmat(neuropilMultiplier,1,size(Neuropil,2)).*Neuropil;
 %         save(strrep(name,'.rois','_corrected.mat'),'corrected','neuropilMultiplier')
         save(name,'-mat','-append','corrected','neuropilMultiplier')
