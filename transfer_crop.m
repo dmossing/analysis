@@ -28,5 +28,8 @@ for i=1:numel(fns1)
         save(filename2,'info')
     else
         disp('crop already saved')
+        info.rect_old = info.rect;
+        info.rect = rect;
+        save(filename2,'info')
     end
 end
