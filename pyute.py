@@ -13,6 +13,7 @@ from oasis.functions import deconvolve
 import scipy.optimize as sop
 import scipy.ndimage.measurements as snm
 import re
+import pickle as pkl
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -114,6 +115,29 @@ def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
     resamp=np.rollaxis(resamp,0,L+1)
     stat = fn(resamp,axis=axis)
+    #lb = np.percentile(stat,pct[0],axis=axis) # after computing fn, dimension axis+1 shifted down to axis
+    lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
+    #ub = np.percentile(stat,pct[1],axis=axis)
+    ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
+    return lb,ub
+
+def subsample(arr,fn,axis=0,nsubsample=None,nreps=1000,pct=(2.5,97.5)):
+    # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
+    # and report percentiles pct
+    N = arr.shape[axis]
+    assert(nsubsample<=N)
+    c = np.zeros((nsubsample,nreps),dtype=int)
+    for i in range(nreps):
+        c[:,i] = np.random.choice(np.arange(N),size=(nsubsample,),replace=False)
+
+    #c = np.random.choice(np.arange(N),size=(nsubsample,nreps))
+    L = len(arr.shape)
+    resamp=np.rollaxis(arr,axis,0)
+    resamp=resamp[c]
+    resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
+    resamp=np.rollaxis(resamp,0,L+1)
+    resamp = np.nanmean(resamp,axis=axis)
+    stat = fn(resamp,axis=-1)
     #lb = np.percentile(stat,pct[0],axis=axis) # after computing fn, dimension axis+1 shifted down to axis
     lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
     #ub = np.percentile(stat,pct[1],axis=axis)
@@ -318,43 +342,63 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
 
     return trialwise,ctrialwise,strialwise,dfof
 
-def fit_2d_gaussian(locs,ret,verbose=False):
-    
-    def twoD_Gaussian(xy, xo, yo, amplitude, sigma_x, sigma_y, theta, offset):
-        x = xy[0]
-        y = xy[1]
-        xo = float(xo)
-        yo = float(yo)    
-        a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
-        b = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
-        c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
-        g = offset + amplitude*np.exp( - (a*((x-xo)**2) + 2*b*(x-xo)*(y-yo) 
-                                + c*((y-yo)**2)))
-        return g.ravel()
+def twoD_Gaussian(xy, xo, yo, amplitude, sigma_x, sigma_y, theta, offset):
+    x = xy[0]
+    y = xy[1]
+    xo = float(xo)
+    yo = float(yo)    
+    a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
+    b = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
+    c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
+    g = offset + amplitude*np.exp( - (a*((x-xo)**2) + 2*b*(x-xo)*(y-yo) 
+                            + c*((y-yo)**2)))
+    return g.ravel()
+
+# TEMPORARILY constraining gaussian to have positive amplitude for PC data (19/1/30)
+def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,None,np.inf,None,None,2*np.pi,np.inf))):
     
     xx,yy = np.meshgrid(locs[0],locs[1])
     x = xx.flatten()
     y = yy.flatten()
+    bounds = [list(x) for x in bounds]
+    if not bounds[0][0]:
+        bounds[0][0] = x.min()
+    if not bounds[1][0]:
+        bounds[1][0] = x.max()
+    if not bounds[0][1]:
+        bounds[0][1] = y.min()
+    if not bounds[1][1]:
+        bounds[1][1] = y.max()
+    if not bounds[1][3]:
+        bounds[1][3] = x.max()
+    if not bounds[1][4]:
+        bounds[1][4] = y.max()
+    bounds = tuple([tuple(x) for x in bounds])
     msk_surr = np.zeros(ret.shape[1:3],dtype='bool')
     msk_surr[0,:] = 1
     msk_surr[:,0] = 1
     msk_surr[-1,:] = 1
     msk_surr[:,-1] = 1 
     i = 0
-    if ret[i][msk_surr].mean()<ret[i].mean():
-        initial_guess = (0,0,ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
-    else:
-        initial_guess = (0,0,ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
-    params = np.zeros((ret.shape[0],)+(len(initial_guess),))
+    can_be_negative = bounds[0][2]<0
+    #if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
+    #    extremum = np.argmax(ret[i],axis=None)
+    #    initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
+    #else:
+    #    extremum = np.argmin(ret[i],axis=None)
+    #    initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
+    params = np.zeros((ret.shape[0],7))
     sqerror = np.zeros((ret.shape[0],))
     for i in range(ret.shape[0]):
         try:
             data = ret[i].flatten()
-            if ret[i][msk_surr].mean()<ret[i].mean():
-                initial_guess = (0,0,ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
+            if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
+                extremum = np.argmax(ret[i],axis=None)
+                initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,np.maximum(0,ret[i].min()))
             else:
-                initial_guess = (0,0,ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
-            popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0 = initial_guess,bounds=((x.min(),y.min(),-np.inf,0,0,0,0),(x.max(),y.max(),np.inf,x.max(),y.max(),2*np.pi,np.inf)))
+                extremum = np.argmin(ret[i],axis=None)
+                initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
+            popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0=initial_guess, bounds=bounds)
             # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
             modeled = twoD_Gaussian((x,y),*popt)
             sqerror[i] = ((modeled-data)**2).mean()/np.var(data)
@@ -372,6 +416,27 @@ def fit_2d_gaussian(locs,ret,verbose=False):
     paramdict['theta'] = params[:,5]
     paramdict['offset'] = params[:,6]
     return paramdict
+
+def model_2d_gaussian(locs,paramdict):
+    N = paramdict['xo'].shape[0]
+    params = np.zeros((N,7))
+    params[:,0] = paramdict['xo']
+    params[:,1] = paramdict['yo']
+    params[:,2] = paramdict['amplitude']
+    params[:,3] = paramdict['sigma_x']
+    params[:,4] = paramdict['sigma_y']
+    params[:,5] = paramdict['theta']
+    params[:,6] = paramdict['offset']
+
+    xx,yy = np.meshgrid(locs[0],locs[1])
+    x = xx.flatten()
+    y = yy.flatten()
+
+    modeled = np.zeros((N,)+xx.shape)
+    for i in range(N):
+        modeled[i] = twoD_Gaussian((x,y),*params[i]).reshape(xx.shape)
+    return modeled
+    
 
 def add_to_array(starting,to_add):
     if starting.size:
@@ -418,14 +483,14 @@ def dist_from_center(ret,gridsize=5,center=(0,0)):
 
 def dict_select(dict_of_arrs,dict_of_inds):
     # arrays are stored in a dict, and sets of indices to them are stored in a dict. Create a stitched together array (along axis 0) containing the concatenated arr[ind]
-    keylist = list(dict_of_inds.keys())
+    key_list = list(dict_of_inds.keys())
     total_inds = 0
-    for key in keylist:
+    for key in key_list:
         total_inds = total_inds + dict_of_inds[key].sum()
-    template = dict_of_arrs[keylist[0]]
+    template = dict_of_arrs[key_list[0]]
     summary_arr = np.zeros((total_inds,)+template.shape[1:],dtype=template.dtype)
     total_inds = 0
-    for key in keylist:
+    for key in key_list:
         inds = dict_of_inds[key]
         old_total_inds = total_inds
         total_inds = total_inds+inds.sum()
@@ -458,7 +523,7 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
             line = repeat_internal_values(line)
         frame = frame.reshape((-1,2))
         line = line.reshape((-1,2))
-        new_frame = np.floor(frame/nplanes).astype('int')
+        new_frame = np.floor(frame/nplanes).astype('<i4')
         new_line = line + np.remainder(frame,nplanes)*nlines
         new_nlines = nlines*nplanes
         
@@ -466,9 +531,12 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
 
     frame = frame.astype('<i4')
 
-    if np.min(np.diff(frame)) < 0:
+    while np.min(np.diff(frame)) < 0:
         brk = np.argmin(np.diff(frame))+1
         frame[brk:] = frame[brk:] + 65536
+
+    with open('temp_frame.p', 'wb') as handle:
+        pkl.dump(frame, handle, protocol=pkl.HIGHEST_PROTOCOL)
     
     frame,line,nlines = convert_frame_line(frame,line,nlines,nplanes,continuous=continuous)
     
@@ -480,10 +548,14 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
     desired_offsets = np.arange(-nbefore,interpbetweentrigs+nafter) # frames relative to each trigger to sample
     
     trialwise = np.zeros((traces.shape[0],trigtime.shape[0],desired_offsets.size))
-    for cell in range(traces.shape[0]):
-        for trial in range(trigtime.shape[0]):
-            desired_frames = frame[trial,0]+desired_offsets
-            trialwise[cell,trial] = np.interp(trigtime[trial,0]+desired_offsets,desired_frames+roitime[cell],traces[cell][desired_frames])
+    for trial in range(trigtime.shape[0]):
+        desired_frames = frame[trial,0]+desired_offsets
+        try:
+            for cell in range(traces.shape[0]):
+                trialwise[cell,trial] = np.interp(trigtime[trial,0]+desired_offsets,desired_frames+roitime[cell],traces[cell][desired_frames])
+        except:
+            print('could not do trial #'+str(trial))
+            trialwise[cell,trial] = np.nan
     
     return trialwise
     #return trialize(traces,frame,nbefore=nbefore,nafter=nafter) # TEMPORARY!! SEEING IF INTERPOLATION IS THE PROBLEM. Seems not to be at first glance...
@@ -527,7 +599,8 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         baseline = np.repeat(baseline,ds,axis=1)
         if baseline.shape[1]>to_add.shape[1]:
             baseline = baseline[:,:to_add.shape[1]]
-        to_correct = to_add<0
+        #to_correct = to_add<0
+        to_correct = baseline<0 # changed 19/2/4
         to_add[to_correct] = to_add[to_correct] - baseline[to_correct]
         baseline[to_correct] = 0
         c = np.zeros_like(to_add)
@@ -587,19 +660,20 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None):
     mn_tgt = np.nanmean(arr,0)
     lb_tgt,ub_tgt = bootstrap(arr,fn=np.nanmean,pct=pct)
-    if colors is None:
-        colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
-    for i in range(mn_tgt.shape[0]):
-        plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
+    plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize)
+    #if colors is None:
+    #    colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
+    #for i in range(mn_tgt.shape[0]):
+    #    plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
 
-def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
+def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,markersize=None):
     if colors is None:
         colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
     for i in range(mn_tgt.shape[0]):
-        plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
+        plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize)
 
 def plot_errorbars_in_rows(x,mn_tgt,lb_tgt,ub_tgt,rowlen=10,scale=0.5):
     nrows = np.ceil(mn_tgt.shape[0]/rowlen)
@@ -661,3 +735,5 @@ def plot_nothing(plot_options):
     c,linestyle,linewidth = [opt[key] for key in opt_keys]
     plt.plot(0,0,c=c,linestyle=linestyle,linewidth=linewidth)
 
+def keylist(dict):
+    return list(dict.keys())

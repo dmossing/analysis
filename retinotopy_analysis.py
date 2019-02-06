@@ -69,7 +69,7 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
         ret = np.zeros((data.shape[0],Ny,Nx,2))
         for j in range(Ny):
             for k in range(Nx):
-                lkat = np.logical_and(np.logical_and(locinds[:,0]==j+1,locinds[:,1]==k+1),runtrial)
+                lkat = np.logical_and(np.logical_and(np.logical_and(locinds[:,0]==j+1,locinds[:,1]==k+1),runtrial),np.nanmax(np.nanmax(data,0),-1))
                 lkat_reg = np.logical_and(lkat,np.logical_not(inverted))
                 lkat_inv = np.logical_and(lkat,inverted)
                 n_reg = lkat_reg.sum()
@@ -97,9 +97,19 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
     else: 
         gridsize = 10
         ctr = np.array((0,0))
+    
+    # flipping for expts. after 18/10/30
+    toflip = int(datafiles[0].split('/')[-4])>181030
+    if toflip:
+        ctr = ctr*np.array((1,-1))
 
     xrg = np.arange(-(Nx-1)*gridsize/2,(Nx+1)*gridsize/2,gridsize)
     yrg = np.arange(-(Ny-1)*gridsize/2,(Ny+1)*gridsize/2,gridsize)
+
+    # inverting for expts. before 18/12/09
+    notquitefixed = int(datafiles[0].split('/')[-4])<181209
+    if toflip and notquitefixed:
+        yrg = -yrg
 
     if has_inverse:
         paramdict = [ut.fit_2d_gaussian((xrg,yrg),ret[:,:,:,0]),ut.fit_2d_gaussian((xrg,yrg),ret[:,:,:,1])]
@@ -258,7 +268,7 @@ def ontarget_by_retinotopy(ret_vars,ctr=None,rg=5,pcutoff=1e-2):
         pval_ret = ret_vars['pval_ret']
     except:
         pval_ret = ret_vars['pval']
-    return np.logical_and((xo+ctr_ret[0]-ctr[0])**2+(-yo+ctr_ret[1]-ctr[1])**2<rg**2,pval_ret<pcutoff),np.hstack((xo,yo)) # assumes upside down retinotopy center; true through 18/10/30
+    return np.logical_and((xo+ctr_ret[0]-ctr[0])**2+(-yo+ctr_ret[1]-ctr[1])**2<rg**2,pval_ret<pcutoff),np.hstack((xo,yo)) # ctr_ret as calculated assumes upside down retinotopy center; true through 18/10/30. Grid used in fitting gaussians goes from negative to positive degrees with increasing y index, hence -yo.
 
 def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda x:x>100,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
 
