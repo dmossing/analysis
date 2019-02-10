@@ -71,5 +71,6 @@ end
 
 %%
 
+save([saveroot num2str(i) '.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat');
 save([saveroot num2str(i) '_proc.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat');
 end
