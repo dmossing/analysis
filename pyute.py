@@ -354,6 +354,15 @@ def twoD_Gaussian(xy, xo, yo, amplitude, sigma_x, sigma_y, theta, offset):
                             + c*((y-yo)**2)))
     return g.ravel()
 
+def assign_tuple(tup,ind,tgt):
+    lis = [list(x) for x in tup]
+    ctr = 0
+    if len(ind)==1:
+        lis[ind[0]] =  tgt
+    if len(ind)==2:
+        lis[ind[0]][ind[1]] = tgt
+    return tuple([tuple(x) for x in bounds])
+
 # TEMPORARILY constraining gaussian to have positive amplitude for PC data (19/1/30)
 def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,None,np.inf,None,None,2*np.pi,np.inf))):
     
@@ -387,34 +396,52 @@ def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,N
     #else:
     #    extremum = np.argmin(ret[i],axis=None)
     #    initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
-    params = np.zeros((ret.shape[0],7))
-    sqerror = np.zeros((ret.shape[0],))
+    params = np.zeros((2,ret.shape[0],7))
+    sqerror = np.zeros((2,ret.shape[0]))
     for i in range(ret.shape[0]):
-        try:
-            data = ret[i].flatten()
-            if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
-                extremum = np.argmax(ret[i],axis=None)
-                initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,np.maximum(0,ret[i].min()))
-            else:
-                extremum = np.argmin(ret[i],axis=None)
-                initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
-            popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0=initial_guess, bounds=bounds)
-            # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
-            modeled = twoD_Gaussian((x,y),*popt)
-            sqerror[i] = ((modeled-data)**2).mean()/np.var(data)
-            params[i] = popt
-        except:
-            if verbose:
-                print("couldn't do "+str(i))
+        for k in range(2):
+            try:
+                data = ret[i].flatten()
+                #if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
+                if k==0:
+                    extremum = np.argmax(ret[i],axis=None)
+                    initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,np.maximum(0,ret[i].min()))                  
+                    assign_tuple(bounds,(0,2),0)
+                    assign_tuple(bounds,(1,2),np.inf)
+                    popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0=initial_guess, bounds=bounds)
+                else:
+                    extremum = np.argmin(ret[i],axis=None)
+                    initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
+                    assign_tuple(bounds,(0,2),-np.inf)
+                    assign_tuple(bounds,(1,2),0)
+                    popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0=initial_guess, bounds=bounds)
+                # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
+                modeled = twoD_Gaussian((x,y),*popt)
+                sqerror[k,i] = ((modeled-data)**2).mean()/np.var(data)
+                params[k,i] = popt
+            except:
+                if verbose:
+                    print("couldn't do "+str(i))
+    best_option = np.argmin(sqerror,axis=0)
     paramdict = {}
-    paramdict['sqerror'] = sqerror
-    paramdict['xo'] = params[:,0]
-    paramdict['yo'] = params[:,1]
-    paramdict['amplitude'] = params[:,2]
-    paramdict['sigma_x'] = params[:,3]
-    paramdict['sigma_y'] = params[:,4]
-    paramdict['theta'] = params[:,5]
-    paramdict['offset'] = params[:,6]
+    paramdict['sqerror'] = np.zeros(ret.shape[0:1])
+    paramdict['xo'] = np.zeros(ret.shape[0:1])
+    paramdict['yo'] = np.zeros(ret.shape[0:1])
+    paramdict['amplitude'] = np.zeros(ret.shape[0:1])
+    paramdict['sigma_x'] = np.zeros(ret.shape[0:1])
+    paramdict['sigma_y'] = np.zeros(ret.shape[0:1])
+    paramdict['theta'] = np.zeros(ret.shape[0:1])
+    paramdict['offset'] = np.zeros(ret.shape[0:1])    
+    for i in range(sqerror.shape[1]):
+        bo = best_option[i]
+        paramdict['sqerror'][i] = sqerror[bo,i]
+        paramdict['xo'][i] = params[bo,i,0]
+        paramdict['yo'][i] = params[bo,i,1]
+        paramdict['amplitude'][i] = params[bo,i,2]
+        paramdict['sigma_x'][i] = params[bo,i,3]
+        paramdict['sigma_y'][i] = params[bo,i,4]
+        paramdict['theta'][i] = params[bo,i,5]
+        paramdict['offset'][i] = params[bo,i,6]
     return paramdict
 
 def model_2d_gaussian(locs,paramdict):
@@ -599,10 +626,10 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         baseline = np.repeat(baseline,ds,axis=1)
         if baseline.shape[1]>to_add.shape[1]:
             baseline = baseline[:,:to_add.shape[1]]
-        #to_correct = to_add<0
-        to_correct = baseline<0 # changed 19/2/4
-        to_add[to_correct] = to_add[to_correct] - baseline[to_correct]
-        baseline[to_correct] = 0
+        #to_correct = to_add<0 # commented out 19/2/5
+        #to_correct = baseline<0 # changed 19/2/4 # commented out 19/2/5
+        #to_add[to_correct] = to_add[to_correct] - baseline[to_correct] # commented out 19/2/5
+        #baseline[to_correct] = 0 # commented out 19/2/5
         c = np.zeros_like(to_add)
         s = np.zeros_like(to_add)
         this_dfof = np.zeros_like(to_add)
@@ -619,11 +646,13 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        return to_add,cc,ss,this_dfof,s
+        dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        return to_add,cc,ss,this_dfof,s,dd
         
     trialwise = np.array(())
     ctrialwise = np.array(())
     strialwise = np.array(())
+    dtrialwise = np.array(())
     dfof = np.array(())
     straces = np.array(())
     for datafile in datafiles:
@@ -642,14 +671,15 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         print(to_add.shape)
         nlines = loadmat(datafile,'msk').shape[0]
         roilines = ctr[0] + nlines*thisdepth
-        to_add,c,s,this_dfof,this_straces = process(to_add,roilines)
+        to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
         strialwise = tack_on(s,strialwise)
+        dtrialwise = tack_on(dtr,dtrialwise)
         dfof = tack_on(this_dfof,dfof)
         straces = tack_on(this_straces,straces)
 
-    return trialwise,ctrialwise,strialwise,dfof,straces
+    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
 
 def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     if colors is None:
