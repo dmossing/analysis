@@ -30,9 +30,21 @@ dat = load([planefolds{i} '/Fall.mat']);
 iscell = readNPY([planefolds{i} '/iscell.npy']);
 
 %%
-Fcell = {dat.F};
-FcellNeu = {dat.Fneu};
+bds = cumsum([0 dat.ops.frames_per_folder]);
+nfolds = numel(dat.ops.frames_per_folder);
+
+%%
+Fcell = cell(1,nfolds);
+FcellNeu = cell(1,nfolds);
+sp = cell(1,nfolds);
+for i=1:nfolds
+    Fcell{i} = dat.F(:,bds(i)+1:bds(i+1));
+    FcellNeu{i} = dat.Fneu(:,bds(i)+1:bds(i+1));
+    sp{i} = dat.spks(:,bds(i)+1:bds(i+1));
+end
+
 ops = dat.ops;
+
 ops.Ly = single(dat.ops.Ly);
 ops.Lx = single(dat.ops.Lx);
 
@@ -40,7 +52,6 @@ ops.mimg1 = ops.meanImg;
 if isfield(ops, 'meanImg_chan2')
 	ops.mimgRED = ops.meanImg_chan2;
 end
-sp = {dat.spks};
 clear stat
 flds = fieldnames(dat.stat{1});
 for n = 1:length(dat.stat)
