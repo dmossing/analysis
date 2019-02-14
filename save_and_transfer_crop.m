@@ -1,6 +1,7 @@
 function save_and_transfer_crop(foldname)
 if foldname(end)~='/'
     foldname = [foldname '/'];
+end
 fnames = dirnames([foldname '*.mat'],foldname);
 for i=1:numel(fnames)
     fnames{i} = fnames{i}(1:end-4);
