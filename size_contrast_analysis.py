@@ -80,7 +80,7 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
         criterion = lambda x: np.abs(x)>100
     nbydepth = get_nbydepth(datafiles)
 #     trialwise,ctrialwise,strialwise = gen_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=1)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
     
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
@@ -194,11 +194,11 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
     proc['contrast'] = contrast
     proc['trialwise'] = trialwise
     proc['strialwise'] = strialwise
-    proc['ctrialwise'] = ctrialwise
+    #proc['ctrialwise'] = ctrialwise
     proc['dtrialwise'] = dtrialwise
     proc['dfof'] = dfof
-    proc['straces'] = straces
-    proc['oriavg_dfof'] = Favg
+    #proc['straces'] = straces
+    #proc['oriavg_dfof'] = Favg
     
     return Savg,Smean,lb,ub,pval,spont,Smean_stat,proc
 
@@ -410,7 +410,8 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         thesecriteria = [criterion,lambda x: np.logical_not(criterion(x))]
 
         for k in range(2):
-            soriavg[thisfold][k],strialavg[thisfold][k],lb[thisfold][k],ub[thisfold][k],pval[thisfold][k],spont[thisfold][k],Smean_stat[thisfold][k],proc[thisfold][k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff)
+            #soriavg[thisfold][k],strialavg[thisfold][k],lb[thisfold][k],ub[thisfold][k],pval[thisfold][k],spont[thisfold][k],Smean_stat[thisfold][k],proc[thisfold][k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff)
+            soriavg[thisfold][k],_,_,_,_,_,_,proc[thisfold][k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff) # changed 2/12/19
         nbydepth[thisfold] = get_nbydepth(datafiles)
         try: 
             ret_vars[thisfold] = sio.loadmat(retfile,squeeze_me=True)#['ret'][:]
@@ -419,8 +420,49 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         except:
             print('retinotopy not saved for '+thisfile)
             ret_vars[thisfold] = None
-    return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
+    #return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
+    return soriavg,ret_vars,proc # changed 2/12/19
 
 def find_gdind(arrlist):
     sz = [el.size for el in arrlist]
     return np.where(sz)[0][:1][0]
+
+def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
+    data_struct = {}
+    for key in keylist:
+        if len(proc[key][0])>0:
+            gdind = 0
+        else:
+            gdind = 1
+        decon = np.nanmean(proc[key][gdind]['strialwise'][:,:,nbefore:-nafter],-1)
+        calcium_responses_au = np.nanmean(proc[key][gdind]['trialwise'][:,:,nbefore:-nafter],-1)
+        running_speed_cm_s = 4*np.pi/180*proc[key][gdind]['trialrun'] # 4 cm from disk ctr to estimated mouse location
+        rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
+        stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+        rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
+        cell_id = np.arange(decon.shape[0])
+        ucontrast,icontrast = np.unique(proc[key][gdind]['contrast'],return_inverse=True)
+        usize,isize = np.unique(proc[key][gdind]['size'],return_inverse=True)
+        uangle,iangle = np.unique(proc[key][gdind]['angle'],return_inverse=True)
+        stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis]),axis=0)
+        stimulus_size_deg = usize
+        stimulus_contrast = ucontrast
+        stimulus_direction = uangle
+        session_id = 'session_'+key[:-1].replace('/','_')
+        mouse_id = key.split('/')[1]
+        
+        data_struct[session_id] = {}
+        data_struct[session_id]['mouse_id'] = mouse_id
+        data_struct[session_id]['stimulus_id'] = stimulus_id
+        data_struct[session_id]['stimulus_size_deg'] = stimulus_size_deg
+        data_struct[session_id]['stimulus_contrast'] = stimulus_contrast
+        data_struct[session_id]['stimulus_direction'] = stimulus_direction
+        data_struct[session_id]['cell_id'] = cell_id
+        data_struct[session_id]['cell_type'] = cell_type
+        data_struct[session_id]['mouse_id'] = mouse_id
+        data_struct[session_id]['calcium_responses_au'] = calcium_responses_au
+        data_struct[session_id]['decon'] = decon
+        data_struct[session_id]['rf_mapping_pval'] = ret_vars[key]['pval_ret']
+        data_struct[session_id]['rf_distance_deg'] = rf_distance_deg
+        data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
+    return data_struct
