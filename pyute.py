@@ -361,7 +361,7 @@ def assign_tuple(tup,ind,tgt):
         lis[ind[0]] =  tgt
     if len(ind)==2:
         lis[ind[0]][ind[1]] = tgt
-    return tuple([tuple(x) for x in bounds])
+    return tuple([tuple(x) for x in lis])
 
 # TEMPORARILY constraining gaussian to have positive amplitude for PC data (19/1/30)
 def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,None,np.inf,None,None,2*np.pi,np.inf))):
@@ -388,8 +388,8 @@ def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,N
     msk_surr[:,0] = 1
     msk_surr[-1,:] = 1
     msk_surr[:,-1] = 1 
-    i = 0
-    can_be_negative = bounds[0][2]<0
+    #i = 0
+    #can_be_negative = bounds[0][2]<0
     #if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
     #    extremum = np.argmax(ret[i],axis=None)
     #    initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
@@ -397,8 +397,9 @@ def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,N
     #    extremum = np.argmin(ret[i],axis=None)
     #    initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
     params = np.zeros((2,ret.shape[0],7))
-    sqerror = np.zeros((2,ret.shape[0]))
+    sqerror = np.inf*np.ones((2,ret.shape[0]))
     for i in range(ret.shape[0]):
+        #assert(i!=0)
         for k in range(2):
             try:
                 data = ret[i].flatten()
@@ -406,14 +407,14 @@ def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,N
                 if k==0:
                     extremum = np.argmax(ret[i],axis=None)
                     initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,np.maximum(0,ret[i].min()))                  
-                    assign_tuple(bounds,(0,2),0)
-                    assign_tuple(bounds,(1,2),np.inf)
+                    bounds = assign_tuple(bounds,(0,2),0)
+                    bounds = assign_tuple(bounds,(1,2),np.inf)
                     popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0=initial_guess, bounds=bounds)
                 else:
                     extremum = np.argmin(ret[i],axis=None)
                     initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
-                    assign_tuple(bounds,(0,2),-np.inf)
-                    assign_tuple(bounds,(1,2),0)
+                    bounds = assign_tuple(bounds,(0,2),-np.inf)
+                    bounds = assign_tuple(bounds,(1,2),0)
                     popt, pcov = sop.curve_fit(twoD_Gaussian, (x,y), data, p0=initial_guess, bounds=bounds)
                 # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
                 modeled = twoD_Gaussian((x,y),*popt)
