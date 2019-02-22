@@ -30,17 +30,28 @@ for i=1:nplanes
     iscell = readNPY([planefolds{i} '/iscell.npy']);
     
     %%
-    bds = cumsum([0 dat.ops.frames_per_folder]);
-    nfolds = numel(dat.ops.frames_per_folder);
+    framesper = zeros(size(dat.ops.frames_per_folder));
+    whichfold = zeros([size(dat.ops.filelist,1) 1]);
+    for j=1:size(dat.ops.filelist,1) % take list of files, and find which subfold each is in
+        ss = strsplit(dat.ops.filelist(j,:),'/');
+        whichfold(j) = str2num(ss{end-1});
+    end
+    [~,ia,~] = unique(whichfold); % take the unique subfolds, and where the first of each occurs in the filelist
+    [~,~,ic] = unique(ia); % return the order in which the folders appear in filelist
+    framesper = dat.ops.frames_per_folder; %(ic); % trying other way round!
+    
+    %%
+    bds = cumsum([0 framesper]);
+    nfolds = numel(framesper);
     
     %%
     Fcell = cell(1,nfolds);
     FcellNeu = cell(1,nfolds);
     sp = cell(1,nfolds);
     for j=1:nfolds
-        Fcell{j} = dat.F(:,bds(j)+1:bds(j+1));
-        FcellNeu{j} = dat.Fneu(:,bds(j)+1:bds(j+1));
-        sp{j} = dat.spks(:,bds(j)+1:bds(j+1));
+        Fcell{ic(j)} = dat.F(:,bds(j)+1:bds(j+1)); % trying other way round!
+        FcellNeu{ic(j)} = dat.Fneu(:,bds(j)+1:bds(j+1)); % trying other way round!
+        sp{ic(j)} = dat.spks(:,bds(j)+1:bds(j+1)); % trying other way round!
     end
     
     ops = dat.ops;
