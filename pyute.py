@@ -96,28 +96,12 @@ def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     N = arr.shape[axis]
     c = np.random.choice(np.arange(N),size=(N,nreps))
     L = len(arr.shape)
-#    if len(arr.shape)==1:
-#        resamp = arr[c]
-#    elif len(arr.shape)==2:
-#        if axis==0:
-#            resamp = arr[c]
-#        elif axis==1:
-#            resamp = arr[:,c]
-#    elif len(arr.shape)==3:
-#        if axis==0:
-#            resamp = arr[c]
-#        elif axis==1:
-#            resamp = arr[:,c]
-#        elif axis==2:
-#            resamp = arr[:,:,c]
     resamp=np.rollaxis(arr,axis,0)
     resamp=resamp[c]
     resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
     resamp=np.rollaxis(resamp,0,L+1)
     stat = fn(resamp,axis=axis)
-    #lb = np.percentile(stat,pct[0],axis=axis) # after computing fn, dimension axis+1 shifted down to axis
     lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
-    #ub = np.percentile(stat,pct[1],axis=axis)
     ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
     return lb,ub
 
@@ -578,12 +562,13 @@ def precise_trialize(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,n
     trialwise = np.zeros((traces.shape[0],trigtime.shape[0],desired_offsets.size))
     for trial in range(trigtime.shape[0]):
         desired_frames = frame[trial,0]+desired_offsets
+        
         try:
             for cell in range(traces.shape[0]):
                 trialwise[cell,trial] = np.interp(trigtime[trial,0]+desired_offsets,desired_frames+roitime[cell],traces[cell][desired_frames])
         except:
-            print('could not do trial #'+str(trial))
-            trialwise[cell,trial] = np.nan
+           print('could not do trial #'+str(trial))
+           trialwise[cell,trial] = np.nan
     
     return trialwise
     #return trialize(traces,frame,nbefore=nbefore,nafter=nafter) # TEMPORARY!! SEEING IF INTERPOLATION IS THE PROBLEM. Seems not to be at first glance...
@@ -644,11 +629,15 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
             c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
             #except:
             #    print("couldn't do "+str(i))
-        to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        return to_add,cc,ss,this_dfof,s,dd
+        #to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        #cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        #ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        #dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
+        to_add,trialwise_t_offset = precise_trialize_no_interp(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        cc,_ = precise_trialize_no_interp(c,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        ss,_ = precise_trialize_no_interp(s,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        dd,_ = precise_trialize_no_interp(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        return to_add,cc,ss,this_dfof,s,dd,trialwise_t_offset
         
     trialwise = np.array(())
     ctrialwise = np.array(())
@@ -656,6 +645,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
     dtrialwise = np.array(())
     dfof = np.array(())
     straces = np.array(())
+    trialwise_t_offset = np.array(())
     for datafile in datafiles:
         thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
         info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
@@ -667,20 +657,23 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         if not frame_adjust is None:
             frm = frame_adjust(frm)
             line = frame_adjust(line)
-        (to_add,ctr) = loadmat(datafile,('corrected','ctr'))
+        (to_add,ctr,uncorrected) = loadmat(datafile,('corrected','ctr','Data'))
         print(datafile)
         print(to_add.shape)
         nlines = loadmat(datafile,'msk').shape[0]
         roilines = ctr[0] + nlines*thisdepth
-        to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
+        #to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
+        to_add,c,s,this_dfof,this_straces,dtr,tt = process(to_add,roilines)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
         strialwise = tack_on(s,strialwise)
         dtrialwise = tack_on(dtr,dtrialwise)
         dfof = tack_on(this_dfof,dfof)
         straces = tack_on(this_straces,straces)
+        trialwise_t_offset = tack_on(tt,trialwise_t_offset)
 
-    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
+    #return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
+    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset
 
 def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     if colors is None:
@@ -744,7 +737,8 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
-    plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle,linewidth=linewidth)
+    plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle,fmt=None)
+    plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth)
     plt.scatter(x,mn_tgt,c=c,s=markersize)
 
 def get_dict_ind(opt,i):
@@ -768,3 +762,62 @@ def plot_nothing(plot_options):
 
 def keylist(dict):
     return list(dict.keys())
+
+def precise_trialize_no_interp(traces,frame,line,roilines,nlines=512,nplanes=4,nbefore=4,nafter=8,continuous=False):
+    
+    def convert_frame_line(frame,line,nlines,nplanes,continuous=False,matlab_format=True):
+        
+        def repeat_internal_values(x):
+            return np.concatenate((x,np.repeat(x[1:-1],2),x[-1]),axis=None)
+        
+        if matlab_format:
+            frame = frame-1
+            line = line-1
+        if continuous: # no dead time between stims; the end of one is the start of the next
+            frame = repeat_internal_values(frame)
+            line = repeat_internal_values(line)
+        frame = frame.reshape((-1,2))
+        line = line.reshape((-1,2))
+        new_frame = np.floor(frame/nplanes).astype('<i4')
+        new_line = line + np.remainder(frame,nplanes)*nlines
+        new_nlines = nlines*nplanes
+        
+        return new_frame,new_line,new_nlines
+
+    frame = frame.astype('<i4')
+
+    while np.min(np.diff(frame)) < 0:
+        brk = np.argmin(np.diff(frame))+1
+        frame[brk:] = frame[brk:] + 65536
+    
+    frame,line,nlines = convert_frame_line(frame,line,nlines,nplanes,continuous=continuous)
+    
+    ftrigtime = line/nlines
+    trigtime = frame+ftrigtime
+    triallen = np.diff(trigtime,axis=1)
+    trigrate = np.mean(triallen)
+    interpbetweentrigs = int(np.round(trigrate))
+    roitime = roilines/nlines
+    desired_offsets = np.arange(-nbefore,interpbetweentrigs+nafter) # frames relative to each trigger to sample
+    
+    trialwise = np.zeros((traces.shape[0],trigtime.shape[0],desired_offsets.size))
+    trialwise_t_offset = np.zeros((traces.shape[0],trigtime.shape[0]))
+    for trial in range(trigtime.shape[0]):
+        desired_frames = frame[trial,0]+desired_offsets
+        stop_early = desired_frames.max()+1 >= traces.shape[1] # last frame is beyond the end
+        if stop_early:
+            stopat = traces.shape[1]-1-desired_frames.max()-1 # take a subset of the frames
+        else:
+            stopat = desired_frames.size # take all the frames
+        #try:
+        for cell in range(traces.shape[0]):
+            trialwise_t_offset[cell,trial] = np.mod(roitime[cell]-ftrigtime[trial,0],1)
+            if roitime[cell] > ftrigtime[trial,0]: # if cell is recorded after stim comes in, take the stim frame
+                trialwise[cell,trial][:stopat] = traces[cell][desired_frames[:stopat]]
+            else: # if cell is recorded before stim comes in, take the subsequent frame
+                trialwise[cell,trial][:stopat] = traces[cell][desired_frames[:stopat]+1]
+        #except:
+        #    print('could not do trial #'+str(trial))
+        #    trialwise[cell,trial] = np.nan
+    
+    return trialwise,trialwise_t_offset

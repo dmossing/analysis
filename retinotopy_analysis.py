@@ -24,7 +24,7 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
         nbydepth[i] = corrected.shape[0]
 #         with h5py.File(datafile,mode='r') as f:
 #             nbydepth[i] = (f['corrected'][:].T.shape[0])
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
 
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
@@ -126,7 +126,7 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
     for i in range(strialwise.shape[0]):
         _,pval_ret[i] = sst.ttest_rel(strialwise[i,:,nbefore-1],strialwise[i,:,nbefore+1])
     
-    return ret,paramdict,pval_ret,trialrun,has_inverse
+    return ret,paramdict,pval_ret,trialrun,has_inverse,locinds
 
 
 def analyze_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>100,rg=(2,-10),nbefore=nbefore,nafter=nafter):
@@ -270,7 +270,7 @@ def ontarget_by_retinotopy(ret_vars,ctr=None,rg=5,pcutoff=1e-2):
         pval_ret = ret_vars['pval']
     return np.logical_and((xo+ctr_ret[0]-ctr[0])**2+(-yo+ctr_ret[1]-ctr[1])**2<rg**2,pval_ret<pcutoff),np.hstack((xo,yo)) # ctr_ret as calculated assumes upside down retinotopy center; true through 18/10/30. Grid used in fitting gaussians goes from negative to positive degrees with increasing y index, hence -yo.
 
-def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda x:x>100,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
+def do_process(thisfold,thisfile,rg=(2,-10),nbefore=8,nafter=8,criterion=lambda x:x>100,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
 
     #datafoldbase = '/home/mossing/scratch/2Pdata/'
     datafold = datafoldbase+thisfold+'ot/'
@@ -281,17 +281,27 @@ def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda 
     stimfile = thisfile+'.mat'
 
     datafiles = [datafold+file for file in datafiles]
+    datafiles = [x for x in datafiles if os.path.exists(x)]
     stimfile = stimfold+stimfile
     retfile = datafoldbase+thisfold+'retinotopy_'+thisfile[-3:]+'.mat'
 
 #     nbefore = 4
 #     nafter = 4
 
-    ret,paramdict,pval,trialrun,has_inverse = analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=criterion,rg=rg,nbefore=nbefore,nafter=nafter)
+    ret,paramdict,pval,trialrun,has_inverse,locinds = analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=criterion,rg=rg,nbefore=nbefore,nafter=nafter)
     nbydepth = get_nbydepth(datafiles)
-    trialwise,ctrialwise,strialwise,_,_,_ = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,_,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
 #     traces,ctraces,straces,dfof,baseline = rt.gen_traces(datafiles)
     spont = strialwise[:,trialrun>100,:nbefore].mean(-1).mean(-1)
+    proc = {}
+    proc['trialwise'] = trialwise
+    proc['dtrialwise'] = dtrialwise
+    proc['strialwise'] = strialwise
+    proc['trialwise_t_offset'] = trialwise_t_offset
+    proc['spont'] = spont
+    proc['locinds'] = locinds
+    proc['dfof'] = dfof
+    
 
     try:
         retfile_load = sio.loadmat(retfile)
@@ -309,9 +319,9 @@ def do_process(thisfold,thisfile,rg=(2,-10),nbefore=4,nafter=4,criterion=lambda 
     retfile_load['ret'] = ret
     sio.savemat(retfile,retfile_load)
     print('saving here '+retfile)
-    return ret,paramdict,pval,trialrun,has_inverse,nbydepth,spont
+    return ret,paramdict,pval,trialrun,has_inverse,nbydepth,proc
 
-def analyze_everything(folds=None,files=None,rgs=None,criteria=None,nbefore=4,nafter=4,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
+def analyze_everything(folds=None,files=None,rgs=None,criteria=None,nbefore=8,nafter=8,datafoldbase='/media/mossing/backup_1/data/2P/',stimfoldbase='/home/mossing/modulation/visual_stim/'):
     if isinstance(datafoldbase,str):
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
@@ -322,10 +332,10 @@ def analyze_everything(folds=None,files=None,rgs=None,criteria=None,nbefore=4,na
     trialrun = {}
     has_inverse = {}
     nbydepth = {}
-    spont = {}
+    proc = {}
     for thisfold,thisfile,rg,criterion,thisdatafoldbase,thisstimfoldbase in zip(folds,files,rgs,criteria,datafoldbase,stimfoldbase):
-        ret[thisfold],paramdict[thisfold],pval[thisfold],trialrun[thisfold],has_inverse[thisfold],nbydepth[thisfold],spont[thisfold] = do_process(thisfold,thisfile,rg=rg,nbefore=nbefore,nafter=nafter,criterion=criterion,datafoldbase=thisdatafoldbase,stimfoldbase=thisstimfoldbase)
-    return ret,paramdict,pval,trialrun,has_inverse,nbydepth,spont
+        ret[thisfold],paramdict[thisfold],pval[thisfold],trialrun[thisfold],has_inverse[thisfold],nbydepth[thisfold],proc[thisfold] = do_process(thisfold,thisfile,rg=rg,nbefore=nbefore,nafter=nafter,criterion=criterion,datafoldbase=thisdatafoldbase,stimfoldbase=thisstimfoldbase)
+    return ret,paramdict,pval,trialrun,has_inverse,nbydepth,proc
 
 def plot_peak_aligned(retx,xo,gridsize=10,alpha=1e-2,c='b'):
     Nx = retx.shape[1]
@@ -333,3 +343,28 @@ def plot_peak_aligned(retx,xo,gridsize=10,alpha=1e-2,c='b'):
     for i in range(retx.shape[0]):
         plt.plot(xrg-xo[i],retx[i]/retx[i].max(),alpha=alpha,c=c)
     plt.xlim(xrg.min()-gridsize,xrg.max()+gridsize)
+
+def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+    data_struct = {}
+    for key in keylist:
+        dfof = proc[key]['dtrialwise']
+        #calcium_responses_au = np.nanmean(proc[key]['trialwise'][:,:,nbefore:-nafter],-1)
+        running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'] # 4 cm from disk ctr to estimated mouse location
+        rf_ctr = np.concatenate((proc[key]['paramdict']['xo'][np.newaxis,:],-proc[key]['paramdict']['yo'][np.newaxis,:]),axis=0)
+        cell_id = np.arange(dfof.shape[0])
+        stimulus_id = proc[key]['locinds'].T - 1
+        session_id = 'session_'+key[:-1].replace('/','_')
+        mouse_id = key.split('/')[1]
+        
+        data_struct[session_id] = {}
+        data_struct[session_id]['mouse_id'] = mouse_id
+        data_struct[session_id]['stimulus_id'] = stimulus_id
+        data_struct[session_id]['cell_id'] = cell_id
+        data_struct[session_id]['cell_type'] = cell_type
+        data_struct[session_id]['F'] = dfof
+        data_struct[session_id]['nbefore'] = nbefore
+        data_struct[session_id]['nafter'] = nafter
+        data_struct[session_id]['rf_mapping_pval'] = proc[key]['pval']
+        data_struct[session_id]['decon'] = proc[key]['strialwise']
+        data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
+    return data_struct

@@ -1,4 +1,4 @@
-function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,alignfile,green_only)
+function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,alignfile,green_only,empty_red,opto_settings)
 % splits up a .sbx file into one or multiple .tifs
 % sbxfile a string
 if nargin < 2 || isempty(chunksize)
@@ -9,6 +9,15 @@ if nargin < 3 || isempty(alignfile)
 end
 if nargin < 4 || isempty(green_only)
     green_only = false;
+end
+if nargin < 5 || isempty(empty_red)
+    empty_red = false;
+end
+if nargin < 6 || isempty(opto_settings)
+    opto_settings = [];
+    opto_correct = false;
+else
+    opto_correct = true;
 end
 if isempty(strfind(sbxfile,'.sbx'))
     sbxfile = [sbxfile '.sbx'];
@@ -26,21 +35,29 @@ if info.channels == 1
 else
     twochan = false;
 end
-%temp = sbxreadpacked(filebase,1,1);
+
+if opto_correct
+    lights_on = opto_settings.lights_on;
+    frame = opto_settings.frame;
+    while find(diff(frame)<0,1)
+        seam = find(diff(frame)<0,1);
+        frame(seam+1:end) = frame(seam+1:end)+65536;
+    end
+    line = opto_settings.line;
+    fr_affected = [];
+    ln_affected = [];
+    for j=1:numel(lights_on)
+        if lights_on(j)
+            fr = [frame(4*(j-1)+1); frame(4*(j-1)+4)];
+            ln = [line(4*(j-1)+1); line(4*(j-1)+4)];
+            fr_affected = [fr_affected fr];
+            ln_affected = [ln_affected ln];
+        end
+    end
+end
+
 temp = squeeze(sbxread(filebase,1,1));
-% [~, ~, rect] = crop(sbxreadpacked(filebase,1,1), true);
-% %         rect = round([rect(3),rect(3)+rect(4),rect(1),rect(1)+rect(2)]);
-% rect = [rect(2),rect(2)+rect(4),rect(1),rect(1)+rect(3)];
-% rect(1) = max(rect(1),1);
-% rect(3) = max(rect(3),1);
-% rect(2) = min(rect(2),info.sz(1));
-% rect(4) = min(rect(4),info.sz(2));
-% if ~mod(rect(2)-rect(1),2)
-%     rect(2) = rect(2)-1;
-% end
-% if ~mod(rect(4)-rect(3),2)
-%     rect(4) = rect(4)-1;
-% end
+
 options.big = false;
 options.append = false;
 
@@ -50,7 +67,8 @@ if alignfile
     alignfile = strrep(sbxfile,'.sbx','.align');
     load(alignfile,'-mat','T');
 end
-for i=(1+twochan):chunksize:info.max_idx
+opto_offsets = [];
+for i=1:chunksize:info.max_idx
     tifffile = strrep(sbxfile,'.sbx',['_t' ddigit(ctr,2) '.tif']);
     if exist(tifffile,'file')
         delete(tifffile)
@@ -70,28 +88,61 @@ for i=(1+twochan):chunksize:info.max_idx
         newchunksize = chunksize;
     end
     z = squeeze(sbxread(filebase,startat,newchunksize));
-    %z = sbxreadpacked(filebase,startat,newchunksize);
+    if opto_correct && numel(fr_affected)>0
+        opto_offset = estimate_opto_offset(z,fr_affected-startat+1)
+        opto_offsets = [opto_offsets; opto_offset];
+        if i < 3
+            opto_settings.opto_offset = opto_offset;
+        else
+            opto_offset = opto_settings.opto_offset;
+        end
+        while numel(fr_affected) > 0 && fr_affected(2,1) < tstartat+newchunksize
+            begframe = fr_affected(1,1)-tstartat+1;
+            endframe = fr_affected(2,1)-tstartat+1;
+            if begframe < 1 % && endframe > 1
+                z(:,:,1:endframe-1) = z(:,:,1:endframe-1) - opto_offset;
+            else
+                z(:,:,begframe+1:endframe-1) = z(:,:,begframe+1:endframe-1) - opto_offset;
+                z(ln_affected(1,1):end,:,begframe) = z(ln_affected(1,1):end,:,begframe) - opto_offset;
+            end
+            z(1:ln_affected(2,1),:,endframe) = z(1:ln_affected(2,1),:,endframe) - opto_offset;
+            fr_affected = fr_affected(:,2:end);
+            ln_affected = ln_affected(:,2:end);
+        end
+        if numel(fr_affected) > 0
+            begframe = fr_affected(1,1)-tstartat+1;
+            endframe = fr_affected(2,1)-tstartat+1;
+            if begframe < newchunksize
+                z(:,:,begframe+1:end) = z(:,:,begframe+1:end) - opto_offset;
+                z(ln_affected(1,1):end,:,begframe) = z(ln_affected(1,1):end,:,begframe) - opto_offset;
+            end
+        end
+    end
+    
     if twochan
         if ~green_only
             rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
         else
-            rejig = permute(z(1,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]); 
+            rejig = permute(z(1,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
         end
-        rejig = permute(z(:,rect(1):rect(2),rect(3):rect(4),:),[2,3,1,4]);
         if alignfile
             rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
         end
         rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
-        %         mysaveastiff(rejig,tifffile,i==1);
-        saveastiff(rejig,tifffile,options); 
+        saveastiff(rejig,tifffile,options);
         
     else
         rejig = z(rect(1):rect(2),rect(3):rect(4),:);
         if alignfile
             rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
         end
-        %         mysaveastiff(z(rect(1):rect(2),rect(3):rect(4),:),tifffile,i==1);
-        saveastiff(rejig,tifffile,options); 
+        if empty_red
+            rejig = reshape(rejig,[size(rejig,1) size(rejig,2) 1 size(rejig,3)]);
+            redch = zeros(size(rejig));
+            rejig = cat(3,rejig,redch);
+            rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
+        end
+        saveastiff(rejig,tifffile,options);
         
     end
     ctr = ctr+1;
@@ -109,9 +160,7 @@ tagstruct.Compression = Tiff.Compression.None;
 tagstruct.BitsPerSample = 16;
 % if isfirst
 t = Tiff(tifffile,'w8');
-% else
-%     t = Tiff(tifffile,'a');
-% end
+
 for d=1:depth,
     t.setTag(tagstruct);
     t.write(data(:, :, d));
@@ -120,3 +169,33 @@ for d=1:depth,
     end
 end
 t.close();
+
+function opto_offset = estimate_opto_offset(z,fr_affected)
+% fr_af = [fr_affected(1,:); fr_affected(1,:) + 5];
+% fr_unaf = [fr_affected(1,:)-5; fr_affected(1,:)];
+if fr_affected(1,1)>4
+    fr_af = [fr_affected(1,:); fr_affected(1,:)];
+    fr_unaf = [fr_affected(1,:)-4; fr_affected(1,:)-4];
+else
+    fr_af = [fr_affected(1,2:end); fr_affected(1,2:end)];
+    fr_unaf = [fr_affected(1,2:end)-4; fr_affected(1,2:end)-4];
+end
+% fr_unaf = reshape([0; fr_affected(1:end-1)'],2,[]);
+sz = size(z);
+light_on = false(sz(end),1);
+light_off = false(sz(end),1);
+ind = 1;
+while ind <= size(fr_af,2) && fr_af(2,ind) < sz(end)
+    %     light_on(fr_af(1,ind)+1:fr_af(2,ind)-1) = 1;
+    light_on(fr_af(1,ind)+1) = 1;
+    ind = ind+1;
+end
+ind = 1;
+while ind <= size(fr_unaf,2) && fr_unaf(2,ind) < sz(end)
+    %     light_off(fr_unaf(1,ind)+1:fr_unaf(2,ind)-1) = 1;
+    light_off(fr_unaf(1,ind)+1) = 1;
+    ind = ind+1;
+end
+z_on = z(:,101:end,light_on);
+z_off = z(:,101:end,light_off);
+opto_offset = mean(z_on(:)) - mean(z_off(:));

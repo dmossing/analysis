@@ -28,7 +28,11 @@ for i=1:nplanes
     %%
     dat = load([planefolds{i} '/Fall.mat']);
     iscell = readNPY([planefolds{i} '/iscell.npy']);
-    
+    red_saved = exist([planefolds{i} '/redcell.npy'],'file');
+    if red_saved
+        redcell = readNPY([planefolds{i} '/redcell.npy']);
+        redratio = redcell(:,2);
+    end
     %%
     framesper = zeros(size(dat.ops.frames_per_folder));
     whichfold = zeros([size(dat.ops.filelist,1) 1]);
@@ -39,7 +43,7 @@ for i=1:nplanes
     [~,ia,~] = unique(whichfold); % take the unique subfolds, and where the first of each occurs in the filelist
     [~,~,ic] = unique(ia); % return the order in which the folders appear in filelist
     framesper = dat.ops.frames_per_folder; %(ic); % trying other way round!
-    
+     % for some reason, this was req'd on 3/20 data ^
     %%
     bds = cumsum([0 framesper]);
     nfolds = numel(framesper);
@@ -53,6 +57,10 @@ for i=1:nplanes
         FcellNeu{ic(j)} = dat.Fneu(:,bds(j)+1:bds(j+1)); % trying other way round!
         sp{ic(j)} = dat.spks(:,bds(j)+1:bds(j+1)); % trying other way round!
     end
+    
+%     Fcell(ic) = Fcell; % for some reason, this was req'd on 3/20 data
+%     FcellNeu(ic) = FcellNeu;
+%     sp(ic) = sp;
     
     ops = dat.ops;
     
@@ -92,7 +100,11 @@ for i=1:nplanes
     end
     
     %%
-    
-    save([saveroot num2str(i) '.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat');
-    save([saveroot num2str(i) '_proc.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat');
+    if red_saved
+        save([saveroot num2str(i) '.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat','redratio');
+        save([saveroot num2str(i) '_proc.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat','redratio');
+    else
+        save([saveroot num2str(i) '.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat');
+        save([saveroot num2str(i) '_proc.mat'],'-v7.3','Fcell','FcellNeu','ops','sp','stat','dat');
+    end
 end

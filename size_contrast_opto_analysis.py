@@ -81,7 +81,7 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
         criterion = lambda x: np.abs(x)>100
     nbydepth = get_nbydepth(datafiles)
 #     trialwise,ctrialwise,strialwise = gen_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
     
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
@@ -95,9 +95,9 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
     data = strialwise #[:,:,nbefore:-nafter]
     
     try:
-        dxdt = sio.loadmat(datafiles[1],squeeze_me=True)['dxdt']
+        dxdt = sio.loadmat(datafiles[0],squeeze_me=True)['dxdt']
     except:
-        with h5py.File(datafiles[1],mode='r') as f:
+        with h5py.File(datafiles[0],mode='r') as f:
             dxdt = f['dxdt'][:].T
             
     trialrun = np.zeros(frame[0::2].shape)
@@ -203,14 +203,16 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
     proc['light'] = light
     proc['trialwise'] = trialwise
     proc['strialwise'] = strialwise
-    proc['ctrialwise'] = ctrialwise
+    #proc['ctrialwise'] = ctrialwise
+    proc['dtrialwise'] = dtrialwise
+    proc['trialwise_t_offset'] = trialwise_t_offset
     proc['dfof'] = dfof
     proc['frame'] = frame
     
     return Savg,Smean,lb,ub,pval,spont,Smean_stat,proc
 
 
-def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None):
+def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,datafoldbase=None,stimfoldbase=None):
     soriavg = {}
     strialavg = {}
     lb = {}
@@ -221,8 +223,8 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
     ret_vars = {}
     Smean_stat = {}
     proc = {}
-    datafoldbase = '/home/mossing/scratch/2Pdata/'
-    stimfoldbase = '/home/mossing/scratch/visual_stim/'
+    #datafoldbase = '/home/mossing/scratch/2Pdata/'
+    #stimfoldbase = '/home/mossing/scratch/visual_stim/'
     for thisfold,thisfile,retnumber,frame_adjust,rg,criterion in zip(folds,files,rets,adjust_fns,rgs,criteria):
         datafold = datafoldbase+thisfold+'ot/'
         datafiles = [thisfile+'_ot_'+number+'.rois' for number in ['000','001','002','003']]
@@ -231,6 +233,7 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
         stimfile = thisfile+'.mat'
 
         datafiles = [datafold+file for file in datafiles]
+        datafiles = [x for x in datafiles if os.path.exists(x)]
         stimfile = stimfold+stimfile
         retfile = datafoldbase+thisfold+'retinotopy_'+retnumber+'.mat'
         print(retfile)
@@ -249,7 +252,7 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
             ret_vars[thisfold] = None
     return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
 
-def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,criterion_cutoff=0.2):
+def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,criterion_cutoff=0.2,datafoldbase=None,stimfoldbase=None):
     soriavg = {}
     strialavg = {}
     lb = {}
@@ -260,9 +263,9 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
     ret_vars = {}
     Smean_stat = {}
     proc = {}
-    datafoldbase = '/home/mossing/scratch/2Pdata/'
-    stimfoldbase = '/home/mossing/scratch/visual_stim/'
-    for thisfold,thisfile,retnumber,frame_adjust,rg,criterion in zip(folds,files,rets,adjust_fns,rgs,criteria):
+    #datafoldbase = '/home/mossing/scratch/2Pdata/'
+    #stimfoldbase = '/home/mossing/scratch/visual_stim/'
+    for thisfold,thisfile,retnumber,frame_adjust,rg,criterion,thisdfb,thissfb in zip(folds,files,rets,adjust_fns,rgs,criteria,datafoldbase,stimfoldbase):
 
         soriavg[thisfold] = [None]*2
         strialavg[thisfold] = [None]*2
@@ -275,15 +278,16 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         Smean_stat[thisfold] = [None]*2
         proc[thisfold] = [None]*2
 
-        datafold = datafoldbase+thisfold+'ot/'
+        datafold = thisdfb+thisfold+'ot/'
         datafiles = [thisfile+'_ot_'+number+'.rois' for number in ['000','001','002','003']]
 
-        stimfold = stimfoldbase+thisfold
+        stimfold = thissfb+thisfold
         stimfile = thisfile+'.mat'
 
         datafiles = [datafold+file for file in datafiles]
+        datafiles = [x for x in datafiles if os.path.exists(x)]
         stimfile = stimfold+stimfile
-        retfile = datafoldbase+thisfold+'retinotopy_'+retnumber+'.mat'
+        retfile = thisdfb+thisfold+'retinotopy_'+retnumber+'.mat'
         print(retfile)
 
         nbefore = 4
@@ -341,3 +345,51 @@ def get_norm_curves(soriavg,lkat=None,sizes=None,contrasts=None,append_gray=Fals
             snorm = to_add
             
     return snorm
+
+def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
+    data_struct = {}
+    for key in keylist:
+        if len(proc[key][0])>0:
+            gdind = 0
+        else:
+            gdind = 1
+        dfof = proc[key][gdind]['dtrialwise']
+        decon = np.nanmean(proc[key][gdind]['strialwise'][:,:,nbefore:-nafter],-1)
+        #calcium_responses_au = np.nanmean(proc[key][gdind]['trialwise'][:,:,nbefore:-nafter],-1)
+        running_speed_cm_s = 4*np.pi/180*proc[key][gdind]['trialrun'] # 4 cm from disk ctr to estimated mouse location
+        rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
+        stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+        rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
+        rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
+        cell_id = np.arange(dfof.shape[0])
+        ucontrast,icontrast = np.unique(proc[key][gdind]['contrast'],return_inverse=True)
+        usize,isize = np.unique(proc[key][gdind]['size'],return_inverse=True)
+        uangle,iangle = np.unique(proc[key][gdind]['angle'],return_inverse=True)
+        ulight,ilight = np.unique(proc[key][gdind]['light'],return_inverse=True)
+        stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis],ilight[np.newaxis]),axis=0)
+        stimulus_size_deg = usize
+        stimulus_contrast = ucontrast
+        stimulus_direction = uangle
+        stimulus_light = ulight
+        session_id = 'session_'+key[:-1].replace('/','_')
+        mouse_id = key.split('/')[1]
+        
+        data_struct[session_id] = {}
+        data_struct[session_id]['mouse_id'] = mouse_id
+        data_struct[session_id]['stimulus_id'] = stimulus_id
+        data_struct[session_id]['stimulus_size_deg'] = stimulus_size_deg
+        data_struct[session_id]['stimulus_contrast'] = stimulus_contrast
+        data_struct[session_id]['stimulus_direction'] = stimulus_direction
+        data_struct[session_id]['stimulus_light'] = stimulus_light
+        data_struct[session_id]['cell_id'] = cell_id
+        data_struct[session_id]['cell_type'] = cell_type
+        data_struct[session_id]['mouse_id'] = mouse_id
+        data_struct[session_id]['F'] = dfof
+        data_struct[session_id]['decon'] = decon
+        data_struct[session_id]['nbefore'] = nbefore
+        data_struct[session_id]['nafter'] = nafter
+        data_struct[session_id]['rf_mapping_pval'] = ret_vars[key]['pval_ret']
+        data_struct[session_id]['rf_distance_deg'] = rf_distance_deg
+        data_struct[session_id]['rf_displacement_deg'] = rf_displacement_deg
+        data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
+    return data_struct

@@ -75,7 +75,7 @@ def gen_traces(datafiles,blcutoff=blcutoff,blspan=blspan): #nbefore=nbefore,naft
                 baselineall = baseline.copy()
     return trialwise,ctrialwise,strialwise,dfofall,baselineall
 
-def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter=nafter,criterion=None,criterion_cutoff=None):
+def analyze_luminance(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter=nafter,criterion=None,criterion_cutoff=None):
     if criterion is None:
         criterion = lambda x: np.abs(x)>100
     nbydepth = get_nbydepth(datafiles)
@@ -115,87 +115,61 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
     stimparams = result['stimParams']
     gratingInfo = result['gratingInfo']
         
-    indexlut,stimp = np.unique(stimparams,axis=1,return_inverse=True)
+    indexlut,stimp = np.unique(stimparams,axis=0,return_inverse=True)
     
-    #angle = stimparams[0]
-    #size = stimparams[1]
-    #contrast = stimparams[4]
-    angle = gratingInfo['Orientation'][()]
-    size = gratingInfo['Size'][()]
-    contrast = gratingInfo['Contrast'][()]
+    intensity = gratingInfo['Intensity'][()]
     
-    ucontrast = np.unique(contrast)
-    uangle = np.unique(angle)
-    usize = np.unique(size)
-    ncontrast = len(ucontrast)
-    nangle = len(uangle)
-    nsize = len(usize)
-    
-    angle180 = np.remainder(angle,180)
-    uangle180 = np.unique(angle180)
-    nangle180 = len(uangle180)
+    uintensity = np.unique(intensity)
+    nintensity = len(uintensity)
  
-    Smean = np.zeros((data.shape[0],nangle180,nsize,ncontrast,data.shape[2]))
-    Fmean = np.zeros((data.shape[0],nangle180,nsize,ncontrast,data.shape[2]))
-    Smean_stat = np.zeros((data.shape[0],nangle180,nsize,ncontrast,data.shape[2]))
-    Stavg = np.zeros((data.shape[0],nangle180,nsize,ncontrast,int(data.shape[1]/nangle/nsize/ncontrast)))
-    
-    Strials = {}
-    Sspont = {}
-    for i in range(nangle180):
-        for j in range(nsize):
-            for k in range(ncontrast):
-                lkat = np.logical_and(runtrial,np.logical_and(angle180==uangle180[i],np.logical_and(size==usize[j],contrast==ucontrast[k])))
-                Smean[:,i,j,k,:] = np.nanmean(data[:,lkat,:],1)
-                Fmean[:,i,j,k,:] = np.nanmean(data_dfof[:,lkat,:],1)
-                Strials[(i,j,k)] = np.nanmean(data[:,lkat,nbefore:-nafter],2)
-                Sspont[(i,j,k)] = np.nanmean(data[:,lkat,:nbefore],2)
-                stat = np.logical_and(np.logical_not(runtrial),np.logical_and(angle180==uangle180[i],np.logical_and(size==usize[j],contrast==ucontrast[k])))
-                Smean_stat[:,i,j,k] = np.nanmean(data[:,stat],1)
- 
-    lb = np.zeros((strialwise.shape[0],nangle180,nsize,ncontrast))
-    ub = np.zeros((strialwise.shape[0],nangle180,nsize,ncontrast))
-    # mn = np.zeros((strialwise.shape[0],nangle180,nsize,ncontrast))
-    
-    for i in range(nangle180):
-        print(i)
-        for j in range(nsize):
-            for k in range(ncontrast):
-                if Strials[(i,j,k)].size:
-                    lb[:,i,j,k],ub[:,i,j,k] = ut.bootstrap(Strials[(i,j,k)],np.mean,axis=1,pct=(16,84))
-                else:
-                    lb[:,i,j,k] = np.nan
-                    ub[:,i,j,k] = np.nan
-                # mn[:,i,j,k] = np.nanmean(Strials[(i,j,k)],axis=1)
-    
-    pval = np.zeros((strialwise.shape[0],nangle180))
-#     for i in range(pval.shape[0]):
-#         print(i)
-    for j,theta in enumerate(uangle180):
-        print(theta)
-        #_,pval[:,j] = sst.ttest_rel(Sspont[(j,0,ncontrast-1)],Strials[(j,0,ncontrast-1)],axis=1)
-        _,pval[:,j] = sst.ttest_ind(Strials[(j,0,0)],Strials[(j,0,ncontrast-1)],axis=1)
-    #assert(np.logical_not(np.isnan(pval).sum()))            
-    Savg = np.nanmean(np.nanmean(Smean[:,:,:,:,nbefore:-nafter],axis=-1),axis=1)
-    Favg = np.nanmean(np.nanmean(Fmean[:,:,:,:,nbefore:-nafter],axis=-1),axis=1)
-    
-   # Storiavg = Stavg.mean(1)
-    # _,pval = sst.ttest_ind(Storiavg[:,0,-1].T,Storiavg[:,0,0].T)
-    
-    #suppressed = np.logical_and(pval<0.05,Savg[:,0,-1]<Savg[:,0,0])
-    #facilitated = np.logical_and(pval<0.05,Savg[:,0,-1]>Savg[:,0,0])
-    spont = np.zeros((Savg.shape[0],))
-    keylist = list(Sspont.keys())
-    nkeys = len(keylist)
-    for key in Sspont.keys():
-        spont = spont + Sspont[key].mean(1)/nkeys
+#    Smean = np.zeros((data.shape[0],nangle180,nsize,ncontrast,data.shape[2]))
+#    Fmean = np.zeros((data.shape[0],nangle180,nsize,ncontrast,data.shape[2]))
+#    Smean_stat = np.zeros((data.shape[0],nangle180,nsize,ncontrast,data.shape[2]))
+#    Stavg = np.zeros((data.shape[0],nangle180,nsize,ncontrast,int(data.shape[1]/nangle/nsize/ncontrast)))
+#    
+#    Strials = {}
+#    Sspont = {}
+#    for i in range(nangle180):
+#        for j in range(nsize):
+#            for k in range(ncontrast):
+#                lkat = np.logical_and(runtrial,np.logical_and(angle180==uangle180[i],np.logical_and(size==usize[j],contrast==ucontrast[k])))
+#                Smean[:,i,j,k,:] = np.nanmean(data[:,lkat,:],1)
+#                Fmean[:,i,j,k,:] = np.nanmean(data_dfof[:,lkat,:],1)
+#                Strials[(i,j,k)] = np.nanmean(data[:,lkat,nbefore:-nafter],2)
+#                Sspont[(i,j,k)] = np.nanmean(data[:,lkat,:nbefore],2)
+#                stat = np.logical_and(np.logical_not(runtrial),np.logical_and(angle180==uangle180[i],np.logical_and(size==usize[j],contrast==ucontrast[k])))
+#                Smean_stat[:,i,j,k] = np.nanmean(data[:,stat],1)
+# 
+#    lb = np.zeros((strialwise.shape[0],nangle180,nsize,ncontrast))
+#    ub = np.zeros((strialwise.shape[0],nangle180,nsize,ncontrast))
+#    
+#    for i in range(nangle180):
+#        print(i)
+#        for j in range(nsize):
+#            for k in range(ncontrast):
+#                if Strials[(i,j,k)].size:
+#                    lb[:,i,j,k],ub[:,i,j,k] = ut.bootstrap(Strials[(i,j,k)],np.mean,axis=1,pct=(16,84))
+#                else:
+#                    lb[:,i,j,k] = np.nan
+#                    ub[:,i,j,k] = np.nan
+#    
+#    pval = np.zeros((strialwise.shape[0],nangle180))
+#    for j,theta in enumerate(uangle180):
+#        print(theta)
+#        _,pval[:,j] = sst.ttest_ind(Strials[(j,0,0)],Strials[(j,0,ncontrast-1)],axis=1)
+#    Savg = np.nanmean(np.nanmean(Smean[:,:,:,:,nbefore:-nafter],axis=-1),axis=1)
+#    Favg = np.nanmean(np.nanmean(Fmean[:,:,:,:,nbefore:-nafter],axis=-1),axis=1)
+#    
+#    spont = np.zeros((Savg.shape[0],))
+#    keylist = list(Sspont.keys())
+#    nkeys = len(keylist)
+#    for key in Sspont.keys():
+#        spont = spont + Sspont[key].mean(1)/nkeys
 
     proc = {}
     proc['runtrial'] = runtrial
     proc['trialrun'] = trialrun
-    proc['angle'] = angle
-    proc['size'] = size
-    proc['contrast'] = contrast
+    proc['intensity'] = intensity
     proc['trialwise'] = trialwise
     proc['strialwise'] = strialwise
     #proc['ctrialwise'] = ctrialwise
@@ -205,7 +179,7 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
     #proc['straces'] = straces
     #proc['oriavg_dfof'] = Favg
     
-    return Savg,Smean,lb,ub,pval,spont,Smean_stat,proc
+    return proc
 
 
 def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/'):
@@ -213,15 +187,15 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
         stimfoldbase = [stimfoldbase]*len(folds)
-    soriavg = {}
-    strialavg = {}
-    lb = {}
-    ub = {}
-    pval = {}
-    nbydepth = {}
-    spont = {}
-    ret_vars = {}
-    Smean_stat = {}
+    #soriavg = {}
+    #strialavg = {}
+    #lb = {}
+    #ub = {}
+    #pval = {}
+    #nbydepth = {}
+    #spont = {}
+    #ret_vars = {}
+    #Smean_stat = {}
     proc = {}
     for thisfold,thisfile,retnumber,frame_adjust,rg,criterion,thisdatafoldbase,thisstimfoldbase in zip(folds,files,rets,adjust_fns,rgs,criteria,datafoldbase,stimfoldbase):
         datafold = thisdatafoldbase+thisfold+'ot/'
@@ -238,16 +212,15 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
         nbefore = 8
         nafter = 8
 
-        soriavg[thisfold],strialavg[thisfold],lb[thisfold],ub[thisfold],pval[thisfold],spont[thisfold],Smean_stat[thisfold],proc[thisfold] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=criterion)
-        nbydepth[thisfold] = get_nbydepth(datafiles)
+        proc[thisfold] = analyze_luminance(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=criterion)
+        proc[thisfold]['nbydepth'] = get_nbydepth(datafiles)
         try: 
-            ret_vars[thisfold] = sio.loadmat(retfile,squeeze_me=True)#['ret'][:]
+            proc[thisfold]['ret_vars'] = sio.loadmat(retfile,squeeze_me=True)#['ret'][:]
             print('loaded retinotopy file')
-            ret_vars[thisfold]['position'] = sio.loadmat(stimfile,squeeze_me=True)['result'][()]['position']
         except:
             print('retinotopy not saved for '+thisfile)
-            ret_vars[thisfold] = None
-    return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
+            proc[thisfold]['ret_vars'] = None
+    return proc
 
 def get_norm_curves(soriavg,lkat=None,sizes=None,contrasts=None,append_gray=False):
     # lkat a dict with keys corresponding to the expts. you'll summarize. lkat is a binary vector for each expt.
@@ -446,7 +419,6 @@ def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc
         rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
         stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
         rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
-        rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
         cell_id = np.arange(decon.shape[0])
         ucontrast,icontrast = np.unique(proc[key][gdind]['contrast'],return_inverse=True)
         usize,isize = np.unique(proc[key][gdind]['size'],return_inverse=True)
@@ -471,7 +443,6 @@ def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc
         data_struct[session_id]['decon'] = decon
         data_struct[session_id]['rf_mapping_pval'] = ret_vars[key]['pval_ret']
         data_struct[session_id]['rf_distance_deg'] = rf_distance_deg
-        data_struct[session_id]['rf_displacement_deg'] = rf_displacement_deg
         data_struct[session_id]['rf_ctr'] = rf_ctr
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
     return data_struct
@@ -479,46 +450,36 @@ def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc
 
 def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
     data_struct = {}
+    if ret_vars is None:
+        ret_vars = {}
+        for key in keylist:
+            ret_vars[key] = proc[key]['ret_vars']
     for key in keylist:
-        if len(proc[key][0])>0:
-            gdind = 0
-        else:
-            gdind = 1
-        dfof = proc[key][gdind]['dtrialwise']
-        decon = proc[key][gdind]['strialwise'] 
-        #calcium_responses_au = np.nanmean(proc[key][gdind]['trialwise'][:,:,nbefore:-nafter],-1)
-        running_speed_cm_s = 4*np.pi/180*proc[key][gdind]['trialrun'] # 4 cm from disk ctr to estimated mouse location
+        dfof = proc[key]['dtrialwise']
+        #calcium_responses_au = np.nanmean(proc[key]['trialwise'][:,:,nbefore:-nafter],-1)
+        running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'] # 4 cm from disk ctr to estimated mouse location
         rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
-        stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+        stim_offset = np.array((0,0)) - ret_vars[key]['paramdict_normal'][()]['ctr']
         rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
-        rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
         cell_id = np.arange(dfof.shape[0])
-        ucontrast,icontrast = np.unique(proc[key][gdind]['contrast'],return_inverse=True)
-        usize,isize = np.unique(proc[key][gdind]['size'],return_inverse=True)
-        uangle,iangle = np.unique(proc[key][gdind]['angle'],return_inverse=True)
-        stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis]),axis=0)
-        stimulus_size_deg = usize
-        stimulus_contrast = ucontrast
-        stimulus_direction = uangle
+        uintensity,iintensity = np.unique(proc[key]['intensity'],return_inverse=True)
+        stimulus_id = np.concatenate((iintensity[np.newaxis],),axis=0)
+        stimulus_intensity = uintensity
         session_id = 'session_'+key[:-1].replace('/','_')
         mouse_id = key.split('/')[1]
         
         data_struct[session_id] = {}
         data_struct[session_id]['mouse_id'] = mouse_id
         data_struct[session_id]['stimulus_id'] = stimulus_id
-        data_struct[session_id]['stimulus_size_deg'] = stimulus_size_deg
-        data_struct[session_id]['stimulus_contrast'] = stimulus_contrast
-        data_struct[session_id]['stimulus_direction'] = stimulus_direction
+        data_struct[session_id]['stimulus_intensity'] = stimulus_intensity
         data_struct[session_id]['cell_id'] = cell_id
         data_struct[session_id]['cell_type'] = cell_type
         data_struct[session_id]['mouse_id'] = mouse_id
         data_struct[session_id]['rf_mapping_pval'] = ret_vars[key]['pval_ret']
         data_struct[session_id]['rf_distance_deg'] = rf_distance_deg
-        data_struct[session_id]['rf_displacement_deg'] = rf_displacement_deg
         data_struct[session_id]['rf_ctr'] = rf_ctr
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
         data_struct[session_id]['F'] = dfof
-        data_struct[session_id]['decon'] = decon
         data_struct[session_id]['nbefore'] = nbefore
         data_struct[session_id]['nafter'] = nafter
     return data_struct

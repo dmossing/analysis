@@ -1,0 +1,13 @@
+%%
+basefold = '/media/mossing/backup_0/data/suite2P/results/';
+% foldnames = {'M0002/190408/2_3_4'; ...
+foldnames = {'M0002/190411/4_5_6'}; % ...
+%     'M10368/190407/2_3_4'; ...
+%     'M10368/190410/2_3_4'};
+% foldnames = {'M0094/190501/2_3_4_5'}; %...
+%     'M0002/190503/5_6_7_8'};
+for i=1:numel(foldnames)
+    thisfoldname = [basefold foldnames{i}];
+    cd(thisfoldname)
+    s2p_output_to_opto_corrected_rois(thisfoldname)
+end

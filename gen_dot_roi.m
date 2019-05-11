@@ -10,6 +10,11 @@ for i=1:numel(d)
     sourcefile = [sourcefold '/' nonproc '.mat'];
 %     nonproc = d(i).name;
     allROIdata = suite2P2ROIdata(sourcefile,'ROIindex',true);
+%     redratio = load(sourcefile,'redratio');
+%     red_saved = hasfield('redratio','redratio');
+%     if red_saved
+%         redratio = redratio.redratio;
+%     end
     for j=1:numel(allROIdata)
         nroi = numel(allROIdata{1}.rois);
         nt = numel(allROIdata{j}.rois(1).rawdata);
@@ -38,7 +43,12 @@ targetfiles = cell(size(expts));
 for j=1:numel(expts)
     expno = ddigit(str2num(expts{j}),3);
     d = dir([targetfold '/M*' expts{j} '.mat']);
-    assert(numel(d)==1);
+    if numel(d)~=1
+        d = dir([targetfold '/../M*' expts{j} '.mat']);
+        if numel(d)==1
+            copyfile([targetfold '/../' d(1).name],[targetfold '/'])
+        end
+    end
     targetfiles{j} = d(1).name;
 end
     

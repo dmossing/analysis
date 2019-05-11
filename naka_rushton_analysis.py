@@ -11,7 +11,7 @@ def fit_opt_params(c,r):
     c50_0 = 50
     n_0 = 2
     params_0 = np.array((a_0,b_0,c50_0,n_0))
-    params_opt = sop.least_squares(lambda params: r-naka_rushton(c,params),params_0,bounds=(0,200))
+    params_opt = sop.least_squares(lambda params: r-naka_rushton(c,params),params_0,bounds=((0,0,5,0),(np.inf,np.inf,200,5)))
     return params_opt['x']
 
 #def fit_opt_params_tv(c,r):
