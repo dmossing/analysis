@@ -684,10 +684,18 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False):
     mn_tgt = np.nanmean(arr,0)
     lb_tgt,ub_tgt = bootstrap(arr,fn=np.nanmean,pct=pct)
-    plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize)
+    if norm_to_max:
+        normby = mn_tgt.max(-1)[:,np.newaxis] - mn_tgt.min(-1)[:,np.newaxis]
+        baseline = mn_tgt.min(-1)[:,np.newaxis]
+        mn_tgt = mn_tgt - baseline
+        lb_tgt = lb_tgt - baseline
+        ub_tgt = ub_tgt - baseline
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize)
+    else:
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize)
     #if colors is None:
     #    colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
     #for i in range(mn_tgt.shape[0]):

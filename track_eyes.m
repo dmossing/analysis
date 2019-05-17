@@ -36,7 +36,7 @@
 % wt = exp(x/const);
 % xstar = wt/sum(wt);
 
-function [ctr,area] = track_eyes(foldname,rad_range)
+function [ctr,area] = track_eyes(foldname) %,rad_range)
 d = dir([foldname '/*.tiff']);
 % cutoff = 100;
 frameno = numel(d);
@@ -90,9 +90,9 @@ end
 
 for i=1:frameno
     i
-    data = imread([foldname '/' d(i).name]);
+    data = double(imread([foldname '/' d(i).name]));
+    data(~msk) = NaN;
     data = imbinarize(data);
-    data(~msk) = 0;
     [xx,yy] = meshgrid(1:size(data,2),1:size(data,1));
     distfun = @(x,y,x0,y0)((x-x0).^2+(y-y0).^2);
     circfun = @(x0,y0,rad)(distfun(xx,yy,x0,y0)<rad^2);
@@ -105,6 +105,7 @@ for i=1:frameno
 end
 ctr(idxframe,:) = ctr;
 area(idxframe) = area;
+end
 
 function msk = draw_msk(filename)
 img = imread(filename);
@@ -112,3 +113,90 @@ figure;
 imshow(img)
 h = impoly;
 msk = h.createMask;
+end
+
+% %%
+% % local_diff = double(diff(diff(data,[],1),[],2));
+% data_small = double(data);
+% local_diff = data_small - imgaussfilt(data_small,2);
+% scatter(data_small(:),local_diff(:))
+% %%
+% rgb = zeros([size(data_small) 3]);
+% rgb(:,:,1) = data_small>15;
+% ch2 = local_diff;
+% rgb(:,:,2) = ch2;
+% imshow(rgb)
+% %%
+% figure
+% depth = 5;
+% current = data_small;
+% num_patches = inf;
+% i = 1;
+% while num_patches > 1
+%     subplot(3,depth,i)
+%     old = current(1:end-1,1:end-1);
+%     imagesc(old)
+%     current = impyramid(current,'reduce');
+%     old_recon = impyramid(current,'expand');
+%     subplot(3,depth,depth+i)
+% %     scatter(old(:),old_recon(:))
+%     rgb = zeros([size(old) 3]);
+%     rgb(:,:,1) = old/max(old(:));
+%     rgb(:,:,2) = old_recon/max(old_recon(:));
+%     imshow(rgb)
+%     subplot(3,depth,2*depth+i)
+% %     scatter(old(:),old_recon(:))
+%     [x,y] = meshgrid(1:size(old,2),1:size(old,1));
+%     
+%     normalize = @(x) zscore(x(~isnan(old)));
+%     
+%     xvals = normalize(x);
+%     yvals = normalize(y);
+%     cvals = normalize(old);
+%     [idx,centroids] = kmeans(cvals,2);
+%     cluster_labels = zeros(size(old));
+%     [~,brightest] = max(centroids);
+%     idx = idx==brightest;
+%     cluster_labels(~isnan(old)) = idx;
+%     imagesc(cluster_labels)
+%     
+%     CC = bwconncomp(cluster_labels);
+%     num_patches = CC.NumObjects;
+%     i = i+1;
+% end
+% %%
+% num_patches = inf;
+% i = 1;
+% current = data;
+% while num_patches > 1
+%     cvals = current(~isnan(current));
+%     [cluster_labels,centroids] = kmeans(cvals,2);
+%     is_bright{i} = zeros(size(current));
+%     [~,brightest_idx] = max(centroids);
+%     is_bright{i}(~isnan(current)) = cluster_labels==brightest_idx;
+%     CC = bwconncomp(is_bright{i});
+%     num_patches = CC.NumObjects;
+%     sort(cellfun(@numel,CC.PixelIdxList))
+%     current = impyramid(current,'reduce');
+%     i = i+1;
+% end
+% %%
+% depth = numel(is_bright);
+% binarized_gaussian_stack = zeros([size(is_bright{1}) depth]);
+% for d=1:depth
+%     expanded = is_bright{d};
+%     for dsub=1:d-1
+%         expanded = impyramid(expanded,'expand');
+%     end
+%     binarized_gaussian_stack(1:end-2^(d-1)+1,1:end-2^(d-1)+1,d) = expanded>0.5;
+% end
+% %%
+% figure
+% for i=1:4
+%     subplot(2,2,i)
+%     imshow(binarized_gaussian_stack(:,:,i))
+% end
+% %%
+% CC = bwconncomp(binarized_gaussian_stack);
+% %%
+% c = imbinarize(current);
