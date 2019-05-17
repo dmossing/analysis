@@ -2,6 +2,7 @@ function fold_track_eyes_kmeans_convex(foldname)
 d = dir(foldname);
 forbidden = {'.','..'};
 for i=1:numel(d)
+    msk = [];
     if ~ismember(d(i).name,forbidden)
         thisfold = [foldname '/' d(i).name];
         d2 = dir([thisfold '/*.tiff']);
@@ -20,9 +21,23 @@ for i=1:numel(d)
     end
 end
 
-function msk = draw_msk(filename)
+function msk = draw_msk(filename,msk)
 img = imread(filename);
+if nargin < 2 || isempty(msk)
+    msk = zeros(size(img));
+    msk_available = false;
+else
+    msk_available = true;
+end
 figure;
-imshow(img)
-h = impoly;
-msk = h.createMask;
+rgb = zeros([size(img) 3]);
+rgb(:,:,1) = img;
+rgb(:,:,2) = msk;
+imshow(rgb)
+if msk_available
+    its_good = strcmp(input('this good? (y/n)\n'),'y');
+end
+if ~its_good
+    h = impoly;
+    msk = h.createMask;
+end
