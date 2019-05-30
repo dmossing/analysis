@@ -284,3 +284,53 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
         data_struct[session_id]['rf_ctr'] = rf_ctr
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
     return data_struct
+
+def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
+    #with h5py.File(filename,mode='w+') as data_struct:
+    with hdf5edit(filename) as data_struct:
+        for key in keylist:
+            if len(proc[key][0])>0:
+                gdind = 0
+            else:
+                gdind = 1
+            dfof = proc[key][gdind]['dtrialwise']
+            decon = proc[key][gdind]['strialwise'] 
+            running_speed_cm_s = 4*np.pi/180*proc[key][gdind]['trialrun'] # 4 cm from disk ctr to estimated mouse location
+            rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
+            stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+            rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
+            rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
+            cell_id = np.arange(dfof.shape[0])
+            uangle,iangle = np.unique(proc[key]['angle'],return_inverse=True)
+            stimulus_id = np.zeros((2,) + proc[key]['paramdict']['iso'].shape)
+            order = proc[key]['order']
+            for i,stimtype in enumerate(order):
+                stimulus_id[0][proc[key]['paramdict'][stimtype]] = i
+            stimulus_id[1] = proc[key]['angle']
+            stimulus_direction = uangle
+            session_id = 'session_'+key[:-1].replace('/','_')
+            mouse_id = key.split('/')[1]
+            
+            if not session_id in data_struct.keys():
+                this_session = data_struct.create_group(session_id)
+                this_session['mouse_id'] = mouse_id
+                this_session['cell_type'] = cell_type
+                this_session.create_dataset('cell_id',data=cell_id)
+            else:
+                this_session = data_struct[session_id]
+
+            exptno = 0
+            while 'figure_ground_'+str(exptno) in this_session.keys():
+                exptno = exptno+1
+            this_expt = this_session.create_group('figure_ground_'+str(exptno))
+            this_expt.create_dataset('stimulus_id',data=stimulus_id)
+            this_expt['order'] = order
+            this_expt.create_dataset('stimulus_direction',data=stimulus_direction)
+            this_expt['stim_offset_deg'] = stim_offset
+            this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
+            this_expt.create_dataset('F',data=dfof)
+            this_expt.create_dataset('raw_trialwise',data=proc[key][gdind]['raw_trialwise'])
+            this_expt.create_dataset('neuropil_trialwise',data=proc[key][gdind]['neuropil_trialwise'])
+            this_expt.create_dataset('decon',data=decon)
+            this_expt['nbefore'] = nbefore
+            this_expt['nafter'] = nafter

@@ -344,7 +344,7 @@ def plot_peak_aligned(retx,xo,gridsize=10,alpha=1e-2,c='b'):
         plt.plot(xrg-xo[i],retx[i]/retx[i].max(),alpha=alpha,c=c)
     plt.xlim(xrg.min()-gridsize,xrg.max()+gridsize)
 
-def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8,ops=None,roi_properties=None):
     data_struct = {}
     for key in keylist:
         dfof = proc[key]['dtrialwise']
@@ -367,4 +367,50 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
         data_struct[session_id]['rf_mapping_pval'] = proc[key]['pval']
         data_struct[session_id]['decon'] = proc[key]['strialwise']
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
+    #    if not ops is None:
+    #        data_struct[session_id]['ops'] = ops[key]
+    #    if not roi_properties is None:
+    #        data_struct[session_id]['roi_properties'] = roi_properties[key]
     return data_struct
+
+def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
+    #with h5py.File(filename,mode='w+') as data_struct:
+    #with h5py.File(filename,mode='r') as data_struct:
+    with ut.hdf5edit(filename) as data_struct:
+    #data_struct = {}
+        for key in keylist:
+            if len(proc[key][0])>0:
+                gdind = 0
+            else:
+                gdind = 1
+            dfof = proc[key]['dtrialwise']
+            decon = proc[key]['strialwise']
+            running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'] # 4 cm from disk ctr to estimated mouse location
+            rf_ctr = np.concatenate((proc[key]['paramdict']['xo'][np.newaxis,:],-proc[key]['paramdict']['yo'][np.newaxis,:]),axis=0)
+            cell_id = np.arange(dfof.shape[0])
+            stimulus_id = proc[key]['locinds'].T - 1
+            session_id = 'session_'+key[:-1].replace('/','_')
+            mouse_id = key.split('/')[1]
+            
+            if not session_id in data_struct.keys():
+                this_session = data_struct.create_group(session_id)
+                this_session['mouse_id'] = mouse_id
+                this_session['cell_type'] = cell_type
+                this_session.create_dataset('cell_id',data=cell_id)
+            else:
+                this_session = data_struct[session_id]
+
+            exptno = 0
+            while 'retinotopy_'+str(exptno) in this_session.keys():
+                exptno = exptno+1
+            this_expt = this_session.create_group('retinotopy_'+str(exptno))
+            this_expt.create_dataset('stimulus_id',data=stimulus_id)
+            this_expt['rf_mapping_pval'] = proc[key]['pval']
+            this_expt['rf_ctr'] = rf_ctr
+            this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
+            this_expt.create_dataset('F',data=dfof)
+            this_expt.create_dataset('raw_trialwise',data=proc[key][gdind]['raw_trialwise'])
+            this_expt.create_dataset('neuropil_trialwise',data=proc[key][gdind]['neuropil_trialwise'])
+            this_expt.create_dataset('decon',data=decon)
+            this_expt['nbefore'] = nbefore
+            this_expt['nafter'] = nafter

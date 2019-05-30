@@ -10,11 +10,11 @@ for i=1:numel(d)
     sourcefile = [sourcefold '/' nonproc '.mat'];
 %     nonproc = d(i).name;
     allROIdata = suite2P2ROIdata(sourcefile,'ROIindex',true);
-%     redratio = load(sourcefile,'redratio');
-%     red_saved = hasfield('redratio','redratio');
-%     if red_saved
-%         redratio = redratio.redratio;
-%     end
+    redratio = load(sourcefile,'redratio');
+    red_saved = isfield(redratio,'redratio');
+    if red_saved
+        redratio = redratio.redratio;
+    end
     for j=1:numel(allROIdata)
         nroi = numel(allROIdata{1}.rois);
         nt = numel(allROIdata{j}.rois(1).rawdata);

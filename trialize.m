@@ -11,6 +11,10 @@ else
     signo = 1;
     data = data(:)';
 end
+while min(diff(frm))<0
+    [~,minind] = min(diff(frm));
+    frm(minind+1:end) = frm(minind+1:end) + 65536;
+end
 if min(size(frm))==1
     frm = reshape(frm,2,[])';
 end

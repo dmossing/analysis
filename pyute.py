@@ -604,7 +604,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
             existing = to_add.copy()
         return existing
     
-    def process(to_add,roilines):
+    def process(to_add,uncorrected,neuropil,roilines):
         to_add_copy = to_add.copy()
         to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
 #        to_add[to_add<0] = 0
@@ -634,10 +634,12 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         #ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         #dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
         to_add,trialwise_t_offset = precise_trialize_no_interp(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        raw_traces,_ = precise_trialize_no_interp(uncorrected,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        neuropil,_ = precise_trialize_no_interp(neuropil,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
         cc,_ = precise_trialize_no_interp(c,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
         ss,_ = precise_trialize_no_interp(s,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
         dd,_ = precise_trialize_no_interp(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        return to_add,cc,ss,this_dfof,s,dd,trialwise_t_offset
+        return to_add,cc,ss,this_dfof,s,dd,trialwise_t_offset,raw_traces,neuropil
         
     trialwise = np.array(())
     ctrialwise = np.array(())
@@ -646,6 +648,10 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
     dfof = np.array(())
     straces = np.array(())
     trialwise_t_offset = np.array(())
+    proc = {}
+    proc['raw_trialwise'] = np.array(())
+    proc['neuropil_trialwise'] = np.array(())
+    proc['trialwise_t_offset'] = np.array(())
     for datafile in datafiles:
         thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
         info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
@@ -657,23 +663,26 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         if not frame_adjust is None:
             frm = frame_adjust(frm)
             line = frame_adjust(line)
-        (to_add,ctr,uncorrected) = loadmat(datafile,('corrected','ctr','Data'))
+        (to_add,ctr,uncorrected,neuropil) = loadmat(datafile,('corrected','ctr','Data','Neuropil'))
         print(datafile)
         print(to_add.shape)
         nlines = loadmat(datafile,'msk').shape[0]
         roilines = ctr[0] + nlines*thisdepth
         #to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
-        to_add,c,s,this_dfof,this_straces,dtr,tt = process(to_add,roilines)
+        to_add,c,s,this_dfof,this_straces,dtr,tt,uncorrected,neuropil = process(to_add,uncorrected,neuropil,roilines)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
         strialwise = tack_on(s,strialwise)
         dtrialwise = tack_on(dtr,dtrialwise)
         dfof = tack_on(this_dfof,dfof)
         straces = tack_on(this_straces,straces)
-        trialwise_t_offset = tack_on(tt,trialwise_t_offset)
+        #trialwise_t_offset = tack_on(tt,trialwise_t_offset)
+        proc['raw_trialwise'] = tack_on(uncorrected,proc['raw_trialwise'])
+        proc['neuropil_trialwise'] = tack_on(neuropil,proc['neuropil_trialwise'])
+        proc['trialwise_t_offset'] = tack_on(tt,proc['trialwise_t_offset'])
 
     #return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
-    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset
+    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc # trialwise_t_offset
 
 def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     if colors is None:
@@ -829,3 +838,33 @@ def precise_trialize_no_interp(traces,frame,line,roilines,nlines=512,nplanes=4,n
         #    trialwise[cell,trial] = np.nan
     
     return trialwise,trialwise_t_offset
+
+def hdf5edit(filename):
+    if not os.path.exists(filename):
+        return h5py.File(filename,mode='w')
+    else:
+        return h5py.File(filename,mode='r+')
+
+def dict_to_hdf5(filename,groupname,dicti):
+    #with h5py.File(filename,mode='r+') as f:
+    with hdf5edit(filename) as f:
+        assert(not groupname in f.keys())
+        this_group = f.create_group(groupname)
+        dict_to_hdf5_(this_group,dicti)
+
+def dict_to_hdf5_(this_group,dicti):
+    for key in dicti:
+        this_type = type(dicti[key])
+        if this_type is str or this_type is float or this_type is int:
+            this_group[key] = dicti[key]
+        elif this_type is np.ndarray:
+            this_group.create_dataset(key,data=dicti[key])
+        elif this_type is dict:
+            new_group = this_group.create_group(key)
+            dict_to_hdf5_(new_group,dicti[key])
+
+def matfile_to_dict(matfile):
+    dicti = {}
+    for key in list(matfile.dtype.fields.keys()):
+        dicti[key] = matfile[key][()]
+    return dicti

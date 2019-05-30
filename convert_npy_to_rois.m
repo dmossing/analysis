@@ -19,7 +19,7 @@ if ~exist(targetfold,'dir')
     foldabove = [targetfold '../'];
     for i=1:numel(expt_endings)
         thismat = dirnames(sprintf([foldabove 'M*%s.mat'],expt_endings{i}),foldabove);
-        copyfile(thismat,targetfold)
+        copyfile(thismat{1},targetfold)
     end
 end
 gen_dot_roi(sourcefold,targetfold)

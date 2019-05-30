@@ -37,6 +37,7 @@ def gen_traces(datafiles,blcutoff=blcutoff,blspan=blspan): #nbefore=nbefore,naft
     strialwise = np.array(())
     dfofall = np.array(())
     baselineall = np.array(())
+    proc = {}
     for datafile in datafiles:
         frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][1:]
         with h5py.File(datafile,mode='r') as f:
@@ -80,7 +81,7 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
         criterion = lambda x: np.abs(x)>100
     nbydepth = get_nbydepth(datafiles)
 #     trialwise,ctrialwise,strialwise = gen_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff) # , trialwise_t_offset
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
     
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
@@ -201,7 +202,10 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
     #proc['ctrialwise'] = ctrialwise
     proc['dtrialwise'] = dtrialwise
     proc['dfof'] = dfof
-    proc['trialwise_t_offset'] = trialwise_t_offset
+    proc['trialwise_t_offset'] = proc1['trialwise_t_offset']
+    proc['raw_trialwise'] = proc1['raw_trialwise']
+    proc['neuropil_trialwise'] = proc1['neuropil_trialwise']
+    #proc['trialwise_t_offset'] = trialwise_t_offset
     #proc['straces'] = straces
     #proc['oriavg_dfof'] = Favg
     
@@ -384,8 +388,11 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
     spont = {}
     ret_vars = {}
     Smean_stat = {}
-    proc = {}
+    #proc = {}
+    proc_hdf5_name = 'size_contrast_proc.hdf5'
     for thisfold,thisfile,retnumber,frame_adjust,rg,criterion,thisdatafoldbase,thisstimfoldbase in zip(folds,files,rets,adjust_fns,rgs,criteria,datafoldbase,stimfoldbase):
+
+        session_id = 'session_'+thisfold[:-1].replace('/','_')
 
         soriavg[thisfold] = [None]*2
         strialavg[thisfold] = [None]*2
@@ -396,7 +403,7 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         spont[thisfold] = [None]*2
         ret_vars[thisfold] = [None]*2
         Smean_stat[thisfold] = [None]*2
-        proc[thisfold] = [None]*2
+        proc = [None]*2
 
         datafold = thisdatafoldbase+thisfold+'ot/'
         datafiles = [thisfile+'_ot_'+number+'.rois' for number in ['000','001','002','003']]
@@ -417,7 +424,7 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
 
         for k in range(2):
             #soriavg[thisfold][k],strialavg[thisfold][k],lb[thisfold][k],ub[thisfold][k],pval[thisfold][k],spont[thisfold][k],Smean_stat[thisfold][k],proc[thisfold][k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff)
-            soriavg[thisfold][k],_,_,_,_,_,_,proc[thisfold][k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff) # changed 2/12/19
+            soriavg[thisfold][k],_,_,_,_,_,_,proc[k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff) # changed 2/12/19
         nbydepth[thisfold] = get_nbydepth(datafiles)
         try: 
             ret_vars[thisfold] = sio.loadmat(retfile,squeeze_me=True)#['ret'][:]
@@ -427,7 +434,16 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
             print('retinotopy not saved for '+thisfile)
             ret_vars[thisfold] = None
     #return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
-    return soriavg,ret_vars,proc # changed 2/12/19
+        if len(proc[0]):
+            gdind = 0
+        else:
+            gdind = 1
+        needed_ret_vars = ['locinds','nx','ny','position','pval_ret','ret']
+        ret_dicti = {varname:ret_vars[thisfold][varname] for varname in needed_ret_vars}
+        ret_dicti['paramdict_normal'] = ut.matfile_to_dict(ret_vars[thisfold]['paramdict_normal'])
+        proc[gdind]['ret_vars'] = ret_dicti
+        ut.dict_to_hdf5(proc_hdf5_name,session_id,proc[gdind])
+    return soriavg,ret_vars # changed 2/12/19
 
 def find_gdind(arrlist):
     sz = [el.size for el in arrlist]
@@ -518,7 +534,66 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
         data_struct[session_id]['rf_ctr'] = rf_ctr
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
         data_struct[session_id]['F'] = dfof
+        data_struct[session_id]['raw_trialwise'] = proc[key][gdind]['raw_trialwise']
+        data_struct[session_id]['neuropil_trialwise'] = proc[key][gdind]['neuropil_trialwise']
         data_struct[session_id]['decon'] = decon
         data_struct[session_id]['nbefore'] = nbefore
         data_struct[session_id]['nafter'] = nafter
     return data_struct
+
+def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
+    #with h5py.File(filename,mode='w+') as data_struct:
+    with ut.hdf5edit(filename) as data_struct:
+    #data_struct = {}
+        for key in keylist:
+            if len(proc[key])>0:
+                gdind = 0
+            else:
+                gdind = 1
+            dfof = proc[key]['dtrialwise'][:]
+            decon = proc[key]['strialwise'][:] 
+            #calcium_responses_au = np.nanmean(proc[key]['trialwise'][:,:,nbefore:-nafter],-1)
+            running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'][:] # 4 cm from disk ctr to estimated mouse location
+            rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
+            stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+            rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
+            rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
+            cell_id = np.arange(dfof.shape[0])
+            ucontrast,icontrast = np.unique(proc[key]['contrast'][:],return_inverse=True)
+            usize,isize = np.unique(proc[key]['size'][:],return_inverse=True)
+            uangle,iangle = np.unique(proc[key]['angle'][:],return_inverse=True)
+            stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis]),axis=0)
+            stimulus_size_deg = usize
+            stimulus_contrast = ucontrast
+            stimulus_direction = uangle
+            session_id = 'session_'+key[:-1].replace('/','_')
+            mouse_id = key.split('/')[1]
+            
+            if not session_id in data_struct.keys():
+                this_session = data_struct.create_group(session_id)
+                this_session['mouse_id'] = mouse_id
+                this_session['cell_type'] = cell_type
+                this_session.create_dataset('cell_id',data=cell_id)
+            else:
+                this_session = data_struct[session_id]
+
+            exptno = 0
+            while 'size_contrast_'+str(exptno) in this_session.keys():
+                exptno = exptno+1
+            this_expt = this_session.create_group('size_contrast_'+str(exptno))
+            this_expt.create_dataset('stimulus_id',data=stimulus_id)
+            this_expt.create_dataset('stimulus_size_deg',data=stimulus_size_deg)
+            this_expt.create_dataset('stimulus_contrast',data=stimulus_contrast)
+            this_expt.create_dataset('stimulus_direction',data=stimulus_direction)
+            #this_expt['rf_mapping_pval'] = ret_vars[key]['pval_ret']
+            #this_expt['rf_distance_deg'] = rf_distance_deg
+            #this_expt['rf_displacement_deg'] = rf_displacement_deg
+            #this_expt['rf_ctr'] = rf_ctr
+            this_expt['stim_offset_deg'] = stim_offset
+            this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
+            this_expt.create_dataset('F',data=dfof)
+            this_expt.create_dataset('raw_trialwise',data=proc[key]['raw_trialwise'][:])
+            this_expt.create_dataset('neuropil_trialwise',data=proc[key]['neuropil_trialwise'][:])
+            this_expt.create_dataset('decon',data=decon)
+            this_expt['nbefore'] = nbefore
+            this_expt['nafter'] = nafter
