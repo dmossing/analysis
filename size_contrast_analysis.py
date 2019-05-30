@@ -438,7 +438,7 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
             gdind = 0
         else:
             gdind = 1
-        needed_ret_vars = ['locinds','nx','ny','position','pval_ret','ret']
+        needed_ret_vars = ['position','pval_ret','ret']
         ret_dicti = {varname:ret_vars[thisfold][varname] for varname in needed_ret_vars}
         ret_dicti['paramdict_normal'] = ut.matfile_to_dict(ret_vars[thisfold]['paramdict_normal'])
         proc[gdind]['ret_vars'] = ret_dicti
