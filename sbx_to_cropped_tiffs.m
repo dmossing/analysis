@@ -1,30 +1,35 @@
-function tifffile = sbx_to_cropped_tiffs(sbxfile,chunksize,alignfile,green_only,empty_red,opto_settings)
+function tifffile = sbx_to_cropped_tiffs(sbxfile,opts) %chunksize,alignfile,green_only,empty_red,opto_settings)
 % splits up a .sbx file into one or multiple .tifs
 % sbxfile a string
-if nargin < 2 || isempty(chunksize)
-    chunksize = 10000; % number of frames per split up .tif
+if nargin < 2
+    opts = [];
 end
-if nargin < 3 || isempty(alignfile)
-    alignfile = '';
+chunksize = getOr(opts,'chunksize',10000);
+alignfile = getOr(opts,'alignfile','');
+green_only = getOr(opts,'green_only',false);
+empty_red = getOr(opts,'empty_red',false);
+opto_correct = getOr(opts,'opto_correct',false);
+targetfold = getOr(opts,'targetfold','');
+if opto_correct
+    opto_settings = opts.opto_settings;
 end
-if nargin < 4 || isempty(green_only)
-    green_only = false;
-end
-if nargin < 5 || isempty(empty_red)
-    empty_red = false;
-end
-if nargin < 6 || isempty(opto_settings)
-    opto_settings = [];
-    opto_correct = false;
-else
-    opto_correct = true;
-end
+
 if isempty(strfind(sbxfile,'.sbx'))
     sbxfile = [sbxfile '.sbx'];
 end
 filebase = sbxfile(1:end-4);
+% only relevant for runing code on big-boi PC
+filebase2 = strrep(filebase,'/media/greg/modulation/mossing/2P/','/home/mossing/data/matfiles/');
+if strfind(filebase2,'/home/mossing/data/matfiles/')
+    strparts = strsplit(filebase2,'/');
+    filebase2 = strjoin({strparts{1:end-1} 'ot/' strparts{end}},'/');
+    just_filename = [strparts{end} '.sbx'];
+else
+    just_filename = sbxfile;
+end
 global info
-load(filebase,'info')
+load(filebase2,'info')
+assert(isfield(info,'rect'))
 if isfield(info,'rect')
     rect = info.rect; % information necessary if image needs to be cropped
 else
@@ -69,7 +74,8 @@ if alignfile
 end
 opto_offsets = [];
 for i=1:chunksize:info.max_idx
-    tifffile = strrep(sbxfile,'.sbx',['_t' ddigit(ctr,2) '.tif']);
+    % just_filename was sbxfile
+    tifffile = [targetfold strrep(just_filename,'.sbx',['_t' ddigit(ctr,2) '.tif'])];
     if exist(tifffile,'file')
         delete(tifffile)
         disp('deleted old vsn')
@@ -199,3 +205,10 @@ end
 z_on = z(:,101:end,light_on);
 z_off = z(:,101:end,light_off);
 opto_offset = mean(z_on(:)) - mean(z_off(:));
+
+function val = getOr(options,fieldname,default)
+if isempty(options) || ~isfield(options,fieldname) || isempty(getfield(options,fieldname))
+    val = default;
+else
+    val = getfield(options,fieldname);
+end

@@ -68,7 +68,7 @@ if frameno>0
     hulls(idxframe,:) = hulls;
     hulls = hulls(:,1:find(sum(hulls>0)==0,1));
 else
-    [ctr,area,props,ctr2,area2,props2] = deal([]);
+    [ctr,area,props,ctr2,area2,props2,hulls] = deal([]);
 end
 end
 
