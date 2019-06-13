@@ -9,7 +9,7 @@ import scipy.misc as smi
 import scipy.io as sio
 import h5py
 import scipy.ndimage.filters as sfi
-#from oasis.functions import deconvolve
+from oasis.functions import deconvolve
 import scipy.optimize as sop
 import scipy.ndimage.measurements as snm
 import re

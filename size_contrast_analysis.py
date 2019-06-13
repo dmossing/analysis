@@ -5,8 +5,8 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 import numpy as np
 import h5py
-#from oasis.functions import deconvolve
-#from oasis import oasisAR1, oasisAR2
+from oasis.functions import deconvolve
+from oasis import oasisAR1, oasisAR2
 import pyute as ut
 
 from importlib import reload
@@ -374,7 +374,7 @@ def append_gray(arr):
         gray = np.tile(arr[:,0].mean(0)[np.newaxis],(1,arr.shape[1]))
         return np.concatenate((gray,arr),axis=0)
 
-def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',criterion_cutoff=0.2):
+def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',criterion_cutoff=0.2,procname='size_contrast_proc.hdf5'):
     if isinstance(datafoldbase,str):
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
@@ -389,7 +389,7 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
     ret_vars = {}
     Smean_stat = {}
     #proc = {}
-    proc_hdf5_name = 'size_contrast_proc.hdf5'
+    proc_hdf5_name = procname
     for thisfold,thisfile,retnumber,frame_adjust,rg,criterion,thisdatafoldbase,thisstimfoldbase in zip(folds,files,rets,adjust_fns,rgs,criteria,datafoldbase,stimfoldbase):
 
         session_id = 'session_'+thisfold[:-1].replace('/','_')
@@ -485,7 +485,7 @@ def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc
         data_struct[session_id]['mouse_id'] = mouse_id
         data_struct[session_id]['calcium_responses_au'] = calcium_responses_au
         data_struct[session_id]['decon'] = decon
-        data_struct[session_id]['rf_mapping_pval'] = ret_vars[key]['pval_ret']
+        data_struct[session_id]['rf_mapping_pval'] = ret_vars[key]['pval_ret'][:]
         data_struct[session_id]['rf_distance_deg'] = rf_distance_deg
         data_struct[session_id]['rf_displacement_deg'] = rf_displacement_deg
         data_struct[session_id]['rf_ctr'] = rf_ctr
@@ -541,10 +541,11 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
         data_struct[session_id]['nafter'] = nafter
     return data_struct
 
-def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
+def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
     #with h5py.File(filename,mode='w+') as data_struct:
     with ut.hdf5edit(filename) as data_struct:
     #data_struct = {}
+        ret_vars = {}
         for key in keylist:
             if len(proc[key])>0:
                 gdind = 0
@@ -552,10 +553,14 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
                 gdind = 1
             dfof = proc[key]['dtrialwise'][:]
             decon = proc[key]['strialwise'][:] 
+            t_offset = proc[key]['trialwise_t_offset'][:] 
+            ret_vars[key] = proc['/'.join([key,'ret_vars'])]
             #calcium_responses_au = np.nanmean(proc[key]['trialwise'][:,:,nbefore:-nafter],-1)
             running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'][:] # 4 cm from disk ctr to estimated mouse location
-            rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
-            stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+            paramdict = proc['/'.join([key,'ret_vars','paramdict_normal'])]
+            #print(paramdict['xo'].shape)
+            rf_ctr = np.concatenate((paramdict['xo'][:][np.newaxis,:],-paramdict['yo'][:][np.newaxis,:]),axis=0)
+            stim_offset = ret_vars[key]['position'][:] - paramdict['ctr'][:]
             rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
             rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
             cell_id = np.arange(dfof.shape[0])
@@ -566,8 +571,9 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             stimulus_size_deg = usize
             stimulus_contrast = ucontrast
             stimulus_direction = uangle
-            session_id = 'session_'+key[:-1].replace('/','_')
-            mouse_id = key.split('/')[1]
+            #session_id = 'session_'+key[:-1].replace('/','_')
+            session_id = key
+            mouse_id = key.split('_')[1]
             
             if not session_id in data_struct.keys():
                 this_session = data_struct.create_group(session_id)
@@ -585,15 +591,16 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('stimulus_size_deg',data=stimulus_size_deg)
             this_expt.create_dataset('stimulus_contrast',data=stimulus_contrast)
             this_expt.create_dataset('stimulus_direction',data=stimulus_direction)
-            #this_expt['rf_mapping_pval'] = ret_vars[key]['pval_ret']
-            #this_expt['rf_distance_deg'] = rf_distance_deg
-            #this_expt['rf_displacement_deg'] = rf_displacement_deg
-            #this_expt['rf_ctr'] = rf_ctr
+            this_expt['rf_mapping_pval'] = ret_vars[key]['pval_ret'][:]
+            this_expt['rf_distance_deg'] = rf_distance_deg
+            this_expt['rf_displacement_deg'] = rf_displacement_deg
+            this_expt['rf_ctr'] = rf_ctr
             this_expt['stim_offset_deg'] = stim_offset
             this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
             this_expt.create_dataset('F',data=dfof)
             this_expt.create_dataset('raw_trialwise',data=proc[key]['raw_trialwise'][:])
             this_expt.create_dataset('neuropil_trialwise',data=proc[key]['neuropil_trialwise'][:])
             this_expt.create_dataset('decon',data=decon)
+            this_expt.create_dataset('t_offset',data=t_offset)
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter

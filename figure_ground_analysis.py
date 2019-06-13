@@ -15,11 +15,15 @@ import scipy.stats as sst
 import scipy.ndimage.measurements as snm
 from mpl_toolkits.mplot3d import Axes3D
 
+order = ['ctrl','fig','grnd','iso','cross']
 
 def analyze_figure_ground(datafiles,stimfile,retfile=None,frame_adjust=None,rg=None,nbefore=4,nafter=4):
     nbydepth = get_nbydepth(datafiles)
     #trialwise,ctrialwise,strialwise,dfof,straces = ut.gen_precise_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter)
+    trialwise_t_offset = proc1['trialwise_t_offset']
+    raw_trialwise = proc1['raw_trialwise']
+    neuropil_trialwise = proc1['neuropil_trialwise'] 
     print(strialwise.shape)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
     
@@ -135,10 +139,12 @@ def analyze_figure_ground(datafiles,stimfile,retfile=None,frame_adjust=None,rg=N
     proc['pval_grnd'] = pval_grnd
     proc['trialrun'] = trialrun
     proc['strialwise'] = strialwise
-    proc['dtrialwise'] = strialwise
-    proc['trialwise'] = strialwise
-    proc['dfof'] = strialwise
-    proc['trialwise_t_offset'] = strialwise
+    proc['dtrialwise'] = dtrialwise
+    proc['trialwise'] = trialwise
+    proc['dfof'] = dfof
+    proc['trialwise_t_offset'] = trialwise_t_offset
+    proc['raw_trialwise'] = raw_trialwise
+    proc['neuropil_trialwise'] = neuropil_trialwise
     proc['order'] = order
     proc['angle'] = angle
     proc['paramdict'] = paramdict
@@ -194,7 +200,7 @@ def analyze_everything(folds,files,rets,adjust_fns):
         nbydepth[thisfold] = get_nbydepth(datafiles)
     return soriavg,strialavg,lb,ub,pval_fig,pval_grnd,nbydepth,ret_vars,trialrun
 
-def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',criterion_cutoff=0.2):
+def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',criterion_cutoff=0.2,procname='figure_ground_proc.hdf5'):
     if isinstance(datafoldbase,str):
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
@@ -222,6 +228,8 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         #Smean_stat[thisfold] = [None]*2
         #proc[thisfold] = [None]*2
 
+        session_id = 'session_'+thisfold[:-1].replace('/','_')
+
         datafiles = [thisfile+'_ot_'+number+'.rois' for number in ['000','001','002','003']]
 
         stimfold = thisstimfoldbase+thisfold
@@ -243,9 +251,16 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
             print('retinotopy not saved for '+thisfile)
             ret_vars[thisfold] = None
         nbydepth[thisfold] = get_nbydepth(datafiles)
-        proc[thisfold]['ret_vars'] = ret_vars[thisfold]
+
+        needed_ret_vars = ['position','pval_ret','ret']
+        ret_dicti = {varname:ret_vars[thisfold][varname] for varname in needed_ret_vars}
+        ret_dicti['paramdict_normal'] = ut.matfile_to_dict(ret_vars[thisfold]['paramdict_normal'])
+        proc[thisfold]['ret_vars'] = ret_dicti
+        #proc[thisfold]['ret_vars'] = ret_vars[thisfold]
         proc[thisfold]['nbydepth'] = nbydepth
-    return soriavg,proc
+
+        ut.dict_to_hdf5(procname,session_id,proc[thisfold])
+    return soriavg #,proc
 
 def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
     data_struct = {}
@@ -261,7 +276,8 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
         rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
         cell_id = np.arange(dfof.shape[0])
         stimulus_id = np.zeros((2,) + proc[key]['paramdict']['iso'].shape)
-        order = proc[key]['order']
+        #order = proc[key]['order']
+        #order = ['ctrl','fig','grnd','iso','cross']
         for i,stimtype in enumerate(order):
             stimulus_id[0][proc[key]['paramdict'][stimtype]] = i
         stimulus_id[1] = proc[key]['angle']
@@ -287,29 +303,31 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
 
 def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, ret_vars=None, nbefore=8, nafter=8):
     #with h5py.File(filename,mode='w+') as data_struct:
-    with hdf5edit(filename) as data_struct:
+    with ut.hdf5edit(filename) as data_struct:
         for key in keylist:
-            if len(proc[key][0])>0:
-                gdind = 0
-            else:
-                gdind = 1
-            dfof = proc[key][gdind]['dtrialwise']
-            decon = proc[key][gdind]['strialwise'] 
-            running_speed_cm_s = 4*np.pi/180*proc[key][gdind]['trialrun'] # 4 cm from disk ctr to estimated mouse location
-            rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
-            stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+            dfof = proc[key]['dtrialwise'][:]
+            decon = proc[key]['strialwise'][:] 
+            running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'][:] # 4 cm from disk ctr to estimated mouse location
+            print(proc[key]['ret_vars']['paramdict_normal'])
+            ret_paramdict = proc['/'.join(['',key,'ret_vars','paramdict_normal'])]
+            xo = ret_paramdict['xo'][:]
+            yo = ret_paramdict['yo'][:]
+            rf_ctr = np.concatenate((xo[np.newaxis,:],-yo[np.newaxis,:]),axis=0)
+            stim_offset = proc[key]['ret_vars']['position'][:] - ret_paramdict['ctr'][:]
             rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
             rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
             cell_id = np.arange(dfof.shape[0])
-            uangle,iangle = np.unique(proc[key]['angle'],return_inverse=True)
-            stimulus_id = np.zeros((2,) + proc[key]['paramdict']['iso'].shape)
-            order = proc[key]['order']
+            uangle,iangle = np.unique(proc[key]['angle'][:],return_inverse=True)            
+
+            stimulus_id = np.zeros((2,) + proc[key]['paramdict']['iso'][:].shape)
+            #order = proc[key]['order']
             for i,stimtype in enumerate(order):
                 stimulus_id[0][proc[key]['paramdict'][stimtype]] = i
             stimulus_id[1] = proc[key]['angle']
             stimulus_direction = uangle
-            session_id = 'session_'+key[:-1].replace('/','_')
-            mouse_id = key.split('/')[1]
+            session_id = key #'session_'+key[:-1].replace('/','_')
+            #mouse_id = key.split('/')[1]
+            mouse_id = key.split('_')[1]
             
             if not session_id in data_struct.keys():
                 this_session = data_struct.create_group(session_id)
@@ -323,14 +341,15 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             while 'figure_ground_'+str(exptno) in this_session.keys():
                 exptno = exptno+1
             this_expt = this_session.create_group('figure_ground_'+str(exptno))
-            this_expt.create_dataset('stimulus_id',data=stimulus_id)
-            this_expt['order'] = order
+            this_expt.create_dataset('stimulus_id',data=stimulus_id) 
+            #uorder = [u'ctrl',u'fig',u'grnd',u'iso',u'cross']
+            #this_expt.create_dataset('order',data=uorder)
             this_expt.create_dataset('stimulus_direction',data=stimulus_direction)
             this_expt['stim_offset_deg'] = stim_offset
             this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
             this_expt.create_dataset('F',data=dfof)
-            this_expt.create_dataset('raw_trialwise',data=proc[key][gdind]['raw_trialwise'])
-            this_expt.create_dataset('neuropil_trialwise',data=proc[key][gdind]['neuropil_trialwise'])
+            this_expt.create_dataset('raw_trialwise',data=proc[key]['raw_trialwise'])
+            this_expt.create_dataset('neuropil_trialwise',data=proc[key]['neuropil_trialwise'])
             this_expt.create_dataset('decon',data=decon)
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter
