@@ -868,3 +868,41 @@ def matfile_to_dict(matfile):
     for key in list(matfile.dtype.fields.keys()):
         dicti[key] = matfile[key][()]
     return dicti
+
+def k_and(*args):
+    if len(args)>2:
+        return np.logical_and(args[0],k_and(*args[1:]))
+    else:
+        return np.logical_and(args[0],args[1])
+
+def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
+    ndims = stim_id.shape[0]
+    maxind = tuple(stim_id.max(1)+1)
+    if cell_criteria is None:
+        cell_criteria = np.ones((data.shape[0],),dtype='bool')
+    if trial_criteria is None:
+        trial_criteria = np.ones((data.shape[1],),dtype='bool')
+    nparams = len(maxind)
+    ntrialtypes = np.prod(maxind)
+    tuning = np.zeros((data[cell_criteria].shape[0],ntrialtypes)+data.shape[2:])
+    for itype in range(ntrialtypes):
+        imultitype = np.unravel_index(itype,maxind)
+        these_trials = trial_criteria.copy()
+        for iparam in range(nparams):
+            these_trials = np.logical_and(these_trials,stim_id[iparam]==imultitype[iparam])
+        tuning[:,itype] = np.nanmean(data[cell_criteria][:,these_trials],1)
+    tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
+    return tuning
+
+def noisy_scatter(x,y,noise=0.1):
+    def prepare_to_plot(u):
+        return u + noise*np.random.randn(*u.shape)
+    xplot = prepare_to_plot(x)
+    yplot = prepare_to_plot(y)
+    plt.scatter(xplot,yplot,s=5,alpha=2e2/x.size)
+
+def plot_bin_stat(x,y,nbins=20):
+    binmean,binedge,_ = sst.binned_statistic(x,y,bins=nbins)
+    binstd,_,_ = sst.binned_statistic(x,y,statistic=sst.sem,bins=nbins)
+    plt.errorbar(0.5*(binedge[:-1]+binedge[1:]),binmean,binstd,c='r')
+    plt.plot(0.5*(binedge[:-1]+binedge[1:]),np.zeros_like(binmean),c='k')

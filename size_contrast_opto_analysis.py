@@ -252,7 +252,8 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
             ret_vars[thisfold] = None
     return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
 
-def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,criterion_cutoff=0.2,datafoldbase=None,stimfoldbase=None):
+def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,criteria=None,criterion_cutoff=0.2,datafoldbase=None,stimfoldbase=None,procname='size_contrast_opto_proc.hdf5'):
+
     soriavg = {}
     strialavg = {}
     lb = {}
@@ -262,10 +263,13 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
     spont = {}
     ret_vars = {}
     Smean_stat = {}
-    proc = {}
+    #proc = {}
+    proc_hdf5_name = procname
     #datafoldbase = '/home/mossing/scratch/2Pdata/'
     #stimfoldbase = '/home/mossing/scratch/visual_stim/'
     for thisfold,thisfile,retnumber,frame_adjust,rg,criterion,thisdfb,thissfb in zip(folds,files,rets,adjust_fns,rgs,criteria,datafoldbase,stimfoldbase):
+
+        session_id = 'session_'+thisfold[:-1].replace('/','_')
 
         soriavg[thisfold] = [None]*2
         strialavg[thisfold] = [None]*2
@@ -276,7 +280,8 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         spont[thisfold] = [None]*2
         ret_vars[thisfold] = [None]*2
         Smean_stat[thisfold] = [None]*2
-        proc[thisfold] = [None]*2
+        #proc[thisfold] = [None]*2
+        proc = [None]*2
 
         datafold = thisdfb+thisfold+'ot/'
         datafiles = [thisfile+'_ot_'+number+'.rois' for number in ['000','001','002','003']]
@@ -296,7 +301,7 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         thesecriteria = [criterion,lambda x: np.logical_not(criterion(x))]
 
         for k in range(2):
-            soriavg[thisfold][k],strialavg[thisfold][k],lb[thisfold][k],ub[thisfold][k],pval[thisfold][k],spont[thisfold][k],Smean_stat[thisfold][k],proc[thisfold][k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff)
+            soriavg[thisfold][k],strialavg[thisfold][k],lb[thisfold][k],ub[thisfold][k],pval[thisfold][k],spont[thisfold][k],Smean_stat[thisfold][k],proc[k] = analyze_size_contrast(datafiles,stimfile,retfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,criterion=thesecriteria[k],criterion_cutoff=criterion_cutoff)
 
         nbydepth[thisfold] = get_nbydepth(datafiles)
         try: 
@@ -306,7 +311,16 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         except:
             print('retinotopy not saved for '+thisfile)
             ret_vars[thisfold] = None
-    return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
+        if len(proc[0]):
+            gdind = 0
+        else:
+            gdind = 1
+        needed_ret_vars = ['position','pval_ret','ret']
+        ret_dicti = {varname:ret_vars[thisfold][varname] for varname in needed_ret_vars}
+        ret_dicti['paramdict_normal'] = ut.matfile_to_dict(ret_vars[thisfold]['paramdict_normal'])
+        proc[gdind]['ret_vars'] = ret_dicti
+        ut.dict_to_hdf5(proc_hdf5_name,session_id,proc[gdind])
+    return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat #,proc
 
 def get_norm_curves(soriavg,lkat=None,sizes=None,contrasts=None,append_gray=False):
     # lkat a dict with keys corresponding to the expts. you'll summarize. lkat is a binary vector for each expt.
@@ -393,3 +407,69 @@ def gen_full_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None,
         data_struct[session_id]['rf_displacement_deg'] = rf_displacement_deg
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
     return data_struct
+
+def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+    #with h5py.File(filename,mode='w+') as data_struct:
+    with ut.hdf5edit(filename) as data_struct:
+    #data_struct = {}
+        ret_vars = {}
+        for key in keylist:
+            if len(proc[key])>0:
+                gdind = 0
+            else:
+                gdind = 1
+            dfof = proc[key]['dtrialwise'][:]
+            decon = proc[key]['strialwise'][:] 
+            print([el for el in proc[key]['trialwise_t_offset']])
+            t_offset = proc[key]['trialwise_t_offset']['trialwise_t_offset'][:] 
+            ret_vars[key] = proc['/'.join([key,'ret_vars'])]
+            #calcium_responses_au = np.nanmean(proc[key]['trialwise'][:,:,nbefore:-nafter],-1)
+            running_speed_cm_s = 4*np.pi/180*proc[key]['trialrun'][:] # 4 cm from disk ctr to estimated mouse location
+            paramdict = proc['/'.join([key,'ret_vars','paramdict_normal'])]
+            #print(paramdict['xo'].shape)
+            rf_ctr = np.concatenate((paramdict['xo'][:][np.newaxis,:],-paramdict['yo'][:][np.newaxis,:]),axis=0)
+            stim_offset = ret_vars[key]['position'][:] - paramdict['ctr'][:]
+            rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
+            rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
+            cell_id = np.arange(dfof.shape[0])
+            ucontrast,icontrast = np.unique(proc[key]['contrast'][:],return_inverse=True)
+            usize,isize = np.unique(proc[key]['size'][:],return_inverse=True)
+            uangle,iangle = np.unique(proc[key]['angle'][:],return_inverse=True)
+            ulight,ilight = np.unique(proc[key]['light'],return_inverse=True)
+            stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis]),axis=0)
+            stimulus_size_deg = usize
+            stimulus_contrast = ucontrast
+            stimulus_direction = uangle
+            stimulus_light = ulight
+            #session_id = 'session_'+key[:-1].replace('/','_')
+            session_id = key
+            mouse_id = key.split('_')[1]
+            
+            if not session_id in data_struct.keys():
+                this_session = data_struct.create_group(session_id)
+                this_session['mouse_id'] = mouse_id
+                this_session['cell_type'] = cell_type
+                this_session.create_dataset('cell_id',data=cell_id)
+            else:
+                this_session = data_struct[session_id]
+
+            exptno = 0
+            while 'size_contrast_opto_'+str(exptno) in this_session.keys():
+                exptno = exptno+1
+            this_expt = this_session.create_group('size_contrast_'+str(exptno))
+            this_expt.create_dataset('stimulus_id',data=stimulus_id)
+            this_expt.create_dataset('stimulus_size_deg',data=stimulus_size_deg)
+            this_expt.create_dataset('stimulus_contrast',data=stimulus_contrast)
+            this_expt.create_dataset('stimulus_direction',data=stimulus_direction)
+            this_expt.create_dataset('stimulus_light',data=stimulus_light)
+            this_expt['rf_mapping_pval'] = ret_vars[key]['pval_ret'][:]
+            this_expt['rf_distance_deg'] = rf_distance_deg
+            this_expt['rf_displacement_deg'] = rf_displacement_deg
+            this_expt['rf_ctr'] = rf_ctr
+            this_expt['stim_offset_deg'] = stim_offset
+            this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
+            this_expt.create_dataset('F',data=dfof)
+            this_expt.create_dataset('decon',data=decon)
+            this_expt.create_dataset('t_offset',data=t_offset)
+            this_expt['nbefore'] = nbefore
+            this_expt['nafter'] = nafter
