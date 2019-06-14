@@ -1,3 +1,4 @@
+gma
 function rgb = combine_rg(imr,img,rg,normalized)
 if nargin < 3
     rg = 0;
