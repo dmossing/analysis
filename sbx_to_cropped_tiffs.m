@@ -19,7 +19,7 @@ if isempty(strfind(sbxfile,'.sbx'))
 end
 filebase = sbxfile(1:end-4);
 % only relevant for runing code on big-boi PC
-filebase2 = strrep(filebase,'/media/greg/modulation/mossing/2P/','/home/mossing/data/matfiles/');
+filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/data/matfiles/');
 if strfind(filebase2,'/home/mossing/data/matfiles/')
     strparts = strsplit(filebase2,'/');
     filebase2 = strjoin({strparts{1:end-1} 'ot/' strparts{end}},'/');

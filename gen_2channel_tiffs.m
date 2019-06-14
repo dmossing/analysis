@@ -1,11 +1,14 @@
-function gen_2channel_tiffs(foldname,filenames)
-data_foldbase = '/media/greg/modulation/mossing/2P/';
-result_foldbase = '/media/greg/modulation/mossing/visual_stim/';
+function gen_2channel_tiffs(foldname,filenames,green_only)
+if nargin < 3
+    green_only = 0;
+end
+data_foldbase = '/home/mossing/modulation/2P/';
+result_foldbase = '/home/mossing/modulation/visual_stim/';
 
-targetfold = '/media/data/dan/suite2P/raw/';
+targetfold = '/home/mossing/data_ssd/suite2P/raw/';
 
 opts.chunksize = 1000;
-opts.green_only = 0;
+opts.green_only = green_only;
 
 thisfoldname = foldname;
 d = dir([data_foldbase thisfoldname '/M*.mat']);

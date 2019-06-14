@@ -1,4 +1,7 @@
-function save_crop_for_alignment(fns)
+function save_crop_for_alignment(fns,sbxlocn)
+if nargin < 2
+    sbxlocn = '';
+end
 try
     if isdir(fns)
         d = dir([fns '/*.sbx']);
@@ -10,9 +13,16 @@ for i=1:numel(fns)
     fname = fns{i};
 	if fname(end-3:end) == '.sbx'
 		fname = fname(1:end-4);
-	end
-    load([fname '.mat'])
-    imgtocrop = sbxreadpacked(fname,1,1);
+    end
+    if sbxlocn
+        fileparts = strsplit(fname,'/');
+        fname_itself = fileparts{end};
+        sbxfile = [sbxlocn '/' fname_itself];
+    else
+        sbxfile = fname;
+    end
+    load(fname,'info')
+    imgtocrop = sbxreadpacked(sbxfile,1,1);
     if numel(size(imgtocrop))==3
         imgtocrop = squeeze(imgtocrop(1,:,:));
     end

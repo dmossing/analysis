@@ -17,6 +17,7 @@ import pdb
 from importlib import reload
 reload(suite2p.run_s2p)
 reload(suite2p)
+import glob
 
 fast_disk = '/home/mossing/data_ssd/suite2P/bin'
 
@@ -96,7 +97,9 @@ def process_data(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw
     opsEnd=run_s2p(ops=ops,db=db)
     if delete_raw:
         for fold in data_path:
-            os.remove(fold + '/*.tif')
+            for old_file in glob.glob(fold + '/*.tif'):
+                os.remove(old_file)
+    
 
 
 ## In[15]:

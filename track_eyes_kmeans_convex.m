@@ -185,7 +185,7 @@ edge_image(~msk) = 0;
 data(~msk) = 0;
 
 if area < sum(msk(:))
-    sz = floor(sqrt(area)/2);
+    sz = floor(0.25*sqrt(area));
 else
     sz = 5;
 end
@@ -236,12 +236,4 @@ hull(1:numel(thisp)) = pupil_inds(thisp);
 % scatter(ctr_new(1),ctr_new(2),'g+')
 % hold off;
 % pause(1e-3)
-% disp('got here')
 end
-
-% %%
-% rgb = zeros(size(data));
-% rgb(:,:,1) = data/max(data(:));
-% rgb(:,:,2) = is_bright;
-% rgb(:,:,3) = zeros(size(data));
-% imshow(rgb)
