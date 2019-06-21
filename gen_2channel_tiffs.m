@@ -1,11 +1,18 @@
-function gen_2channel_tiffs(foldname,filenames,green_only)
+function gen_2channel_tiffs(foldname,filenames,options)
 if nargin < 3
-    green_only = 0;
+    options = [];
 end
-data_foldbase = '/home/mossing/modulation/2P/';
-result_foldbase = '/home/mossing/modulation/visual_stim/';
 
-targetfold = '/home/mossing/data_ssd/suite2P/raw/';
+green_only = getOr(options,'green_only',0);
+result_foldbase = getOr(options,'result_foldbase',...
+    '/home/mossing/modulation/visual_stim/');
+data_foldbase = getOr(options,'data_foldbase',...
+    '/home/mossing/data_ssd/2P/');
+targetfold = getOr(options,'targetfold',...
+    '/home/mossing/data_ssd/suite2P/raw/');
+
+% result_foldbase = '/home/mossing/modulation/visual_stim/';
+% targetfold = '/home/mossing/data_ssd/suite2P/raw/';
 
 opts.chunksize = 1000;
 opts.green_only = green_only;
@@ -24,4 +31,11 @@ for i=1:numel(d)
         opts.targetfold = [targetfold animalid '/' dstr '/' subfold '/'];
         sbx_to_cropped_tiffs([data_foldbase thisfoldname '/' fnames{i}(1:end-4)],opts);
     end
+end
+
+function val = getOr(options,fieldname,default)
+if isempty(options) || ~isfield(options,fieldname) || isempty(getfield(options,fieldname))
+    val = default;
+else
+    val = getfield(options,fieldname);
 end
