@@ -17,6 +17,7 @@ import scipy.ndimage.measurements as snm
 from mpl_toolkits.mplot3d import Axes3D
 import scipy.optimize as sop
 import pdb
+import analysis_template as at
 
 blcutoff = 1
 ds = 10
@@ -436,7 +437,7 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             usize,isize = np.unique(proc[key]['size'][:],return_inverse=True)
             uangle,iangle = np.unique(proc[key]['angle'][:],return_inverse=True)
             ulight,ilight = np.unique(proc[key]['light'],return_inverse=True)
-            stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis]),axis=0)
+            stimulus_id = np.concatenate((isize[np.newaxis],icontrast[np.newaxis],iangle[np.newaxis],ilight[np.newaxis]),axis=0)
             stimulus_size_deg = usize
             stimulus_contrast = ucontrast
             stimulus_direction = uangle
@@ -473,3 +474,40 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('t_offset',data=t_offset)
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter
+
+def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',procname='size_contrast_proc.hdf5'):
+    if isinstance(datafoldbase,str):
+        datafoldbase = [datafoldbase]*len(folds)
+    if isinstance(stimfoldbase,str):
+        stimfoldbase = [stimfoldbase]*len(folds)
+    stim_params = size_contrast_opto_params()
+    for thisfold,thisfile,frame_adjust,rg,thisdatafoldbase,thisstimfoldbase,retnumber in zip(folds,files,adjust_fns,rgs,datafoldbase,stimfoldbase,rets):
+
+        session_id = at.gen_session_id(thisfold)
+        datafiles = at.gen_datafiles(thisdatafoldbase,thisfold,thisfile,nplanes=4)
+        stimfile = at.gen_stimfile(thisstimfoldbase,thisfold,thisfile)
+        retfile = thisdatafoldbase+thisfold+'retinotopy_'+retnumber+'.mat'
+
+        nbefore = 8
+        nafter = 8
+
+        proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
+        
+        proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+
+        ut.dict_to_hdf5(procname,session_id,proc)
+
+def size_contrast_opto_params():
+    paramlist = [('angle','Orientation'),('size','Size'),('contrast','Contrast'),('light','lightsOn')]
+    params_and_fns = [None]*len(paramlist)
+    for i,pair in enumerate(paramlist):
+        param = pair[0]
+        function = lambda result: result['gratingInfo'][()][pair[1]][()]
+        params_and_fns[i] = (param,function)
+    return params_and_fns
+
+def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+    groupname = 'size_contrast_opto'
+    featurenames=['size','contrast','angle','light']
+    datasetnames = ['stimulus_size_deg','stimulus_contrast','stimulus_direction_deg','stimulus_light']
+    at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)

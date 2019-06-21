@@ -8,8 +8,10 @@ import h5py
 from oasis.functions import deconvolve
 from oasis import oasisAR1, oasisAR2
 import pyute as ut
-
+import analysis_template as at
 from importlib import reload
+reload(ut)
+reload(at)
 import scipy.ndimage.filters as sfi
 import scipy.stats as sst
 import scipy.ndimage.measurements as snm
@@ -353,3 +355,67 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('decon',data=decon)
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter
+
+def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',procname='size_contrast_proc.hdf5'):
+    if isinstance(datafoldbase,str):
+        datafoldbase = [datafoldbase]*len(folds)
+    if isinstance(stimfoldbase,str):
+        stimfoldbase = [stimfoldbase]*len(folds)
+
+    stim_params = [('paramdict',gen_paramdict),('angle',gen_angle)]
+    
+    session_ids = []
+
+    for thisfold,thisfile,frame_adjust,rg,thisdatafoldbase,thisstimfoldbase,retnumber in zip(folds,files,adjust_fns,rgs,datafoldbase,stimfoldbase,rets):
+
+        session_id = at.gen_session_id(thisfold)
+        datafiles = at.gen_datafiles(thisdatafoldbase,thisfold,thisfile,nplanes=4)
+        stimfile = at.gen_stimfile(thisstimfoldbase,thisfold,thisfile)
+        retfile = thisdatafoldbase+thisfold+'retinotopy_'+retnumber+'.mat'
+
+        nbefore = 8
+        nafter = 8
+
+        proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
+        
+        proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+
+        ut.dict_to_hdf5(procname,session_id,proc)
+        session_ids.append(session_id)
+    return session_ids
+
+def gen_paramdict(result):
+
+    stimparams = result['stimParams']
+
+    sz = stimparams[1]
+    figContrast = stimparams[-2]
+    grndContrast = stimparams[-1]
+
+    paramdict = {}
+    paramdict['ctrl'] = np.logical_and(figContrast==0,grndContrast==0)
+    paramdict['fig'] = np.logical_and(figContrast==1,grndContrast==0)
+    paramdict['grnd'] = np.logical_and(np.logical_and(figContrast==0,grndContrast==1),sz>0)
+    paramdict['iso'] = sz==0
+    paramdict['cross'] = np.logical_and(figContrast==1,grndContrast==1)
+
+    return paramdict
+
+def gen_angle(result):
+    stimparams = result['stimParams']
+    ori = stimparams[0]
+    return ori
+
+def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+    groupname = 'figure_ground'
+    featurenames=[gen_stimtype,'angle']
+    datasetnames = ['stimulus_type','stimulus_direction_deg']
+    grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    return grouplist
+
+def gen_stimtype(proc):
+    ufeature = [n.encode('ascii','ignore') for n in order]
+    stimulus_id = np.zeros(proc['paramdict']['iso'][:].shape)
+    for i,stimtype in enumerate(order):
+        stimulus_id[proc['paramdict'][stimtype]] = i
+    return ufeature,stimulus_id

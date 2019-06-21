@@ -1,6 +1,6 @@
 %%
 nplanes = 4;
-datafold = '/media/mossing/backup_0/data/2P/';
+datafold = '/media/mossing/backup_1/data/2P/';
 stimfold = '/home/mossing/modulation/visual_stim/';
 foldname = '190501/M0094';
 filename = 'M0094_130_005';

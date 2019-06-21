@@ -14,6 +14,9 @@ import scipy.optimize as sop
 import scipy.ndimage.measurements as snm
 import re
 import pickle as pkl
+import glob
+import fnmatch
+import shutil
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -174,11 +177,24 @@ def plotstacked(arr,offset=1):
 def trialize(arr,frm,nbefore=15,nafter=30):
     if len(frm.shape)==1:
         frm = frm.reshape((-1,2))
+    if arr is None:
+        return None
     triallen = np.diff(frm,axis=1)
     triallen = np.round(triallen.mean()).astype('int')
     trialwise = np.zeros((arr.shape[0],frm.shape[0],triallen+nbefore+nafter))
+    trialwise[:] = np.nan
     for i in range(trialwise.shape[1]):
-        trialwise[:,i,:] = arr[:,frm[i,0]-nbefore:frm[i,0]+triallen+nafter]
+
+        begin_arr = frm[i,0]-nbefore
+        begin_t = np.maximum(-begin_arr,0)
+
+        end_arr = frm[i,0]+triallen+nafter
+        end_t = triallen+nbefore+nafter + np.minimum(arr.shape[1]-end_arr,0)
+            
+        try:
+            trialwise[:,i,begin_t:end_t] = arr[:,begin_arr:end_arr]
+        except:
+            print('problem with trial #'+str(i))
     return trialwise
 
 def resample(signal1,trig1,trig2):
@@ -906,3 +922,29 @@ def plot_bin_stat(x,y,nbins=20):
     binstd,_,_ = sst.binned_statistic(x,y,statistic=sst.sem,bins=nbins)
     plt.errorbar(0.5*(binedge[:-1]+binedge[1:]),binmean,binstd,c='r')
     plt.plot(0.5*(binedge[:-1]+binedge[1:]),np.zeros_like(binmean),c='k')
+
+def mkdir(d):
+    if not os.path.exists(d):
+        os.mkdir(d)
+        
+def copy_directory_structure(source,target):
+    for root,dirs,files in os.walk(source):
+        for name in dirs:
+            thispath = os.path.join(root,name)
+            thatpath = thispath.replace(source,target)
+            mkdir(thatpath)
+            
+def copy_pattern_ds(source,target,pattern,exclude=None):
+    if type(exclude) is str:
+        exclude = [exclude]
+    copy_directory_structure(source,target)
+    for root,dirs,files in os.walk(source):
+        for name in files:
+            exclude_this = False
+            for bad_item in exclude:
+                if fnmatch.fnmatch(name,bad_item):
+                    exclude_this = True
+            if fnmatch.fnmatch(name,pattern) and not exclude_this:
+                thispath = os.path.join(root,name)
+                thatpath = thispath.replace(source,target)
+                shutil.copyfile(thispath,thatpath)
