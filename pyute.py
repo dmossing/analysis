@@ -934,17 +934,18 @@ def copy_directory_structure(source,target):
             thatpath = thispath.replace(source,target)
             mkdir(thatpath)
             
-def copy_pattern_ds(source,target,pattern,exclude=None):
+def copy_pattern_ds(source,target,pattern,exclude=[]):
     if type(exclude) is str:
         exclude = [exclude]
     copy_directory_structure(source,target)
     for root,dirs,files in os.walk(source):
         for name in files:
             exclude_this = False
-            for bad_item in exclude:
-                if fnmatch.fnmatch(name,bad_item):
-                    exclude_this = True
-            if fnmatch.fnmatch(name,pattern) and not exclude_this:
+            if exclude:
+                for bad_item in exclude:
+                    if fnmatch.fnmatchcase(name,bad_item):
+                        exclude_this = True
+            if fnmatch.fnmatchcase(name,pattern) and not exclude_this:
                 thispath = os.path.join(root,name)
                 thatpath = thispath.replace(source,target)
                 shutil.copyfile(thispath,thatpath)
