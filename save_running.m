@@ -46,6 +46,11 @@ for i=1:numel(fnames)
             load([roifoldname '/' strrep(othername,'.rois','.mat')],'info')
         end
         frm = info.frame(info.event_id==1);
+        brkpt = find(diff(frm)<0,1);
+        while(brkpt)
+            frm(brkpt+1:end) = frm(brkpt+1:end) + 65536;
+            brkpt = find(diff(frm)<0,1);
+        end
         frm_run = find(stim_trigger);
         [ufrm,uidx] = sort(unique(frm));
         if numel(ufrm)~=numel(frm)

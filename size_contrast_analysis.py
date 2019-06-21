@@ -8,9 +8,10 @@ import h5py
 from oasis.functions import deconvolve
 from oasis import oasisAR1, oasisAR2
 import pyute as ut
-
+import analysis_template as at
 from importlib import reload
 reload(ut)
+reload(at)
 import scipy.ndimage.filters as sfi
 import scipy.stats as sst
 import scipy.ndimage.measurements as snm
@@ -444,6 +445,7 @@ def analyze_everything_by_criterion(folds=None,files=None,rets=None,adjust_fns=N
         proc[gdind]['ret_vars'] = ret_dicti
         ut.dict_to_hdf5(proc_hdf5_name,session_id,proc[gdind])
     return soriavg,ret_vars # changed 2/12/19
+    
 
 def find_gdind(arrlist):
     sz = [el.size for el in arrlist]
@@ -604,3 +606,48 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('t_offset',data=t_offset)
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter
+
+def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',procname='size_contrast_proc.hdf5'):
+    if isinstance(datafoldbase,str):
+        datafoldbase = [datafoldbase]*len(folds)
+    if isinstance(stimfoldbase,str):
+        stimfoldbase = [stimfoldbase]*len(folds)
+    stim_params = size_contrast_params()
+    session_ids = []
+    for thisfold,thisfile,frame_adjust,rg,thisdatafoldbase,thisstimfoldbase,retnumber in zip(folds,files,adjust_fns,rgs,datafoldbase,stimfoldbase,rets):
+
+        session_id = at.gen_session_id(thisfold)
+        datafiles = at.gen_datafiles(thisdatafoldbase,thisfold,thisfile,nplanes=4)
+        stimfile = at.gen_stimfile(thisstimfoldbase,thisfold,thisfile)
+        retfile = thisdatafoldbase+thisfold+'retinotopy_'+retnumber+'.mat'
+
+        nbefore = 8
+        nafter = 8
+
+        proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
+        
+        proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+
+        ut.dict_to_hdf5(procname,session_id,proc)
+        session_ids.append(session_id)
+    return session_ids
+
+def size_contrast_params():
+    paramlist = [('angle','Orientation'),('size','Size'),('contrast','Contrast')]
+    params_and_fns = [None]*len(paramlist)
+    for i,pair in enumerate(paramlist):
+        param = pair[0]
+        function = lambda result: result['gratingInfo'][()][pair[1]][()]
+        params_and_fns[i] = (param,function)
+    return params_and_fns
+
+def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+    groupname = 'size_contrast'
+    featurenames=['size','contrast','angle']
+    datasetnames = ['stimulus_size_deg','stimulus_contrast','stimulus_direction_deg']
+    grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+
+    at.add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
+    return grouplist
+
+

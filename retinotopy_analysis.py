@@ -10,6 +10,7 @@ import h5py
 import pyute as ut
 import scipy.stats as sst
 import scipy.ndimage.filters as sfi
+import analysis_template as at
 
 blcutoff = 1
 ds = 10
@@ -63,7 +64,7 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
     trialrun = np.zeros(frame[0::2].shape)
     for i in range(len(trialrun)):
         trialrun[i] = dxdt[frame[0::2][i]:frame[1::2][i]].mean()
-    runtrial = criterion(np.abs(trialrun)) #>0
+    runtrial = criterion(np.abs(trialrun))
 
     if has_inverse:
         ret = np.zeros((data.shape[0],Ny,Nx,2))
@@ -414,3 +415,71 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('decon',data=decon)
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter
+
+def analyze_simply(folds=None,files=None,adjust_fns=None,rgs=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',procname='size_contrast_proc.hdf5'):
+    if isinstance(datafoldbase,str):
+        datafoldbase = [datafoldbase]*len(folds)
+    if isinstance(stimfoldbase,str):
+        stimfoldbase = [stimfoldbase]*len(folds)
+    # -1 to go from matlab to python indexing
+    stim_params = [('locY',lambda result: result['locinds'][()][:,0]-1),('locX',lambda result: result['locinds'][()][:,1]-1)]
+    session_ids = []
+    for thisfold,thisfile,frame_adjust,rg,thisdatafoldbase,thisstimfoldbase in zip(folds,files,adjust_fns,rgs,datafoldbase,stimfoldbase):
+
+        session_id = at.gen_session_id(thisfold)
+        datafiles = at.gen_datafiles(thisdatafoldbase,thisfold,thisfile,nplanes=4)
+        stimfile = at.gen_stimfile(thisstimfoldbase,thisfold,thisfile)
+
+        nbefore = 8
+        nafter = 8
+
+        proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
+
+        proc['locY'],proc['locX'] = fix_up_directions(proc['locY'],proc['locX'],stimfile,datafiles[0])
+
+        ut.dict_to_hdf5(procname,session_id,proc)
+        session_ids.append(session_id)
+    return session_id
+
+def fix_up_directions(locy,locx,stimfile,datafile):
+    # positive direction is temporal
+    # positive direction is UP!!
+
+    result = ut.matfile_to_dict(ut.loadmat(stimfile,'result')) # [()]
+
+    if 'range' in list(result.keys()):
+        gridsize = 5
+        ctr = np.array((result['range'][0:2].mean(),result['range'][2:].mean())) # ctr: x center of range, y center of range # fixed 18/10/30; for expts. before 18/10/30, this will have to be switched!
+    else: 
+        gridsize = 10
+        ctr = np.array((0,0))
+
+    Ny = locy.max()+1
+    Nx = locx.max()+1
+
+    xrg = np.arange(-(Nx-1)*gridsize/2,(Nx+1)*gridsize/2,gridsize) # positive direction is temporal
+    yrg = -np.arange(-(Ny-1)*gridsize/2,(Ny+1)*gridsize/2,gridsize) # positive direction is UP!!
+    
+    # flipping for expts. before 18/10/30
+    toflip = int(datafile.split('/')[-4])<181030
+    if toflip:
+        ctr = ctr*np.array((1,-1))
+
+    # inverting for expts. between 18/10/30 and 18/12/09
+    notquitefixed = int(datafile.split('/')[-4])<181209
+    if ~toflip and notquitefixed:
+        yrg = -yrg
+    
+    xrg = xrg + ctr[0]
+    yrg = yrg + ctr[1]
+
+    locydeg = yrg[locy.astype('int')]
+    locxdeg = xrg[locx.astype('int')]
+
+    return yrg,xrg
+
+def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+    groupname = 'retinotopy'
+    featurenames=['locY','locX']
+    datasetnames = ['stimulus_location_y_deg','stimulus_location_x_deg']
+    at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
