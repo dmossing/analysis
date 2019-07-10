@@ -362,6 +362,9 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
     if isinstance(stimfoldbase,str):
         stimfoldbase = [stimfoldbase]*len(folds)
 
+    if os.path.exists(procname):
+        os.remove(procname)
+
     stim_params = [('paramdict',gen_paramdict),('angle',gen_angle)]
     
     session_ids = []

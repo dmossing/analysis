@@ -421,6 +421,12 @@ def analyze_simply(folds=None,files=None,adjust_fns=None,rgs=None,datafoldbase='
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
         stimfoldbase = [stimfoldbase]*len(folds)
+    if adjust_fns is None:
+        adjust_fns = [None]*len(folds)
+    if rgs is None:
+        rgs = [None]*len(folds)
+    if os.path.exists(procname):
+        os.remove(procname)
     # -1 to go from matlab to python indexing
     stim_params = [('locY',lambda result: result['locinds'][()][:,0]-1),('locX',lambda result: result['locinds'][()][:,1]-1)]
     session_ids = []
@@ -439,7 +445,26 @@ def analyze_simply(folds=None,files=None,adjust_fns=None,rgs=None,datafoldbase='
 
         ut.dict_to_hdf5(procname,session_id,proc)
         session_ids.append(session_id)
-    return session_id
+
+    #    retfile = 'retinotopy_' + 
+
+    #    try:
+    #        retfile_load = sio.loadmat(retfile)
+    #    except:
+    #        print('retinotopy file not accessible')
+    #        retfile_load = {}
+    #
+    #    if has_inverse:
+    #        retfile_load['paramdict_normal'] = paramdict[0]
+    #        retfile_load['paramdict_inv'] = paramdict[1]
+    #    else:
+    #        retfile_load['paramdict_normal'] = paramdict
+    #    retfile_load['pval_ret'] = pval
+    #    retfile_load['has_inverse'] = has_inverse
+    #    retfile_load['ret'] = ret
+    #    sio.savemat(retfile,retfile_load)
+
+    return session_ids
 
 def fix_up_directions(locy,locx,stimfile,datafile):
     # positive direction is temporal
@@ -476,10 +501,11 @@ def fix_up_directions(locy,locx,stimfile,datafile):
     locydeg = yrg[locy.astype('int')]
     locxdeg = xrg[locx.astype('int')]
 
-    return yrg,xrg
+    return locydeg,locxdeg
 
 def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
     groupname = 'retinotopy'
     featurenames=['locY','locX']
     datasetnames = ['stimulus_location_y_deg','stimulus_location_x_deg']
-    at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    return grouplist

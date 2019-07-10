@@ -612,7 +612,9 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
         stimfoldbase = [stimfoldbase]*len(folds)
-    stim_params = size_contrast_params()
+    if os.path.exists(procname):
+        os.remove(procname)
+    stim_params = size_contrast_params_kludge()
     session_ids = []
     for thisfold,thisfile,frame_adjust,rg,thisdatafoldbase,thisstimfoldbase,retnumber in zip(folds,files,adjust_fns,rgs,datafoldbase,stimfoldbase,rets):
 
@@ -626,7 +628,10 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
 
         proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
         
-        proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+        try:
+            proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+        except:
+            print('retinotopy not saved for ' + session_id)
 
         ut.dict_to_hdf5(procname,session_id,proc)
         session_ids.append(session_id)
@@ -636,9 +641,17 @@ def size_contrast_params():
     paramlist = [('angle','Orientation'),('size','Size'),('contrast','Contrast')]
     params_and_fns = [None]*len(paramlist)
     for i,pair in enumerate(paramlist):
+        print(pair[1])
         param = pair[0]
         function = lambda result: result['gratingInfo'][()][pair[1]][()]
         params_and_fns[i] = (param,function)
+    return params_and_fns
+
+def size_contrast_params_kludge():
+    params_and_fns = [None]*3
+    params_and_fns[0] = ('angle',lambda result: result['gratingInfo'][()]['Orientation'][()])
+    params_and_fns[1] = ('size',lambda result: result['gratingInfo'][()]['Size'][()])
+    params_and_fns[2] = ('contrast',lambda result: result['gratingInfo'][()]['Contrast'][()])
     return params_and_fns
 
 def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
@@ -650,4 +663,12 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     at.add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
     return grouplist
 
-
+def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100))):
+    nsize = len(usize)
+    ncontrast = len(ucontrast)
+    plt.imshow(arr)
+    plt.xticks(np.arange(ncontrast),ucontrast)
+    plt.yticks(np.arange(nsize),usize)
+    if show_labels:
+        plt.xlabel('contrast (%)')
+        plt.ylabel('size ($^o$)')

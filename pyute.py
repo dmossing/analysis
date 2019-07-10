@@ -179,6 +179,11 @@ def trialize(arr,frm,nbefore=15,nafter=30):
         frm = frm.reshape((-1,2))
     if arr is None:
         return None
+    if len(arr.shape)==1:
+        arr = arr[np.newaxis]
+        singleton = True
+    else:
+        singleton = False
     triallen = np.diff(frm,axis=1)
     triallen = np.round(triallen.mean()).astype('int')
     trialwise = np.zeros((arr.shape[0],frm.shape[0],triallen+nbefore+nafter))
@@ -195,6 +200,8 @@ def trialize(arr,frm,nbefore=15,nafter=30):
             trialwise[:,i,begin_t:end_t] = arr[:,begin_arr:end_arr]
         except:
             print('problem with trial #'+str(i))
+    if singleton:
+        trialwise = trialwise[0]
     return trialwise
 
 def resample(signal1,trig1,trig2):
@@ -948,4 +955,15 @@ def copy_pattern_ds(source,target,pattern,exclude=[]):
             if fnmatch.fnmatchcase(name,pattern) and not exclude_this:
                 thispath = os.path.join(root,name)
                 thatpath = thispath.replace(source,target)
+                print(' --> '.join([thispath,thatpath]))
                 shutil.copyfile(thispath,thatpath)
+
+def plot_ellipse(x,y,ctr_fn=np.mean,rad_fn=np.std,alpha=None,c=None,edge=True):
+    ell = mp.Ellipse(xy=(ctr_fn(x),ctr_fn(y)),width=2*rad_fn(x),height=2*rad_fn(y))
+    plt.gca().add_artist(ell)
+    if not alpha is None:
+        ell.set_alpha(alpha)
+    if not c is None:
+        ell.set_facecolor(colors[i])
+    if edge:
+        ell.set_edgecolor('k')

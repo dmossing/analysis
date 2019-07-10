@@ -480,7 +480,10 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
         stimfoldbase = [stimfoldbase]*len(folds)
-    stim_params = size_contrast_opto_params()
+    if os.path.exists(procname):
+        os.remove(procname)
+    stim_params = size_contrast_opto_params_kludge()
+    session_ids = []
     for thisfold,thisfile,frame_adjust,rg,thisdatafoldbase,thisstimfoldbase,retnumber in zip(folds,files,adjust_fns,rgs,datafoldbase,stimfoldbase,rets):
 
         session_id = at.gen_session_id(thisfold)
@@ -496,6 +499,8 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
         proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
 
         ut.dict_to_hdf5(procname,session_id,proc)
+        session_ids.append(session_id)
+    return session_ids
 
 def size_contrast_opto_params():
     paramlist = [('angle','Orientation'),('size','Size'),('contrast','Contrast'),('light','lightsOn')]
@@ -504,6 +509,14 @@ def size_contrast_opto_params():
         param = pair[0]
         function = lambda result: result['gratingInfo'][()][pair[1]][()]
         params_and_fns[i] = (param,function)
+    return params_and_fns
+
+def size_contrast_opto_params_kludge():
+    params_and_fns = [None]*4
+    params_and_fns[0] = ('angle',lambda result: result['gratingInfo'][()]['Orientation'][()])
+    params_and_fns[1] = ('size',lambda result: result['gratingInfo'][()]['Size'][()])
+    params_and_fns[2] = ('contrast',lambda result: result['gratingInfo'][()]['Contrast'][()])
+    params_and_fns[3] = ('light',lambda result: result['gratingInfo'][()]['lightsOn'][()])
     return params_and_fns
 
 def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):

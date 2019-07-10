@@ -52,10 +52,12 @@ for i=1:numel(fnames)
             brkpt = find(diff(frm)<0,1);
         end
         frm_run = find(stim_trigger);
-        [ufrm,uidx] = sort(unique(frm));
-        if numel(ufrm)~=numel(frm)
-            frm = frm(uidx);
+        [ufrm,uidx] = unique(frm);
+        frm = frm(uidx);
+        if numel(frm_run)>=numel(frm)
             frm_run = frm_run(uidx);
+        else
+            frm = frm(1:numel(frm_run));
         end
         dxdt = resamplebytrigs(dx_dt,max(frm)+10,frm_run,frm); %find(stim_trigger),info.frame(info.event_id==1));
         %         dxdt = resamplebytrigs(dx_dt,size(Data,2),frm_run,frm); %find(stim_trigger),info.frame(info.event_id==1));
