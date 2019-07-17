@@ -70,7 +70,40 @@ ops = {
       }
 
 
-def process_data(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',nchannels=1,delete_raw=False):
+def process_data(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',nchannels=1,delete_raw=False,diameter=15):
+#    save_path0 = result_base+animalid+'/'+date+'/'+'_'.join(expt_ids)
+#    data_path = [raw_base+animalid+'/'+date+'/'+lbl for lbl in expt_ids]
+
+    db = prepare_db(animalid,date,expt_ids,raw_base=raw_base,result_base=result_base,fast_disk=fast_disk,nchannels=nchannels,diameter=diameter)
+
+    # provide an h5 path in 'h5py' or a tiff path in 'data_path'
+    # db overwrites any ops (allows for experiment specific settings)
+    #db = {
+    #      'h5py': [], # a single h5 file path
+    #      'h5py_key': 'data',
+    #      'look_one_level_down': False, # whether to look in ALL subfolders when searching for tiffs,
+    #      'save_path0': save_path0,
+    #      'data_path': data_path, # a list of folders with tiffs 
+    #                                             # (or folder of folders with tiffs if look_one_level_down is True, or subfolders is not empty)                                     
+    #      'subfolders': [], # choose subfolders of 'data_path' to look in (optional)
+    #      'fast_disk': fast_disk, # string which specifies where the binary file will be stored (should be an SSD)
+    #      'nchannels': nchannels,
+    #      'diameter': diameter
+    #    }
+
+    try:
+        shutil.rmtree(fast_disk+'/suite2p')
+        print('fast disk contents deleted')
+    except:
+        print('fast disk location empty')
+
+    opsEnd=run_s2p(ops=ops,db=db)
+    if delete_raw:
+        for fold in db['data_path']:
+            for old_file in glob.glob(fold + '/*.tif'):
+                os.remove(old_file)
+    
+def prepare_db(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',nchannels=1,diameter=15):
     save_path0 = result_base+animalid+'/'+date+'/'+'_'.join(expt_ids)
     data_path = [raw_base+animalid+'/'+date+'/'+lbl for lbl in expt_ids]
 
@@ -85,21 +118,11 @@ def process_data(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw
                                                  # (or folder of folders with tiffs if look_one_level_down is True, or subfolders is not empty)                                     
           'subfolders': [], # choose subfolders of 'data_path' to look in (optional)
           'fast_disk': fast_disk, # string which specifies where the binary file will be stored (should be an SSD)
-          'nchannels': nchannels
+          'nchannels': nchannels,
+          'diameter': diameter
         }
 
-    try:
-        shutil.rmtree(fast_disk+'/suite2p')
-        print('fast disk contents deleted')
-    except:
-        print('fast disk location empty')
-
-    opsEnd=run_s2p(ops=ops,db=db)
-    if delete_raw:
-        for fold in data_path:
-            for old_file in glob.glob(fold + '/*.tif'):
-                os.remove(old_file)
-    
+    return db
 
 
 ## In[15]:

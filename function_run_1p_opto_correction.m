@@ -84,12 +84,12 @@ for ff=1:numel(filenames)
     
 end
 %%
-lkat = 1;
-data = roifile{i}.Data;
-neuropil = roifile{i}.Neuropil;
-d = data(lkat,:);
-n = neuropil(lkat,:);
-plot(d-n)
+% lkat = 1;
+% data = roifile{i}.Data;
+% neuropil = roifile{i}.Neuropil;
+% d = data(lkat,:);
+% n = neuropil(lkat,:);
+% plot(d-n)
 
 %%
 % for i=1:nplanes

@@ -18,17 +18,19 @@ if isempty(strfind(sbxfile,'.sbx'))
     sbxfile = [sbxfile '.sbx'];
 end
 filebase = sbxfile(1:end-4);
-% only relevant for runing code on big-boi PC
-filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/data/matfiles/');
-if strfind(filebase2,'/home/mossing/data/matfiles/')
+% only relevant for running code on big-boi PC
+filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/modulation/matfiles/');
+filebase2_no_ot = filebase2;
+if strfind(filebase2,'/home/mossing/modulation/matfiles/')
     strparts = strsplit(filebase2,'/');
     filebase2 = strjoin({strparts{1:end-1} 'ot/' strparts{end}},'/');
+    filebase2_no_ot = strjoin({strparts{1:end-1} strparts{end}},'/');
     just_filename = [strparts{end} '.sbx'];
 else
     just_filename = sbxfile;
 end
 global info
-load(filebase2,'info')
+load(filebase2_no_ot,'info')
 assert(isfield(info,'rect'))
 if isfield(info,'rect')
     rect = info.rect; % information necessary if image needs to be cropped
@@ -148,7 +150,9 @@ for i=1:chunksize:info.max_idx
             rejig = cat(3,rejig,redch);
             rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
         end
-        saveastiff(rejig,tifffile,options);
+        if ~isempty(rejig)
+            saveastiff(rejig,tifffile,options);
+        end
         
     end
     ctr = ctr+1;

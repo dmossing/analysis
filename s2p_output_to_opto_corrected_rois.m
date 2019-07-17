@@ -2,7 +2,7 @@ function s2p_output_to_opto_corrected_rois(foldname,varargin)
 
 p = inputParser;
 
-p.addParameter('datafold','/media/mossing/backup_0/data/2P/');
+p.addParameter('datafold','/media/mossing/data1/2P/');
 
 p.parse(varargin{:});
 
@@ -18,6 +18,9 @@ file_endings = strsplit(path_parts{end},'_');
 datestr = path_parts{end-1};
 animalid = path_parts{end-2};
 targetfold = sprintf('%s/%s/%s/',datafold,datestr,animalid);
+if ~exist([targetfold 'ot/'],'dir')
+    mkdir([targetfold 'ot/'])
+end
 for i=1:numel(file_endings)
     copyfile([targetfold '*' file_endings{i} '.mat'],[targetfold 'ot/'])
 end
