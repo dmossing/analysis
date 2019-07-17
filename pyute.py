@@ -967,3 +967,9 @@ def plot_ellipse(x,y,ctr_fn=np.mean,rad_fn=np.std,alpha=None,c=None,edge=True):
         ell.set_facecolor(colors[i])
     if edge:
         ell.set_edgecolor('k')
+
+def combine_rg(r,g):
+    rn = (r/r.max())[:,:,np.newaxis]
+    gn = (g/g.max())[:,:,np.newaxis]
+    rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
+    return rgb

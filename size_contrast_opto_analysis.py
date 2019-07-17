@@ -496,7 +496,10 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
 
         proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
         
-        proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+        try:
+            proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+        except:
+            print('retinotopy not saved for ' + session_id)
 
         ut.dict_to_hdf5(procname,session_id,proc)
         session_ids.append(session_id)
