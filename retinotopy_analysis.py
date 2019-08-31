@@ -416,7 +416,7 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt['nbefore'] = nbefore
             this_expt['nafter'] = nafter
 
-def analyze_simply(folds=None,files=None,adjust_fns=None,rgs=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',procname='size_contrast_proc.hdf5'):
+def analyze_simply(folds=None,files=None,adjust_fns=None,rgs=None,datafoldbase='/home/mossing/scratch/2Pdata/',stimfoldbase='/home/mossing/scratch/visual_stim/',procname='size_contrast_proc.hdf5',nbefore=8,nafter=8):
     if isinstance(datafoldbase,str):
         datafoldbase = [datafoldbase]*len(folds)
     if isinstance(stimfoldbase,str):
@@ -436,12 +436,17 @@ def analyze_simply(folds=None,files=None,adjust_fns=None,rgs=None,datafoldbase='
         datafiles = at.gen_datafiles(thisdatafoldbase,thisfold,thisfile,nplanes=4)
         stimfile = at.gen_stimfile(thisstimfoldbase,thisfold,thisfile)
 
-        nbefore = 8
-        nafter = 8
+#        nbefore = 8
+#        nafter = 8
 
         proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
 
         proc['locY'],proc['locX'] = fix_up_directions(proc['locY'],proc['locX'],stimfile,datafiles[0])
+        #locYdeg,locXdeg = fix_up_directions(proc['locY'],proc['locX'],stimfile,datafiles[0])
+        proc['nbefore'] = nbefore
+        proc['nafter'] = nafter
+        
+        proc['ret_vars'] = compute_ret_vars_proc(proc)
 
         ut.dict_to_hdf5(procname,session_id,proc)
         session_ids.append(session_id)
@@ -508,4 +513,66 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     featurenames=['locY','locX']
     datasetnames = ['stimulus_location_y_deg','stimulus_location_x_deg']
     grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    #save_rf_center_info(filename,grouplist)
     return grouplist
+
+def save_rf_center_info(dsname,keylist):
+    roi_ctr = []
+    with h5py.File(dsname,mode='r') as f:
+        #keylist = [key for key in f.keys()]
+        tuning = [None]*len(keylist)
+        uparam = [None]*len(keylist)
+        for ikey in range(len(keylist)):
+            session = f[keylist[ikey]]
+            roi_ctr.append(session['cell_center'][:])
+            
+    tuning,uparam,relevant_list = at.compute_tuning(dsname)
+    
+    paramdict = []
+    for i in range(len(tuning)):
+        print(i)
+        paramdict.append(None)
+        if not tuning[i] is None:
+            paramdict[i] = ut.fit_2d_gaussian(uparam[i],np.nanmean(tuning[i][:,:,:,nbefore:-nafter],-1))
+            
+    rf_ctr = []
+    for iexpt in range(len(roi_ctr)):
+        if keylist[iexpt] in relevant_list:
+            rf_ctr[iexpt] = np.concatenate((paramdict[iexpt]['xo'][np.newaxis,:],paramdict[iexpt]['yo'][np.newaxis,:]),axis=0)
+            
+    # next, save rf_ctr to data_struct
+    with h5py.File(dsname,mode='r+') as ds:
+    #     print(len([key for key in ds]))
+        for iexpt,session in enumerate(ds.keys()):
+            if len(rf_ctr[iexpt]):
+                xctr = ds[session]['retinotopy_0']['stimulus_location_x_deg'][:].mean()
+                yctr = ds[session]['retinotopy_0']['stimulus_location_y_deg'][:].mean()
+                if not 'ctr' in ds[session]['retinotopy_0']:
+                    ds[session]['retinotopy_0'].create_dataset('ctr',data=np.array((xctr,yctr)))
+                if not 'rf_ctr_xy_yflipped' in ds[session]['retinotopy_0']:
+                    #del ds[session]['retinotopy_0']['rf_ctr_xy_yflipped']
+                    ds[session]['retinotopy_0'].create_dataset('rf_ctr_xy_yflipped',data=rf_ctr[iexpt])
+                    rf_ctr_mean_subtracted_yunflipped = (rf_ctr[iexpt]-np.array((xctr,yctr))[:,np.newaxis])*np.array((1,-1))[:,np.newaxis]
+                    ds[session]['retinotopy_0'].create_dataset('rf_ctr',data = rf_ctr_mean_subtracted_yunflipped)
+
+def compute_ret_vars_proc(proc):
+    # currently RF is computed with no trial criteria!
+    strialwise = proc['strialwise'][:]
+    uparam,stim_id = at.gen_stimulus_id(proc,['locY','locX'])
+    tuning = ut.compute_tuning(strialwise,stim_id,cell_criteria=None,trial_criteria=None)
+    nbefore = proc['nbefore']
+    nafter = proc['nafter']
+
+    if not tuning is None:
+        paramdict = ut.fit_2d_gaussian(uparam,np.nanmean(tuning[:,:,:,nbefore:-nafter],-1))
+
+    pval_ret = np.zeros(strialwise.shape[0])
+    for i in range(strialwise.shape[0]):
+        _,pval_ret[i] = sst.ttest_rel(strialwise[i,:,nbefore-1],strialwise[i,:,nbefore+1])
+
+            
+    ret_vars = {}
+    ret_vars['paramdict_normal'] = paramdict
+    ret_vars['pval_ret'] = pval_ret
+
+    return ret_vars

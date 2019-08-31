@@ -17,6 +17,7 @@ import pickle as pkl
 import glob
 import fnmatch
 import shutil
+import pandas as pd
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -104,9 +105,9 @@ def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
     resamp=np.rollaxis(resamp,0,L+1)
     stat = fn(resamp,axis=axis)
-    lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
-    ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
-    return lb,ub
+    #lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
+    #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
+    return tuple([np.percentile(stat,p,axis=-1) for p in pct])
 
 def subsample(arr,fn,axis=0,nsubsample=None,nreps=1000,pct=(2.5,97.5)):
     # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
@@ -868,6 +869,12 @@ def hdf5edit(filename):
     else:
         return h5py.File(filename,mode='r+')
 
+def hdf5read(filename):
+    if not os.path.exists(filename):
+        return h5py.File(filename,mode='w')
+    else:
+        return h5py.File(filename,mode='r')
+
 def dict_to_hdf5(filename,groupname,dicti):
     #with h5py.File(filename,mode='r+') as f:
     with hdf5edit(filename) as f:
@@ -892,11 +899,25 @@ def matfile_to_dict(matfile):
         dicti[key] = matfile[key][()]
     return dicti
 
+def hdf5_to_dict(grp):
+    print(grp[()])
+    assert(True==False)
+    if isinstance(grp[()],h5py.Group):
+        print('it is a group')
+        dicti = {}
+        for key in grp[()]:
+            dicti[key] = hdf5_to_dict(grp[()][key])
+    else:
+        dicti = grp[:]
+    return dicti
+
 def k_and(*args):
     if len(args)>2:
         return np.logical_and(args[0],k_and(*args[1:]))
-    else:
+    elif len(args)==2:
         return np.logical_and(args[0],args[1])
+    else:
+        return args[0]
 
 def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
     ndims = stim_id.shape[0]
@@ -916,6 +937,55 @@ def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
         tuning[:,itype] = np.nanmean(data[cell_criteria][:,these_trials],1)
     tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
     return tuning
+
+def compute_tavg_dataframe(dsfile,expttype='size_contrast_0'):
+    # will return a pandas dataframe, consisting of data from every trial in every expt
+    # and two dicts: each indexed by session id, one listing roi parameters (location, rf center, rf pval), and one listing trialwise parameters (run speed, eye position)
+    with h5py.File(dsfile,mode='r') as f:
+        keylist = [key for key in f.keys()]
+        df = [None for i in range(len(keylist))]
+        roi_info = {}
+        trial_info = {}
+        for ikey in range(len(keylist)):
+            session = f[keylist[ikey]]
+            print(session)
+            print([key for key in session.keys()])
+            if expttype in session:
+                sc0 = session[expttype]
+                nbefore = sc0['nbefore'][()]
+                nafter = sc0['nafter'][()]
+                data = np.nanmean(sc0['decon'][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
+                stim_id = sc0['stimulus_id'][:]
+                trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10 #
+                #uparam[ikey] = [None for iparam in range(len(sc0['stimulus_parameters']))]
+                dfdict = {}
+                dfdict['data'] = data.flatten()
+                roi_index = session['cell_id'][:]
+                trial_index = np.arange(data.shape[1])
+                dfdict['roi_index'] = np.tile(roi_index[:,np.newaxis],(1,data.shape[1])).flatten()
+                dfdict['trial_index'] = np.tile(trial_index[np.newaxis,:],(data.shape[0],1)).flatten()
+                dfdict['session_id'] = keylist[ikey]
+
+                roidict = {}
+                if 'rf_displacement_deg' in sc0:
+                    roidict['rf_displacement'] = sc0['rf_displacement_deg'][:]
+                    roidict['pval'] = sc0['rf_mapping_pval'][:]
+                    roidict['cell_center'] = session['cell_center'][:].T
+
+                trialdict = {}
+                for iparam,param in enumerate(sc0['stimulus_parameters']):
+                    this_info = sc0[param][:][stim_id[iparam]]
+                    trialdict[param.decode('UTF-8')] = this_info
+                    trialdict['running'] = trialrun
+                    #dfdict[param.decode('UTF-8')] = np.tile(trial_info[np.newaxis,:],(data.shape[0],1)).flatten()
+
+                df[ikey] = pd.DataFrame(dfdict)
+                roi_info[keylist[ikey]] = roidict
+                trial_info[keylist[ikey]] = trialdict
+
+    df = pd.concat(df)
+    
+    return df,roi_info,trial_info
 
 def noisy_scatter(x,y,noise=0.1):
     def prepare_to_plot(u):
@@ -968,8 +1038,19 @@ def plot_ellipse(x,y,ctr_fn=np.mean,rad_fn=np.std,alpha=None,c=None,edge=True):
     if edge:
         ell.set_edgecolor('k')
 
+def plot_ellipse(x,y,ctr_fn=np.mean,rad_fn=np.std,alpha=None,c=None,edge=True):
+    ell = mp.Ellipse(xy=(ctr_fn(x),ctr_fn(y)),width=2*rad_fn(x),height=2*rad_fn(y))
+    plt.gca().add_artist(ell)
+    if not alpha is None:
+        ell.set_alpha(alpha)
+    if not c is None:
+        ell.set_facecolor(colors[i])
+    if edge:
+        ell.set_edgecolor('k')
+
 def combine_rg(r,g):
     rn = (r/r.max())[:,:,np.newaxis]
     gn = (g/g.max())[:,:,np.newaxis]
     rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
     return rgb
+

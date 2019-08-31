@@ -249,9 +249,11 @@ def analyze_everything(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,
             ret_vars[thisfold] = sio.loadmat(retfile,squeeze_me=True)#['ret'][:]
             print('loaded retinotopy file')
             ret_vars[thisfold]['position'] = sio.loadmat(stimfile,squeeze_me=True)['result'][()]['position']
+            proc[thisfold]['position'] = sio.loadmat(stimfile,squeeze_me=True)['result'][()]['position']
         except:
             print('retinotopy not saved for '+thisfile)
             ret_vars[thisfold] = None
+            proc[thisfold]['position'] = sio.loadmat(stimfile,squeeze_me=True)['result'][()]['position']
     return soriavg,strialavg,lb,ub,pval,nbydepth,spont,ret_vars,Smean_stat,proc
 
 def get_norm_curves(soriavg,lkat=None,sizes=None,contrasts=None,append_gray=False):
@@ -628,10 +630,12 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
 
         proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
         
-        try:
-            proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
-        except:
-            print('retinotopy not saved for ' + session_id)
+    # now will get retinotopy info from retinotopy_0 data struct fields i/o from procfile
+#        try:
+#            proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+#        except:
+#            print('retinotopy not saved for ' + session_id)
+        proc['position'] = sio.loadmat(stimfile,squeeze_me=True)['result'][()]['position']
 
         ut.dict_to_hdf5(procname,session_id,proc)
         session_ids.append(session_id)
@@ -663,12 +667,18 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     at.add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
     return grouplist
 
-def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100))):
+def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100)),vmin=None,vmax=None):
     nsize = len(usize)
     ncontrast = len(ucontrast)
-    plt.imshow(arr)
+    plt.imshow(arr,vmin=vmin,vmax=vmax)
     plt.xticks(np.arange(ncontrast),ucontrast)
     plt.yticks(np.arange(nsize),usize)
     if show_labels:
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')
+
+def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6):
+    z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
+    colors = plt.cm.viridis(np.linspace(0,1,ncontrast))
+    for s in range(nsize):
+        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*10)
