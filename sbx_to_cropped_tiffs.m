@@ -137,8 +137,9 @@ for i=1:chunksize:info.max_idx
             rejig = motion_correct(rejig,T(tstartat+1:tstartat+newchunksize,:));
         end
         rejig = reshape(rejig,size(rejig,1),size(rejig,2),[]);
-        saveastiff(rejig,tifffile,options);
-        
+        if ~isempty(rejig)
+            saveastiff(rejig,tifffile,options);
+        end
     else
         rejig = z(rect(1):rect(2),rect(3):rect(4),:);
         if alignfile

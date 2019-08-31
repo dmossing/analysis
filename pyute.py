@@ -292,6 +292,30 @@ def resample(signal1,trig1,trig2):
 #   #                 ctrialwise = c.copy()
 #   #                 strialwise = s.copy()
 #    return trialwise,ctrialwise,strialwise,dfof
+def process_ca_traces(to_add):
+    to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
+    if to_add.max():
+        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
+        topline = sfi.percentile_filter(to_add[:,::ds],99,(1,int(blspan/ds))) # dan added 18/10/30
+        baseline = np.maximum(baseline,topline/10) # dan added 18/10/30
+        baseline = np.repeat(baseline,ds,axis=1)
+        if baseline.shape[1]>to_add.shape[1]:
+            baseline = baseline[:,:to_add.shape[1]]
+        c = np.zeros_like(to_add)
+        s = np.zeros_like(to_add)
+        this_dfof = np.zeros_like(to_add)
+        for i in range(c.shape[0]):
+            this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+            this_dfof[i][np.isnan(this_dfof[i])] = 0
+            c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+    else:
+        this_dfof = np.zeros_like(to_add)
+        c = np.zeros_like(to_add)
+        s = np.zeros_like(to_add)
+    to_add = trialize(to_add,frm,nbefore,nafter)
+    c = trialize(c,frm,nbefore,nafter)
+    s = trialize(s,frm,nbefore,nafter)
+    return to_add,c,s,this_dfof
 
 def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None):
     
@@ -302,30 +326,30 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
             existing = to_add.copy()
         return existing
     
-    def process(to_add):
-        to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
-        if to_add.max():
-            baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-            topline = sfi.percentile_filter(to_add[:,::ds],99,(1,int(blspan/ds))) # dan added 18/10/30
-            baseline = np.maximum(baseline,topline/10) # dan added 18/10/30
-            baseline = np.repeat(baseline,ds,axis=1)
-            if baseline.shape[1]>to_add.shape[1]:
-                baseline = baseline[:,:to_add.shape[1]]
-            c = np.zeros_like(to_add)
-            s = np.zeros_like(to_add)
-            this_dfof = np.zeros_like(to_add)
-            for i in range(c.shape[0]):
-                this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
-                this_dfof[i][np.isnan(this_dfof[i])] = 0
-                c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
-        else:
-            this_dfof = np.zeros_like(to_add)
-            c = np.zeros_like(to_add)
-            s = np.zeros_like(to_add)
-        to_add = trialize(to_add,frm,nbefore,nafter)
-        c = trialize(c,frm,nbefore,nafter)
-        s = trialize(s,frm,nbefore,nafter)
-        return to_add,c,s,this_dfof
+   # def process(to_add):
+   #     to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
+   #     if to_add.max():
+   #         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
+   #         topline = sfi.percentile_filter(to_add[:,::ds],99,(1,int(blspan/ds))) # dan added 18/10/30
+   #         baseline = np.maximum(baseline,topline/10) # dan added 18/10/30
+   #         baseline = np.repeat(baseline,ds,axis=1)
+   #         if baseline.shape[1]>to_add.shape[1]:
+   #             baseline = baseline[:,:to_add.shape[1]]
+   #         c = np.zeros_like(to_add)
+   #         s = np.zeros_like(to_add)
+   #         this_dfof = np.zeros_like(to_add)
+   #         for i in range(c.shape[0]):
+   #             this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
+   #             this_dfof[i][np.isnan(this_dfof[i])] = 0
+   #             c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+   #     else:
+   #         this_dfof = np.zeros_like(to_add)
+   #         c = np.zeros_like(to_add)
+   #         s = np.zeros_like(to_add)
+   #     to_add = trialize(to_add,frm,nbefore,nafter)
+   #     c = trialize(c,frm,nbefore,nafter)
+   #     s = trialize(s,frm,nbefore,nafter)
+   #     return to_add,c,s,this_dfof
         
     trialwise = np.array(())
     ctrialwise = np.array(())
@@ -342,7 +366,7 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
         except:
             with h5py.File(datafile,mode='r') as f:
                 to_add = f['corrected'][:].T
-        to_add,c,s,this_dfof = process(to_add)
+        to_add,c,s,this_dfof = process_ca_traces(to_add)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
         strialwise = tack_on(s,strialwise)
