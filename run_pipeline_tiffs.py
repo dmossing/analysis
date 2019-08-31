@@ -10,6 +10,7 @@ import sys
 sys.path.insert(0, '/home/mossing/code/downloads/s2p_github')
 import suite2p
 from suite2p.run_s2p import run_s2p
+from suite2p import utils, register, chan2detect
 import timeit
 import os
 import shutil
@@ -102,8 +103,77 @@ def process_data(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw
         for fold in db['data_path']:
             for old_file in glob.glob(fold + '/*.tif'):
                 os.remove(old_file)
+
+def process_data_1ch_2ch(animalid,date,expt_ids_1ch,expt_ids_2ch,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',delete_raw=False,diameter=15):
+#    save_path0 = result_base+animalid+'/'+date+'/'+'_'.join(expt_ids)
+#    data_path = [raw_base+animalid+'/'+date+'/'+lbl for lbl in expt_ids]
+
+    # process 1ch data first
+    db = prepare_db(animalid,date,expt_ids_1ch,raw_base=raw_base,result_base=result_base,fast_disk=fast_disk,nchannels=1,diameter=diameter,combined=False)
+
+    try:
+        shutil.rmtree(fast_disk+'/suite2p')
+        print('fast disk contents deleted')
+    except:
+        print('fast disk location empty')
+
+    # run suite2p part
+    opsEnd=run_s2p(ops=ops,db=db)
+    if delete_raw:
+        for fold in db['data_path']:
+            for old_file in glob.glob(fold + '/*.tif'):
+                os.remove(old_file)
+
+    add_2ch_data(animalid,date,expt_ids_1ch,expt_ids_2ch,raw_base=raw_base,result_base=result_base,fast_disk=fast_disk,delete_raw=delete_raw,diameter=diameter)
+    # do stuff with 2ch data and combine everything together
+
+def add_2ch_data(animalid,date,expt_ids_1ch,expt_ids_2ch,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',delete_raw=False,diameter=15):
+
+    mouse = animalid
+    blk  = expt_ids_1ch #int(dat[mouse]['blk'][k])
+    blk_ = '_'.join(blk)
+    redblk  = expt_ids_2ch #int(dat[mouse]['redblk'][k])
+    #redblk_ = '_'.join(redblk)
+            
+    # green experiment save_path0
+    froot = result_base+'%s/%s/%s/' % (mouse, date, blk_)
+    print(froot)
+    ops1 = np.load(os.path.join(froot, "suite2p/ops1.npy"),allow_pickle=True)
     
-def prepare_db(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',nchannels=1,diameter=15):
+    # 2-channel experiment raw data saved here
+    data_path = [raw_base+'%s/%s/%s/' % (mouse, date, rb) for rb in redblk]
+    print(data_path[0])
+    ops = ops1[0].copy()
+    ops['fast_disk'] = []
+    ops['save_path0'] = fast_disk # save binary locally on SSD
+    ops['data_path'] = data_path
+    ops['nchannels'] = 2
+    ops['functional_chan'] = 1
+    
+    # compute binaries for 2 channels       
+    ops2 = utils.tiff_to_binary(ops)
+    
+    for iplane in range(0,len(ops1)):
+        #ops2 = np.load("/media/carsen/SSD/BIN/suite2p/plane%d/ops.npy"%iplane).item()
+        #opsOut = register.register_binary(ops2, ops1[iplane]['refImg'])
+        
+        opsOut = register.register_binary(ops2[iplane], ops1[iplane]['refImg'])
+        ops1[iplane]['meanImg_chan2'] = opsOut['meanImg_chan2']
+        stat = np.load(os.path.join(froot, "suite2p/plane%d/stat.npy"%iplane), allow_pickle=True)
+        ops1[iplane]['chan2_thres'] = 0.65
+        ops1[iplane],redcell = chan2detect.detect(ops1[iplane],stat)
+        np.save(os.path.join(froot, "suite2p/plane%d/ops.npy"%iplane), ops1[iplane], allow_pickle=True)
+        np.save(os.path.join(froot, "suite2p/plane%d/redcell.npy"%iplane), redcell, allow_pickle=True)
+        ops1[iplane]['save_path'] = os.path.join(froot, "suite2p/plane%d"%iplane)
+        ops1[iplane]['save_path0'] = os.path.join(froot)
+    utils.combined(ops1) 
+
+    if delete_raw:
+        for fold in data_path:
+            for old_file in glob.glob(fold + '/*.tif'):
+                os.remove(old_file)
+    
+def prepare_db(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw/',result_base='/home/mossing/data/suite2P/results/',fast_disk='/home/mossing/data_ssd/suite2P/bin',nchannels=1,diameter=15,combined=True):
     save_path0 = result_base+animalid+'/'+date+'/'+'_'.join(expt_ids)
     data_path = [raw_base+animalid+'/'+date+'/'+lbl for lbl in expt_ids]
 
@@ -119,7 +189,8 @@ def prepare_db(animalid,date,expt_ids,raw_base='/home/mossing/data/suite2P/raw/'
           'subfolders': [], # choose subfolders of 'data_path' to look in (optional)
           'fast_disk': fast_disk, # string which specifies where the binary file will be stored (should be an SSD)
           'nchannels': nchannels,
-          'diameter': diameter
+          'diameter': diameter,
+        'combined': combined
         }
 
     return db
