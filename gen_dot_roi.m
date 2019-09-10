@@ -2,12 +2,26 @@ function gen_dot_roi(sourcefold,targetfold)
 % convert suite2P output to .rois files like I've been using
 % sourcefold = './';
 % targetfold = '/home/mossing/scratch/2Pdata/180802/M9053/ot/';
+vars_of_interest = {'meanImg','meanImg_chan2','meanImg_chan2_corrected','meanImgE'};
 d = dir([sourcefold '/*_proc.mat']);
 targetfiles = matchfiles(sourcefold,targetfold)
 for i=1:numel(d)
     nonproc = strsplit(d(i).name,'_proc.mat');
     nonproc = [nonproc{1}];
     sourcefile = [sourcefold '/' nonproc '.mat'];
+    load(sourcefile,'ops');
+%     var_list = {};
+%     val_list = {};
+    to_append = struct;
+    for ivar=1:numel(vars_of_interest)
+        this_var = vars_of_interest{ivar};
+        if isfield(ops,this_var)
+            this_val = getfield(ops,this_var);
+            to_append = setfield(to_append,this_var,this_val);
+%             var_list = {var_list; this_var};
+%             val_list = {val_list; this_val};
+        end
+    end
 %     nonproc = d(i).name;
     allROIdata = suite2P2ROIdata(sourcefile,'ROIindex',true);
     redratio = load(sourcefile,'redratio');
@@ -30,6 +44,7 @@ for i=1:numel(d)
 %         expno = ddigit(str2num(expts{j}),3);
 %         targetfile = [nonproc(1:end-10) expno '_ot_' planeno '.rois'];
         save([targetfold '/' targetfile],'ROIdata','Data','Neuropil','sourcefile','-v7.3')
+        save([targetfold '/' targetfile],'-struct','to_append','-append')
     end
 end
 
