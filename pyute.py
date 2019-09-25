@@ -315,7 +315,8 @@ def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,naf
     to_add = trialize(to_add,frm,nbefore,nafter)
     c = trialize(c,frm,nbefore,nafter)
     s = trialize(s,frm,nbefore,nafter)
-    return to_add,c,s,this_dfof
+    d = trialize(this_dfof,frm,nbefore,nafter)
+    return to_add,c,s,d #,this_dfof #(non-trialized)
 
 def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None):
     
