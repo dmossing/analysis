@@ -292,7 +292,7 @@ def resample(signal1,trig1,trig2):
 #   #                 ctrialwise = c.copy()
 #   #                 strialwise = s.copy()
 #    return trialwise,ctrialwise,strialwise,dfof
-def process_ca_traces(to_add):
+def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4):
     to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
     if to_add.max():
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
@@ -366,7 +366,7 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
         except:
             with h5py.File(datafile,mode='r') as f:
                 to_add = f['corrected'][:].T
-        to_add,c,s,this_dfof = process_ca_traces(to_add)
+        to_add,c,s,this_dfof = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
         strialwise = tack_on(s,strialwise)
@@ -802,7 +802,7 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
-    plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle,fmt=None)
+    plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle) #,fmt=None)
     plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth)
     plt.scatter(x,mn_tgt,c=c,s=markersize)
 
@@ -962,7 +962,7 @@ def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
     tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
     return tuning
 
-def compute_tavg_dataframe(dsfile,expttype='size_contrast_0'):
+def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon'):
     # will return a pandas dataframe, consisting of data from every trial in every expt
     # and two dicts: each indexed by session id, one listing roi parameters (location, rf center, rf pval), and one listing trialwise parameters (run speed, eye position)
     with h5py.File(dsfile,mode='r') as f:
@@ -978,9 +978,12 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0'):
                 sc0 = session[expttype]
                 nbefore = sc0['nbefore'][()]
                 nafter = sc0['nafter'][()]
-                data = np.nanmean(sc0['decon'][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
+                data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
                 stim_id = sc0['stimulus_id'][:]
-                trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10 #
+                if 'running_speed_cm_s' in sc0:
+                    trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10 #
+                else:
+                    trialrun = sc0['trialrun'][:]
                 #uparam[ikey] = [None for iparam in range(len(sc0['stimulus_parameters']))]
                 dfdict = {}
                 dfdict['data'] = data.flatten()
@@ -1011,6 +1014,25 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0'):
     
     return df,roi_info,trial_info
 
+def array_to_flat_plus_indices(data):
+    flat = data.flatten()
+    indices = np.meshgrid(*[np.arange(shp) for shp in data.shape])
+    indices = [ind.flatten() for ind in indices]
+    return [flat] + indices
+
+def invert_list_ordering(list1):
+# swap 0th and 1st level list indices
+    return [[*a] for a in zip(*list1)]
+
+def nested_list_to_flat_plus_indices(nested):
+    if isinstance(nested,list):
+        output = [nested_list_to_flat_plus_indices(x) for x in nested]
+        intermediate = [[outp[0],ioutp*np.ones(outp[0].shape,dtype='int'),*outp[1:]] for ioutp,outp in enumerate(output)]
+        final = [np.concatenate(a,axis=0) for a in invert_list_ordering(intermediate)]
+    else:
+        final = array_to_flat_plus_indices(nested)
+    return final
+    
 def noisy_scatter(x,y,noise=0.1):
     def prepare_to_plot(u):
         return u + noise*np.random.randn(*u.shape)
