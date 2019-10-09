@@ -43,27 +43,38 @@ else
     twochan = false;
 end
 
+temp = squeeze(sbxread(filebase,1,1));
+
 if opto_correct
-    lights_on = opto_settings.lights_on;
-    frame = opto_settings.frame;
-    while find(diff(frame)<0,1)
-        seam = find(diff(frame)<0,1);
-        frame(seam+1:end) = frame(seam+1:end)+65536;
-    end
-    line = opto_settings.line;
-    fr_affected = [];
-    ln_affected = [];
-    for j=1:numel(lights_on)
-        if lights_on(j)
-            fr = [frame(4*(j-1)+1); frame(4*(j-1)+4)];
-            ln = [line(4*(j-1)+1); line(4*(j-1)+4)];
-            fr_affected = [fr_affected fr];
-            ln_affected = [ln_affected ln];
+    if strcmp(opto_settings.type,'square')
+        lights_on = opto_settings.lights_on;
+        frame = opto_settings.frame;
+        while find(diff(frame)<0,1)
+            seam = find(diff(frame)<0,1);
+            frame(seam+1:end) = frame(seam+1:end)+65536;
+        end
+        line = opto_settings.line;
+        fr_affected = [];
+        ln_affected = [];
+        for j=1:numel(lights_on)
+            if lights_on(j)
+                fr = [frame(4*(j-1)+1); frame(4*(j-1)+4)];
+                ln = [line(4*(j-1)+1); line(4*(j-1)+4)];
+                fr_affected = [fr_affected fr];
+                ln_affected = [ln_affected ln];
+            end
         end
     end
+    if strcmp(opto_settings.type,'exp')
+        opto_sbxbase = opto_settings.sbxbase;
+        opto_filebase = opto_settings.filebase;
+        opto_resultbase = opto_settings.resultbase;
+        artifact0 = compute_artifact_decaying_exponential_from_raw(opto_filebase,opto_sbxbase,opto_resultbase);
+        artifact = uint16(zeros(size(artifact0,1),info.max_idx+1)); % fill up artifact to be size max_idx+1
+        artifact(:,1:size(artifact0,2)) = artifact0;
+        artifact = reshape(artifact,size(artifact,1),1,size(artifact,2));
+    end
 end
-
-temp = squeeze(sbxread(filebase,1,1));
 
 options.big = false;
 options.append = false;
@@ -96,8 +107,8 @@ for i=1:chunksize:info.max_idx
         newchunksize = chunksize;
     end
     z = squeeze(sbxread(filebase,startat,newchunksize));
-    if opto_correct && numel(fr_affected)>0
-        opto_offset = estimate_opto_offset(z,fr_affected-startat+1)
+    if (opto_correct && strcmp(opto_settings.type,'square')) && numel(fr_affected)>0
+        opto_offset = estimate_opto_offset(z,fr_affected-startat+1);
         opto_offsets = [opto_offsets; opto_offset];
         if i < 3
             opto_settings.opto_offset = opto_offset;
@@ -125,6 +136,8 @@ for i=1:chunksize:info.max_idx
                 z(ln_affected(1,1):end,:,begframe) = z(ln_affected(1,1):end,:,begframe) - opto_offset;
             end
         end
+    elseif (opto_correct && strcmp(opto_settings.type,'exp')) && ~isempty(artifact)
+        z = z - repmat(artifact(:,:,startat+1:startat+newchunksize),1,size(z,2),1);
     end
     
     if twochan

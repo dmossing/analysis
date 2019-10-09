@@ -22,6 +22,7 @@ if ~exist(targetfold,'dir')
         copyfile(thismat{1},targetfold)
     end
 end
+
 gen_dot_roi(sourcefold,targetfold)
 cd(targetfold)
 run_preprocessing_fold('.','/home/mossing/modulation/running/');

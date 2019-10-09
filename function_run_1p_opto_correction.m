@@ -3,11 +3,13 @@ p = inputParser;
 
 p.addParameter('datafold','/media/mossing/backup_0/data/2P/');
 p.addParameter('stimfold','/home/mossing/modulation/visual_stim/');
+p.addParameter('sbxfold','/home/mossing/modulation/2P/');
 
 p.parse(varargin{:});
 
 datafold = p.Results.datafold;
 stimfold = p.Results.stimfold;
+sbxfold = p.Results.sbxfold;
 
 d = dir(sprintf('%s/%s/ot/M*.mat',datafold,foldname));
 filenames = {d(:).name};
@@ -21,10 +23,11 @@ filenames = filenames(has_opto_stim);
 
 nplanes = 4;
 
-offset = 1; % the first these many triggers are fake
-toffset = 1; % static, related to the timing properties of the triggers and LED
-loffset1 = 7;
-loffset2 = 7;
+% offset = 1; % the first these many triggers are fake
+% toffset = 1; % static, related to the timing properties of the triggers and LED
+% loffset1 = 1;
+% loffset2 = 1;
+noffset = 200;
 
 for ff=1:numel(filenames)
     filename = filenames{ff}(1:end-4);
@@ -44,35 +47,52 @@ for ff=1:numel(filenames)
         info.frame(seam+1:end) = info.frame(seam+1:end)+65536;
     end
     
+    sbxbase = sprintf('%s/%s/',sbxfold,foldname);
+    filebase = filename;
+        
     %%
+    artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on,noffset,sbxbase,filebase);
     for i=1:nplanes
-        roiline = round(roifile{i}.ctr(1,:));
-        if isfield(info,'rect')
-            roiline = roiline + info.rect(1);
-        end
-        affected = zeros(size(roifile{i}.Data));
+%         roiline = round(roifile{i}.ctr(1,:));
+%         if isfield(info,'rect')
+%             roiline = roiline + info.rect(1);
+%         end
+%         affected = false(size(roifile{i}.Data));
+%         control = false(size(roifile{i}.Data));
+%         
+%         for j=1:numel(lights_on)
+%             frames = 1+floor((-toffset+info.frame(offset+(j-1)*4+1))/nplanes):1+floor((-toffset+info.frame(offset+j*4))/nplanes);
+%             lines = [info.line(offset+(j-1)*4+1) info.line(offset+j*4)];
+%             lines(1) = lines(1) + mod(-toffset+info.frame(offset+(j-1)*4+1),nplanes)*512 + loffset1;
+%             lines(end) = lines(end) + mod(-toffset+info.frame(offset+j*4),nplanes)*512 + loffset2;
+%             if lights_on(j)
+%                 affected(:,frames(2:end-1)) = 1;
+%                 affected(:,frames(1)) = ((i-1)*512+roiline)>lines(1);
+%                 affected(:,frames(end)) = ((i-1)*512+roiline)<lines(end);
+%             else
+%                 control(:,frames(2:end-1)) = 1;
+%                 control(:,frames(1)) = ((i-1)*512+roiline)>lines(1);
+%                 control(:,frames(end)) = ((i-1)*512+roiline)<lines(end);
+%             end
+%         end
+%         af_off = [diff(affected,[],2)>0 zeros(size(affected,1),1)]>0;
+%         af_off = af_off | [zeros(size(affected,1),1) diff(affected,[],2)<0]>0;
+%         af_on = [zeros(size(affected,1),1) diff(affected,[],2)>0]>0;
+%         af_on = af_on | [diff(affected,[],2)<0 zeros(size(affected,1),1)]>0;
+%         
+%         caf_off = [diff(control,[],2)>0 zeros(size(control,1),1)]>0;
+%         caf_off = caf_off | [zeros(size(control,1),1) diff(control,[],2)<0]>0;
+%         caf_on = [zeros(size(control,1),1) diff(control,[],2)>0]>0;
+%         caf_on = caf_on | [diff(control,[],2)<0 zeros(size(control,1),1)]>0;
+%         
+%         artifact_size = mean(roifile{i}.Neuropil(af_on)-roifile{i}.Neuropil(af_off));
+%         control_size = mean(roifile{i}.Neuropil(caf_on)-roifile{i}.Neuropil(caf_off));
         
-        for j=1:numel(lights_on)
-            if lights_on(j)
-                frames = 1+floor((-toffset+info.frame(offset+(j-1)*4+1))/nplanes):1+floor((-toffset+info.frame(offset+j*4))/nplanes);
-                lines = [info.line(offset+(j-1)*4+1) info.line(offset+j*4)];
-                lines(1) = lines(1) + mod(-toffset+info.frame(offset+(j-1)*4+1),nplanes)*512 + loffset1;
-                lines(end) = lines(end) + mod(-toffset+info.frame(offset+j*4),nplanes)*512 + loffset2;
-                affected(:,frames(2:end-1)) = 1;
-                affected(:,frames(1)) = ((i-1)*512+roiline)>lines(1);
-                affected(:,frames(end)) = ((i-1)*512+roiline)<lines(end);
-            end
-        end
-        af_off = [diff(affected,[],2)>0 zeros(size(affected,1),1)]>0;
-        af_off = af_off | [zeros(size(affected,1),1) diff(affected,[],2)<0]>0;
-        af_on = [zeros(size(affected,1),1) diff(affected,[],2)>0]>0;
-        af_on = af_on | [diff(affected,[],2)<0 zeros(size(affected,1),1)]>0;
-        artifact_size = mean(roifile{i}.Neuropil(af_on)-roifile{i}.Neuropil(af_off))
         
-        artifact = artifact_size*affected;
+%         artifact = (artifact_size-control_size)*affected;
         if ~isfield(roifile{i},'opto_stim_corrected')
-            roifile{i}.Data = roifile{i}.Data-artifact; %repmat(artifact',size(roifile{i}.Data,1),1);
-            roifile{i}.Neuropil = roifile{i}.Neuropil-artifact; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
+            roifile{i}.Data = roifile{i}.Data-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Data,1),1);
+            roifile{i}.Neuropil = roifile{i}.Neuropil-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
             roifile{i}.opto_stim_corrected = 1;
         end
     end

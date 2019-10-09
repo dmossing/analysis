@@ -29,6 +29,11 @@ for i=1:numel(d)
         dstr = fileparts{1};
         subfold = num2str(exptno);
         opts.targetfold = [targetfold animalid '/' dstr '/' subfold '/'];
+        opts.opto_correct = true;
+        opts.opto_settings.type = 'exp';
+        opts.opto_settings.sbxbase = sprintf('%s/%s/',data_foldbase,thisfoldname);
+        opts.opto_settings.filebase = fnames{i}(1:end-4);
+        opts.opto_settings.resultbase = sprintf('%s/%s/',result_foldbase,thisfoldname);
         sbx_to_cropped_tiffs([data_foldbase thisfoldname '/' fnames{i}(1:end-4)],opts);
     end
 end

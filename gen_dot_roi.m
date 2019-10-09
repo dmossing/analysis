@@ -3,6 +3,7 @@ function gen_dot_roi(sourcefold,targetfold)
 % sourcefold = './';
 % targetfold = '/home/mossing/scratch/2Pdata/180802/M9053/ot/';
 vars_of_interest = {'meanImg','meanImg_chan2','meanImg_chan2_corrected','meanImgE'};
+vars_of_interest_perfile = {'yoff'};
 d = dir([sourcefold '/*_proc.mat']);
 targetfiles = matchfiles(sourcefold,targetfold)
 for i=1:numel(d)
@@ -10,25 +11,26 @@ for i=1:numel(d)
     nonproc = [nonproc{1}];
     sourcefile = [sourcefold '/' nonproc '.mat'];
     load(sourcefile,'ops');
-%     var_list = {};
-%     val_list = {};
+    %     var_list = {};
+    %     val_list = {};
     to_append = struct;
     for ivar=1:numel(vars_of_interest)
         this_var = vars_of_interest{ivar};
         if isfield(ops,this_var)
             this_val = getfield(ops,this_var);
             to_append = setfield(to_append,this_var,this_val);
-%             var_list = {var_list; this_var};
-%             val_list = {val_list; this_val};
+            %             var_list = {var_list; this_var};
+            %             val_list = {val_list; this_val};
         end
     end
-%     nonproc = d(i).name;
+    %     nonproc = d(i).name;
     allROIdata = suite2P2ROIdata(sourcefile,'ROIindex',true);
     redratio = load(sourcefile,'redratio');
     red_saved = isfield(redratio,'redratio');
     if red_saved
         redratio = redratio.redratio;
     end
+    nt_so_far = 0;
     for j=1:numel(allROIdata)
         nroi = numel(allROIdata{1}.rois);
         nt = numel(allROIdata{j}.rois(1).rawdata);
@@ -41,10 +43,20 @@ for i=1:numel(d)
         ROIdata = allROIdata{j};
         planeno = ddigit(str2num(nonproc(end))-1,3);
         targetfile = [targetfiles{j}(1:end-4) '_ot_' planeno '.rois'];
-%         expno = ddigit(str2num(expts{j}),3);
-%         targetfile = [nonproc(1:end-10) expno '_ot_' planeno '.rois'];
+        %         expno = ddigit(str2num(expts{j}),3);
+        %         targetfile = [nonproc(1:end-10) expno '_ot_' planeno '.rois'];
         save([targetfold '/' targetfile],'ROIdata','Data','Neuropil','sourcefile','-v7.3')
         save([targetfold '/' targetfile],'-struct','to_append','-append')
+        to_append_perfile = struct;
+        for ivar=1:numel(vars_of_interest_perfile)
+            this_var = vars_of_interest_perfile{ivar};
+            if isfield(ops,this_var)
+                this_val = getfield(ops,this_var);
+                to_append_perfile = setfield(to_append_perfile,this_var,this_val(:,nt_so_far+1:nt_so_far+nt));
+            end
+        end
+        save([targetfold '/' targetfile],'-struct','to_append_perfile','-append')
+        nt_so_far = nt_so_far+nt;
     end
 end
 
@@ -66,4 +78,4 @@ for j=1:numel(expts)
     end
     targetfiles{j} = d(1).name;
 end
-    
+
