@@ -1,4 +1,7 @@
-function fold_track_eyes_kmeans_convex(foldname)
+function fold_track_eyes_kmeans_convex(foldname,dry_run)
+if nargin < 2
+    dry_run = false;
+end
 d = dir(foldname);
 forbidden = {'.','..'};
 msk = [];
@@ -14,15 +17,17 @@ for i=1:numel(d)
         end
     end
 end
-for i=1:numel(d)
-    if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
-        if true %~exist([foldname '/eye_tracking_' d(i).name '.mat'])
-            i
-            thisfold = [foldname '/' d(i).name];
-            tic
-            [ctr,area,props,ctr2,area2,props2,hulls] = track_eyes_kmeans_convex(thisfold);
-            toc
-            save([foldname '/eye_tracking_' d(i).name '.mat'],'ctr','area','props','ctr2','area2','props2','hulls')
+if ~dry_run
+    for i=1:numel(d)
+        if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
+            if ~exist([foldname '/eye_tracking_' d(i).name '.mat'])
+                i
+                thisfold = [foldname '/' d(i).name];
+                tic
+                [ctr,area,props,ctr2,area2,props2,hulls] = track_eyes_kmeans_convex(thisfold);
+                toc
+                save([foldname '/eye_tracking_' d(i).name '.mat'],'ctr','area','props','ctr2','area2','props2','hulls')
+            end
         end
     end
 end
