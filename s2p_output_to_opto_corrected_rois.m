@@ -3,6 +3,7 @@ function s2p_output_to_opto_corrected_rois(foldname,varargin)
 p = inputParser;
 
 p.addParameter('datafold','/media/mossing/data1/2P/');
+p.addParameter('sbxfold','/home/mossing/modulation/2P/');
 
 p.parse(varargin{:});
 
@@ -30,4 +31,5 @@ foldname_short = sprintf('%s/%s/',datestr,animalid);
 convert_npy_to_rois(foldname,datafold)
 
 %% perform optogenetic artifact correction, if necessary
-function_run_1p_opto_correction(foldname_short,'datafold',p.Results.datafold)
+% function_run_1p_opto_correction(foldname_short,'datafold',p.Results.datafold,...
+%     'sbxfold',p.Results.sbxfold)

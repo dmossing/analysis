@@ -16,13 +16,14 @@ roiline = roiline(:);
 if isfield(info,'rect')
     roiline = roiline + info.rect(1);
 end
-for i=1:numel(roifile)
-    if i==1
-        yoff = roifile{i}.yoff;
-    else
-        yoff = [yoff; roifile{i}.yoff];
-    end
-end
+[yoff,~] = append_roifile_parts(roifile,'yoff',false);
+% for i=1:numel(roifile)
+%     if i==1
+%         yoff = roifile{i}.yoff;
+%     else
+%         yoff = [yoff; roifile{i}.yoff];
+%     end
+% end
 
 %%
 evaluation_fn = @(loffset1) evaluate_tv_loffset1(loffset1,roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,data);
@@ -58,8 +59,16 @@ if nargin < 3
 end
 output = cell(size(roifile));
 iplane = cell(size(roifile));
+minsize = inf;
 for i=1:numel(roifile)
     output{i} = getfield(roifile{i},fieldname);
+    sz = size(output{i},2);
+    if sz<minsize
+        minsize = sz;
+    end
+end
+for i=1:numel(roifile)
+    output{i} = output{i}(:,1:minsize);
     if transpose
         output{i} = output{i}';
     end

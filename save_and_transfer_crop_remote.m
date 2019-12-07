@@ -16,7 +16,6 @@ date = fileparts{end-1};
 animalid = fileparts{end};
 sbxfold = strjoin({sbxbase,date,animalid},'/');
 if copymat
-    
     fnames = dirnames([sbxfold '/M*.mat'],[sbxfold '/']);
     for i=1:numel(fnames)
         copyfile(fnames{i},foldname)

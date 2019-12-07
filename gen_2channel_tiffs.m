@@ -17,6 +17,10 @@ targetfold = getOr(options,'targetfold',...
 opts.chunksize = 1000;
 opts.green_only = green_only;
 
+if ~strcmp(data_foldbase(end),'/')
+    data_foldbase = [data_foldbase '/'];
+end
+
 thisfoldname = foldname;
 d = dir([data_foldbase thisfoldname '/M*.mat']);
 fnames = {d(:).name};
@@ -29,7 +33,7 @@ for i=1:numel(d)
         dstr = fileparts{1};
         subfold = num2str(exptno);
         opts.targetfold = [targetfold animalid '/' dstr '/' subfold '/'];
-        opts.opto_correct = true;
+        opts.opto_correct = false; % temporary for 19/12/5 analysis! true;
         opts.opto_settings.type = 'exp';
         opts.opto_settings.sbxbase = sprintf('%s/%s/',data_foldbase,thisfoldname);
         opts.opto_settings.filebase = fnames{i}(1:end-4);

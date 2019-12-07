@@ -11,12 +11,14 @@ datafold = p.Results.datafold;
 stimfold = p.Results.stimfold;
 sbxfold = p.Results.sbxfold;
 
+%%
+
 d = dir(sprintf('%s/%s/ot/M*.mat',datafold,foldname));
 filenames = {d(:).name};
 has_opto_stim = zeros(size(filenames));
 for i=1:numel(filenames)
     load(sprintf('%s/%s/%s',stimfold,foldname,filenames{i}),'result')
-    has_opto_stim(i) = (isfield(result,'lights_on') && numel(result.lights_on)==2);
+    has_opto_stim(i) = (isfield(result,'lights_on') && numel(result.lights_on)>1);
 end
 has_opto_stim = has_opto_stim>0;
 filenames = filenames(has_opto_stim);
@@ -28,6 +30,8 @@ nplanes = 4;
 % loffset1 = 1;
 % loffset2 = 1;
 noffset = 200;
+
+%%
 
 for ff=1:numel(filenames)
     filename = filenames{ff}(1:end-4);
@@ -51,7 +55,7 @@ for ff=1:numel(filenames)
     filebase = filename;
         
     %%
-    artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on,noffset,sbxbase,filebase);
+    artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on==1,noffset,sbxbase,filebase);
     for i=1:nplanes
 %         roiline = round(roifile{i}.ctr(1,:));
 %         if isfield(info,'rect')

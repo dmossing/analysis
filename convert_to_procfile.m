@@ -68,8 +68,12 @@ for i=1:nplanes
     for ivar=1:numel(vars_of_interest)
         this_var = vars_of_interest{ivar};
         var_fname = sprintf([planefolds{i} '/%s.npy'],this_var);
-        var_val = readNPY(var_fname);
-        ops = setfield(ops,this_var,var_val);
+        try
+            var_val = readNPY(var_fname);
+            ops = setfield(ops,this_var,var_val);
+        catch
+            disp(this_var)
+        end
     end
     
     ops.Ly = single(dat.ops.Ly);

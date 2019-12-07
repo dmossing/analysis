@@ -24,6 +24,7 @@ for i=1:numel(ts)
     signal(i,:) = reshape(mean(im(:,101:end,:),2),1,[]);
 end
 %%
+trigaligned = zeros(numel(ts),nbefore+nafter+1);
 for i=1:numel(ts)
     trigaligned(i,:) = signal(i,nlines+info.line(ts(i))-nbefore:nlines+info.line(ts(i))+nafter);
 end

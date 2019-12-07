@@ -19,9 +19,13 @@ if isempty(strfind(sbxfile,'.sbx'))
 end
 filebase = sbxfile(1:end-4);
 % only relevant for running code on big-boi PC
-filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/modulation/matfiles/');
+prts = strsplit(filebase,'2P/');
+lastpart = prts{end};
+matfile_fold = '/home/mossing/modulation/matfiles/'; 
+%filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/modulation1/matfiles/');
+filebase2 = [matfile_fold lastpart];
 filebase2_no_ot = filebase2;
-if strfind(filebase2,'/home/mossing/modulation/matfiles/')
+if strfind(filebase2,matfile_fold)
     strparts = strsplit(filebase2,'/');
     filebase2 = strjoin({strparts{1:end-1} 'ot/' strparts{end}},'/');
     filebase2_no_ot = strjoin({strparts{1:end-1} strparts{end}},'/');

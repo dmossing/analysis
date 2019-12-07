@@ -5,8 +5,8 @@ toffset = 1; % static, related to the timing properties of the triggers and LED
 
 % nplanes = 4; %numel(roifile);
 % nlines = 512;
-nplanes = info.otparam(end);
-nlines = info.sz(1);
+% nplanes = info.otparam(end);
+% nlines = info.sz(1);
 sz = size(neuropil);
 
 [affected,control] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2);
@@ -96,7 +96,11 @@ end
 function [affected,control] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2)
 affected = zeros(sz);
 control = zeros(sz);
-nplanes = info.otparam(end);
+try
+    nplanes = info.otparam(end);
+catch
+    nplanes = 4;
+end
 nlines = info.sz(1);
 for j=1:numel(lights_on)
     frames = 1+floor((-toffset+info.frame(offset+(j-1)*4+1))/nplanes):1+floor((-toffset+info.frame(offset+j*4))/nplanes);
