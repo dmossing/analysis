@@ -8,6 +8,8 @@ result_foldbase = getOr(options,'result_foldbase',...
     '/home/mossing/modulation/visual_stim/');
 data_foldbase = getOr(options,'data_foldbase',...
     '/home/mossing/data_ssd/2P/');
+matfile_foldbase = getOr(options,'matfile_foldbase',...
+    '/home/mossing/modulation/matfiles/');
 targetfold = getOr(options,'targetfold',...
     '/home/mossing/data_ssd/suite2P/raw/');
 
@@ -38,6 +40,7 @@ for i=1:numel(d)
         opts.opto_settings.sbxbase = sprintf('%s/%s/',data_foldbase,thisfoldname);
         opts.opto_settings.filebase = fnames{i}(1:end-4);
         opts.opto_settings.resultbase = sprintf('%s/%s/',result_foldbase,thisfoldname);
+        opts.matfile_fold = matfile_foldbase;
         sbx_to_cropped_tiffs([data_foldbase thisfoldname '/' fnames{i}(1:end-4)],opts);
     end
 end
