@@ -55,7 +55,9 @@ for ff=1:numel(filenames)
     filebase = filename;
         
     %%
-    artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on==1,noffset,sbxbase,filebase);
+    from_raw = false;
+    pad_nans = true;
+    artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on==1,noffset,sbxbase,filebase,from_raw,pad_nans);
     for i=1:nplanes
 %         roiline = round(roifile{i}.ctr(1,:));
 %         if isfield(info,'rect')

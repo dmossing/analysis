@@ -30,6 +30,6 @@ foldname_short = sprintf('%s/%s/',datestr,animalid);
 %% create .rois files in the correct location
 convert_npy_to_rois(foldname,datafold)
 
-%% perform optogenetic artifact correction, if necessary
-% function_run_1p_opto_correction(foldname_short,'datafold',p.Results.datafold,...
-%     'sbxfold',p.Results.sbxfold)
+%% perform optogenetic artifact correction, if necessary % added back in 19/12/8!
+ function_run_1p_opto_correction(foldname_short,'datafold',p.Results.datafold,...
+     'sbxfold',p.Results.sbxfold)

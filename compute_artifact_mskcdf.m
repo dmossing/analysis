@@ -1,4 +1,4 @@
-function artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2)
+function artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2,pad_nans)
 %%
 offset = 1; % the first these many triggers are fake
 toffset = 1; % static, related to the timing properties of the triggers and LED
@@ -9,7 +9,7 @@ toffset = 1; % static, related to the timing properties of the triggers and LED
 % nlines = info.sz(1);
 sz = size(neuropil);
 
-[affected,control] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2);
+[affected,control] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2,0);
 % [affected_r,control_r] = compute_affected_roiline(roiline,iplane,sz,info,yoff,lights_on,offset,toffset,loffset1,loffset2);
 
 % affected = zeros(size(neuropil));
@@ -44,17 +44,29 @@ sz = size(neuropil);
 %         control(:,frames(end)) = 1-mskcdf(:,lines(end)); %((iplane-1)*512+roiline)<lines(end);
 %     end
 % end
-af_off = [diff(affected,[],2)==1 zeros(size(affected,1),1)]>0;
-af_off = af_off | [zeros(size(affected,1),1) diff(affected,[],2)==-1]>0;
-af_on = [zeros(size(affected,1),1) diff(affected,[],2)==1]>0;
-af_on = af_on | [diff(affected,[],2)==-1 zeros(size(affected,1),1)]>0;
+% af_off = [diff(affected,[],2)==1 zeros(size(affected,1),1)]>0;
+% af_off = af_off | [zeros(size(affected,1),1) diff(affected,[],2)==-1]>0;
+% af_on = [zeros(size(affected,1),1) diff(affected,[],2)==1]>0;
+% af_on = af_on | [diff(affected,[],2)==-1 zeros(size(affected,1),1)]>0;
+% 
+% caf_off = [diff(control,[],2)==1 zeros(size(control,1),1)]>0;
+% caf_off = caf_off | [zeros(size(control,1),1) diff(control,[],2)==-1]>0;
+% caf_on = [zeros(size(control,1),1) diff(control,[],2)==1]>0;
+% caf_on = caf_on | [diff(control,[],2)==-1 zeros(size(control,1),1)]>0;
+af_off = [diff(affected,[],2)>0 zeros(size(affected,1),1)]>0;
+af_off = af_off | [zeros(size(affected,1),1) diff(affected,[],2)<0]>0;
+af_on = [zeros(size(affected,1),1) diff(affected,[],2)>0]>0;
+af_on = af_on | [diff(affected,[],2)<0 zeros(size(affected,1),1)]>0;
 
-caf_off = [diff(control,[],2)==1 zeros(size(control,1),1)]>0;
-caf_off = caf_off | [zeros(size(control,1),1) diff(control,[],2)==-1]>0;
-caf_on = [zeros(size(control,1),1) diff(control,[],2)==1]>0;
-caf_on = caf_on | [diff(control,[],2)==-1 zeros(size(control,1),1)]>0;
+caf_off = [diff(control,[],2)>0 zeros(size(control,1),1)]>0;
+caf_off = caf_off | [zeros(size(control,1),1) diff(control,[],2)<0]>0;
+caf_on = [zeros(size(control,1),1) diff(control,[],2)>0]>0;
+caf_on = caf_on | [diff(control,[],2)<0 zeros(size(control,1),1)]>0;
 artifact_size = mean(neuropil(af_on)-neuropil(af_off));
 control_size = mean(neuropil(caf_on)-neuropil(caf_off));
+if pad_nans
+    affected(af_on) = nan;
+end
 
 artifact = (artifact_size-control_size)*affected;
 
@@ -93,7 +105,7 @@ for j=1:numel(lights_on)
     end
 end
 
-function [affected,control] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2)
+function [affected,control] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2,pad_nans)
 affected = zeros(sz);
 control = zeros(sz);
 try
@@ -128,11 +140,21 @@ for j=1:numel(lights_on)
     lines = min(lines,nlines*nplanes);
     if lights_on(j)
         affected(:,frames(2:end-1)) = 1;
-        affected(:,frames(1)) = 1-mskcdf(:,lines(1)); %((iplane-1)*512+roiline)>lines(1);
-        affected(:,frames(end)) = mskcdf(:,lines(end)); %((iplane-1)*512+roiline)<lines(end);
+        if pad_nans
+            affected(:,frames(1)) = nan;
+            affected(:,frames(end)) = nan;
+        else
+            affected(:,frames(1)) = 1-mskcdf(:,lines(1)); %((iplane-1)*512+roiline)>lines(1);
+            affected(:,frames(end)) = mskcdf(:,lines(end)); %((iplane-1)*512+roiline)<lines(end);
+        end
     else
         control(:,frames(2:end-1)) = 1;
-        control(:,frames(1)) = 1-mskcdf(:,lines(1)); %((iplane-1)*512+roiline)>lines(1);
-        control(:,frames(end)) = mskcdf(:,lines(end)); %((iplane-1)*512+roiline)<lines(end);
+        if pad_nans
+            control(:,frames(1)) = nan;
+            control(:,frames(end)) = nan;
+        else
+            control(:,frames(1)) = 1-mskcdf(:,lines(1)); %((iplane-1)*512+roiline)>lines(1);
+            control(:,frames(end)) = mskcdf(:,lines(end)); %((iplane-1)*512+roiline)<lines(end);
+        end
     end
 end

@@ -1,4 +1,4 @@
-function artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on,noffset,sbxbase,filebase)
+function artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on,noffset,sbxbase,filebase,from_raw,pad_nans)
 
 
 if nargin < 4
@@ -36,22 +36,26 @@ evaluation_fn = @(loffset2) evaluate_tv_loffset2(loffset2,roiline,mskcdf,iplane,
 ys = [evaluation_fn(-noffset) evaluation_fn(noffset)];
 loffset2 = binary_search_offset([-noffset noffset],ys,evaluation_fn);
 
-% artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2);
-% % artifact = compute_artifact_mskcdf(roiline,iplane,neuropil,info,lights_on,loffset1,loffset2);
-% artifact_cell = cell(size(roifile));
-% for i=1:numel(roifile)
-%     artifact_cell{i} = artifact(iplane==i,:);
-% end
-artifact = compute_opto_artifact_decaying_exponential(sbxbase,filebase,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2);
+if from_raw
+    artifact = compute_opto_artifact_decaying_exponential(sbxbase,filebase,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2);
+    costfun = @(x) evaluate_tv_multiplier(x,artifact,neuropil);
+    multiplier = fminunc(costfun,1);
+
+    artifact_cell = cell(size(roifile));
+    for i=1:numel(roifile)
+        artifact_cell{i} = multiplier*artifact(iplane==i,:);
+    end
+else
+    artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2,pad_nans);
+    % artifact = compute_artifact_mskcdf(roiline,iplane,neuropil,info,lights_on,loffset1,loffset2);
+    artifact_cell = cell(size(roifile));
+    for i=1:numel(roifile)
+        artifact_cell{i} = artifact(iplane==i,:);
+    end
+end
 
 %%
-costfun = @(x) evaluate_tv_multiplier(x,artifact,neuropil);
-multiplier = fminunc(costfun,1);
 
-artifact_cell = cell(size(roifile));
-for i=1:numel(roifile)
-    artifact_cell{i} = multiplier*artifact(iplane==i,:);
-end
 
 function [output,iplane] = append_roifile_parts(roifile,fieldname,transpose)
 if nargin < 3
@@ -93,14 +97,14 @@ else
 end
 
 function tv = evaluate_tv_loffset1(loffset1,roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,data)
-artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,0);
+artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,0,0);
 tv = sum(sum(abs(diff(data-artifact,[],2))));
 % function tv = evaluate_tv_loffset1(loffset1,roiline,iplane,neuropil,info,lights_on,data)
 % artifact = compute_artifact(roiline,iplane,neuropil,info,lights_on,loffset1,0);
 % tv = sum(sum(abs(diff(data-artifact,[],2))));
 
 function tv = evaluate_tv_loffset2(loffset2,roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,data)
-artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,0,loffset2);
+artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,0,loffset2,0);
 tv = sum(sum(abs(diff(data-artifact,[],2))));
 % function tv = evaluate_tv_loffset2(loffset2,roiline,iplane,neuropil,info,lights_on,data)
 % artifact = compute_artifact(roiline,iplane,neuropil,info,lights_on,0,loffset2);

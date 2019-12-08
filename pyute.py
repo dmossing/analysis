@@ -1101,3 +1101,13 @@ def combine_rg(r,g):
     rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
     return rgb
 
+def interp_nans(arr,axis=-1):
+    nan_locs = np.where(np.isnan(arr))
+    arr2 = arr.copy()
+    for loc in nan_locs:
+        loc_before = loc.copy()
+        loc_after = loc.copy()
+        loc_before[axis] = loc[axis]-1
+        loc_after[axis] = loc[axis]+1
+        arr2[loc] = 0.5*arr[loc_before] + 0.5*arr[loc_after]
+    return arr2
