@@ -8,7 +8,7 @@ end
 %%
 
 [mskcdf,iplane] = compute_mskcdf(roifile,info);
-[ctr,iplane] = append_roifile_parts(roifile,'ctr',true);
+[ctr,~] = append_roifile_parts(roifile,'ctr',true);
 [data,~] = append_roifile_parts(roifile,'Data',false);
 [neuropil,~] = append_roifile_parts(roifile,'Neuropil',false);
 roiline = round(ctr(1,:));
@@ -66,6 +66,9 @@ iplane = cell(size(roifile));
 minsize = inf;
 for i=1:numel(roifile)
     output{i} = getfield(roifile{i},fieldname);
+    if transpose
+        output{i} = output{i}';
+    end
     sz = size(output{i},2);
     if sz<minsize
         minsize = sz;
@@ -73,9 +76,9 @@ for i=1:numel(roifile)
 end
 for i=1:numel(roifile)
     output{i} = output{i}(:,1:minsize);
-    if transpose
-        output{i} = output{i}';
-    end
+%     if transpose
+%         output{i} = output{i}';
+%     end
 end
 for i=1:numel(roifile)
     iplane{i} = i*ones(size(output{i},1),1);

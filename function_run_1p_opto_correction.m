@@ -97,8 +97,9 @@ for ff=1:numel(filenames)
         
 %         artifact = (artifact_size-control_size)*affected;
         if ~isfield(roifile{i},'opto_stim_corrected')
-            roifile{i}.Data = roifile{i}.Data-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Data,1),1);
-            roifile{i}.Neuropil = roifile{i}.Neuropil-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
+            maxind = size(artifact_cell{i},2);
+            roifile{i}.Data(:,1:maxind) = roifile{i}.Data(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Data,1),1);
+            roifile{i}.Neuropil(:,1:maxind) = roifile{i}.Neuropil(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
             roifile{i}.opto_stim_corrected = 1;
         end
     end
