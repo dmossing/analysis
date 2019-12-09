@@ -10,7 +10,9 @@ import sys
 sys.path.insert(0, '/home/mossing/code/downloads/s2p_github')
 import suite2p
 from suite2p.run_s2p import run_s2p
-from suite2p import utils, register, chan2detect
+from suite2p import utils
+from suite2p.registration import register
+from suite2p.detection import chan2detect
 import timeit
 import os
 import shutil

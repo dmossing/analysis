@@ -1,4 +1,7 @@
 function flowed = apply_flowfield(image,flow)
+% flow: index i,j tells where the content of pixel i,j should come from,
+% relative to i,j. Thus, considered as a vector field, the vectors point in
+% the apparent direction of flow moving flowed -> image
 flowed = image;
 [Ny,Nx] = size(image);
 for i=1:Ny

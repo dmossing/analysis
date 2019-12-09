@@ -8,6 +8,8 @@ result_foldbase = getOr(options,'result_foldbase',...
     '/home/mossing/modulation/visual_stim/');
 data_foldbase = getOr(options,'data_foldbase',...
     '/home/mossing/data_ssd/2P/');
+matfile_foldbase = getOr(options,'matfile_foldbase',...
+    '/home/mossing/modulation/matfiles/');
 targetfold = getOr(options,'targetfold',...
     '/home/mossing/data_ssd/suite2P/raw/');
 
@@ -16,6 +18,10 @@ targetfold = getOr(options,'targetfold',...
 
 opts.chunksize = 1000;
 opts.green_only = green_only;
+
+if ~strcmp(data_foldbase(end),'/')
+    data_foldbase = [data_foldbase '/'];
+end
 
 thisfoldname = foldname;
 d = dir([data_foldbase thisfoldname '/M*.mat']);
@@ -29,11 +35,12 @@ for i=1:numel(d)
         dstr = fileparts{1};
         subfold = num2str(exptno);
         opts.targetfold = [targetfold animalid '/' dstr '/' subfold '/'];
-        opts.opto_correct = true;
+        opts.opto_correct = false; % temporary for 19/12/5 analysis! true;
         opts.opto_settings.type = 'exp';
         opts.opto_settings.sbxbase = sprintf('%s/%s/',data_foldbase,thisfoldname);
         opts.opto_settings.filebase = fnames{i}(1:end-4);
         opts.opto_settings.resultbase = sprintf('%s/%s/',result_foldbase,thisfoldname);
+        opts.matfile_fold = matfile_foldbase;
         sbx_to_cropped_tiffs([data_foldbase thisfoldname '/' fnames{i}(1:end-4)],opts);
     end
 end

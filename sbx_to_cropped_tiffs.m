@@ -10,6 +10,7 @@ green_only = getOr(opts,'green_only',false);
 empty_red = getOr(opts,'empty_red',false);
 opto_correct = getOr(opts,'opto_correct',false);
 targetfold = getOr(opts,'targetfold','');
+matfile_fold = getOr(opts,'matfile_fold','/home/mossing/modulation/matfiles/');
 if opto_correct
     opto_settings = opts.opto_settings;
 end
@@ -19,9 +20,19 @@ if isempty(strfind(sbxfile,'.sbx'))
 end
 filebase = sbxfile(1:end-4);
 % only relevant for running code on big-boi PC
-filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/modulation/matfiles/');
+folder_options = {'2P/','2Pdata/'};
+for ioption=1:numel(folder_options)
+    if contains(filebase,folder_options{ioption})
+        prts = strsplit(filebase,folder_options{ioption});
+    end
+end
+% prts = strsplit(filebase,'2P/');
+lastpart = prts{end};
+% matfile_fold = '/home/mossing/modulation/matfiles/'; 
+%filebase2 = strrep(filebase,'/home/mossing/modulation/2P/','/home/mossing/modulation1/matfiles/');
+filebase2 = [matfile_fold lastpart];
 filebase2_no_ot = filebase2;
-if strfind(filebase2,'/home/mossing/modulation/matfiles/')
+if strfind(filebase2,matfile_fold)
     strparts = strsplit(filebase2,'/');
     filebase2 = strjoin({strparts{1:end-1} 'ot/' strparts{end}},'/');
     filebase2_no_ot = strjoin({strparts{1:end-1} strparts{end}},'/');

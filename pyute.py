@@ -1209,6 +1209,7 @@ def combine_rg(r,g):
     rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
     return rgb
 
+<<<<<<< HEAD
 def compute_kernel_density(ctr,bw=0.1,grid_pts=None):
     if grid_pts is None:
         x,y = np.meshgrid(np.arange(0,sz[1],resolution),np.arange(0,sz[0],resolution))
