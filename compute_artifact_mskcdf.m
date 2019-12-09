@@ -65,7 +65,7 @@ caf_on = caf_on | [diff(control,[],2)<0 zeros(size(control,1),1)]>0;
 artifact_size = mean(neuropil(af_on)-neuropil(af_off));
 control_size = mean(neuropil(caf_on)-neuropil(caf_off));
 if pad_nans
-    affected(af_on) = nan;
+    affected(af_off) = nan;
 end
 
 artifact = (artifact_size-control_size)*affected;
