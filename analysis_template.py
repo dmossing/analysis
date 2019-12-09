@@ -154,6 +154,7 @@ def add_ret_to_data_struct(filename, keylist=None, proc=None, grouplist=None):
                 stim_offset = ret_vars['position'][:] - paramdict['ctr'][:]
                 rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
                 rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
+                rf_sq_error = ret_vars[key]['paramdict_normal'][()]['sqerror']
 
                 this_expt = data_struct[group]
 
@@ -162,6 +163,7 @@ def add_ret_to_data_struct(filename, keylist=None, proc=None, grouplist=None):
                 this_expt['rf_displacement_deg'] = rf_displacement_deg
                 this_expt['rf_ctr'] = rf_ctr
                 this_expt['stim_offset_deg'] = stim_offset
+                this_expt['rf_sq_error'] = rf_sq_error
 
 def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8,featurenames=['size','contrast','angle'],datasetnames=None,groupname='size_contrast'):
     if datasetnames is None:

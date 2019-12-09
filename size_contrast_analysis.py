@@ -465,6 +465,7 @@ def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc
         running_speed_cm_s = 4*np.pi/180*proc[key][gdind]['trialrun'] # 4 cm from disk ctr to estimated mouse location
         rf_ctr = np.concatenate((ret_vars[key]['paramdict_normal'][()]['xo'][np.newaxis,:],-ret_vars[key]['paramdict_normal'][()]['yo'][np.newaxis,:]),axis=0)
         stim_offset = ret_vars[key]['position'] - ret_vars[key]['paramdict_normal'][()]['ctr']
+        rf_sq_error = ret_vars[key]['paramdict_normal'][()]['sqerror']
         rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
         rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
         cell_id = np.arange(decon.shape[0])
@@ -493,6 +494,7 @@ def gen_data_struct(cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc
         data_struct[session_id]['rf_distance_deg'] = rf_distance_deg
         data_struct[session_id]['rf_displacement_deg'] = rf_displacement_deg
         data_struct[session_id]['rf_ctr'] = rf_ctr
+        data_struct[session_id]['rf_sq_error'] = rf_sq_error
         data_struct[session_id]['running_speed_cm_s'] = running_speed_cm_s
     return data_struct
 
@@ -667,12 +669,18 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     at.add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
     return grouplist
 
-def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100)),vmin=None,vmax=None):
+def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100)),vmin=None,vmax=None,flipud=False):
     nsize = len(usize)
     ncontrast = len(ucontrast)
-    plt.imshow(arr,vmin=vmin,vmax=vmax)
+    to_show = arr.copy()
+    if flipud:
+        to_show = np.flipud(to_show)
+    plt.imshow(to_show,vmin=vmin,vmax=vmax,extent=[-0.5,ncontrast-0.5,-0.5,nsize-0.5])
     plt.xticks(np.arange(ncontrast),ucontrast)
-    plt.yticks(np.arange(nsize),usize)
+    if flipud:
+        plt.yticks(np.arange(nsize),usize)
+    else:
+        plt.yticks(np.arange(nsize)[::-1],usize)
     if show_labels:
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')

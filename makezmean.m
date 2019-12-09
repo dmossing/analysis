@@ -1,6 +1,7 @@
 function zmean = makezmean(fname,zno,framesperz,varargin)
-arglist = {{'ignore_movement',false},{'prctile_cutoff',90}};
-[ignore_movement,prctile_cutoff] = parse_args(varargin,arglist);
+% fname should end in .sbx!
+arglist = {{'ignore_movement',false},{'prctile_cutoff',90},{'channel',1}};
+[ignore_movement,prctile_cutoff,channel] = parse_args(varargin,arglist);
 try
     % single channel case
     ex = load2P(fname,'frames',1);
@@ -30,13 +31,13 @@ catch
         if ~ignore_movement
             zmean(:,i,:,:) = permute(mean(Images,4),[3 1 2]);
         else
-            m = permute(mean(Images,4),[3 1 2]); % channel goes first
-            sqdiff = zeros(size(Images,3),1);
-            for j=1:size(Images,3)
-                sqdiff(j) = sum(sum(sum((double(Images(:,:,:,j))-m).^2)));
+            m = mean(Images(:,:,channel,:),4);
+            sqdiff = zeros(size(Images,4),1);
+            for j=1:size(Images,4)
+                sqdiff(j) = sum(sum(sum((double(Images(:,:,channel,j))-m).^2)));
             end
             gd = sqdiff<prctile(sqdiff,prctile_cutoff);
-            zmean(i,:,:) = permute(mean(Images(:,:,:,gd),4),[3 1 2]);
+            zmean(:,i,:,:) = permute(mean(Images(:,:,:,gd),4),[3 1 2]); % channel goes first
         end
     end
 end

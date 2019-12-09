@@ -18,6 +18,8 @@ import glob
 import fnmatch
 import shutil
 import pandas as pd
+import scipy.stats as sst
+from pympler import asizeof
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -378,8 +380,8 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
 def twoD_Gaussian(xy, xo, yo, amplitude, sigma_x, sigma_y, theta, offset):
     x = xy[0]
     y = xy[1]
-    xo = float(xo)
-    yo = float(yo)    
+    xo = np.array(xo).astype('float')
+    yo = np.array(yo).astype('float') 
     a = (np.cos(theta)**2)/(2*sigma_x**2) + (np.sin(theta)**2)/(2*sigma_y**2)
     b = -(np.sin(2*theta))/(4*sigma_x**2) + (np.sin(2*theta))/(4*sigma_y**2)
     c = (np.sin(theta)**2)/(2*sigma_x**2) + (np.cos(theta)**2)/(2*sigma_y**2)
@@ -396,7 +398,103 @@ def assign_tuple(tup,ind,tgt):
         lis[ind[0]][ind[1]] = tgt
     return tuple([tuple(x) for x in lis])
 
-# TEMPORARILY constraining gaussian to have positive amplitude for PC data (19/1/30)
+def fit_2d_gaussian_before_after(locs,ret,verbose=True,bounds=((None,None,0,0,0,0),(None,None,np.inf,None,None,2*np.pi)),nbefore=8,nafter=8,xoyo_predictions=None,xoyo_prediction_wt=None):
+#     
+    xx,yy = np.meshgrid(locs[0],locs[1])
+    x = xx.flatten()
+    y = yy.flatten()
+    bounds = [list(x) for x in bounds]
+    if not bounds[0][0]:
+        bounds[0][0] = x.min()
+    if not bounds[1][0]:
+        bounds[1][0] = x.max()
+    if not bounds[0][1]:
+        bounds[0][1] = y.min()
+    if not bounds[1][1]:
+        bounds[1][1] = y.max()
+    if not bounds[1][3]:
+        bounds[1][3] = x.max()
+    if not bounds[1][4]:
+        bounds[1][4] = y.max()
+    bounds = tuple([tuple(x) for x in bounds])
+    msk_surr = np.zeros(ret.shape[1:3],dtype='bool')
+    msk_surr[0,:] = 1
+    msk_surr[:,0] = 1
+    msk_surr[-1,:] = 1
+    msk_surr[:,-1] = 1 
+    #i = 0
+    #can_be_negative = bounds[0][2]<0
+    #if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
+    #    extremum = np.argmax(ret[i],axis=None)
+    #    initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0,ret[i].min())
+    #else:
+    #    extremum = np.argmin(ret[i],axis=None)
+    #    initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0,ret[i].max())
+    params = np.zeros((2,ret.shape[0],len(bounds[0])))
+    sqerror = np.inf*np.ones((2,ret.shape[0]))
+    slcs = [slice(None,nbefore),slice(nbefore,-nafter),slice(-nafter,None)]
+    ret_before,ret_during,ret_after = [np.nanmean(ret[:,:,:,slc],-1) for slc in slcs]
+    if not xoyo_predictions is None:
+        fit_fn = lambda xy,p: np.concatenate((twoD_Gaussian(xy,*p),np.sqrt(xoyo_prediction_wt)*np.array((p[0],p[1]))))
+    else:
+        fit_fn = lambda xy,*p: twoD_Gaussian(xy,*p,0)
+    #assert(True==False)
+    for i in range(ret.shape[0]):
+        #assert(i!=0)
+        for k in range(2):
+            try:
+                data = (ret_during[i]-0.5*ret_before[i]-0.5*ret_after[i]).flatten()
+                #if ret[i][msk_surr].mean()<ret[i].mean() or not can_be_negative:
+                if not xoyo_predictions is None:
+                    fit_data = np.concatenate((data,np.sqrt(xoyo_prediction_wt)*xoyo_predictions[i]))
+                else:
+                    fit_data = data
+                if k==0:
+                    # xo,yo,amplitude,sigma_x,sigma_y,theta,offset
+                    extremum = np.argmax(data,axis=None)
+                    initial_guess = (x[extremum],y[extremum],ret[i].max()-ret[i].min(),10,10,0)                  
+                    bounds = assign_tuple(bounds,(0,2),0)
+                    bounds = assign_tuple(bounds,(1,2),np.inf)
+                   # bounds = assign_tuple(bounds,(0,6),0) # peg offset to 0
+                   # bounds = assign_tuple(bounds,(1,6),0) # peg offset to 0
+                    popt, pcov = sop.curve_fit(fit_fn, (x,y), fit_data, p0=initial_guess, bounds=bounds)
+                else:
+                    # xo,yo,amplitude,sigma_x,sigma_y,theta,offset
+                    initial_guess = (x[extremum],y[extremum],ret[i].min()-ret[i].max(),10,10,0)
+                    bounds = assign_tuple(bounds,(0,2),-np.inf)
+                    bounds = assign_tuple(bounds,(1,2),0)
+                   # bounds = assign_tuple(bounds,(0,6),0) # peg offset to 0
+                   # bounds = assign_tuple(bounds,(1,6),0) # peg offset to 0
+                    popt, pcov = sop.curve_fit(fit_fn, (x,y), fit_data, p0=initial_guess, bounds=bounds)
+                # xo, yo, amplitude, sigma_x, sigma_y, theta, offset
+                modeled = twoD_Gaussian((x,y),*popt,0)
+                sqerror[k,i] = ((modeled-data)**2).mean()/np.var(data)
+                params[k,i] = popt
+            except:
+                if verbose:
+                    print("couldn't do "+str(i))
+    best_option = np.argmin(sqerror,axis=0)
+    paramdict = {}
+    paramdict['sqerror'] = np.zeros(ret.shape[0:1])
+    paramdict['xo'] = np.zeros(ret.shape[0:1])
+    paramdict['yo'] = np.zeros(ret.shape[0:1])
+    paramdict['amplitude'] = np.zeros(ret.shape[0:1])
+    paramdict['sigma_x'] = np.zeros(ret.shape[0:1])
+    paramdict['sigma_y'] = np.zeros(ret.shape[0:1])
+    paramdict['theta'] = np.zeros(ret.shape[0:1])
+    #paramdict['offset'] = np.zeros(ret.shape[0:1])    
+    for i in range(sqerror.shape[1]):
+        bo = best_option[i]
+        paramdict['sqerror'][i] = sqerror[bo,i]
+        paramdict['xo'][i] = params[bo,i,0]
+        paramdict['yo'][i] = params[bo,i,1]
+        paramdict['amplitude'][i] = params[bo,i,2]
+        paramdict['sigma_x'][i] = params[bo,i,3]
+        paramdict['sigma_y'][i] = params[bo,i,4]
+        paramdict['theta'][i] = params[bo,i,5]
+        #paramdict['offset'][i] = params[bo,i,6]
+    return paramdict
+
 def fit_2d_gaussian(locs,ret,verbose=False,bounds=((None,None,0,0,0,0,0),(None,None,np.inf,None,None,2*np.pi,np.inf))):
     
     xx,yy = np.meshgrid(locs[0],locs[1])
@@ -655,6 +753,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
     
     def process(to_add,uncorrected,neuropil,roilines):
         to_add_copy = to_add.copy()
+        to_add = interp_nans(to_add,axis=-1)
         to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
 #        to_add[to_add<0] = 0
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
@@ -946,13 +1045,13 @@ def k_and(*args):
 
 def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
     ndims = stim_id.shape[0]
-    maxind = tuple(stim_id.max(1)+1)
+    maxind = tuple(stim_id.max(1).astype('int')+1)
     if cell_criteria is None:
         cell_criteria = np.ones((data.shape[0],),dtype='bool')
     if trial_criteria is None:
         trial_criteria = np.ones((data.shape[1],),dtype='bool')
     nparams = len(maxind)
-    ntrialtypes = np.prod(maxind)
+    ntrialtypes = int(np.prod(maxind))
     tuning = np.zeros((data[cell_criteria].shape[0],ntrialtypes)+data.shape[2:])
     for itype in range(ntrialtypes):
         imultitype = np.unravel_index(itype,maxind)
@@ -963,7 +1062,7 @@ def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
     tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
     return tuning
 
-def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon'):
+def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None):
     # will return a pandas dataframe, consisting of data from every trial in every expt
     # and two dicts: each indexed by session id, one listing roi parameters (location, rf center, rf pval), and one listing trialwise parameters (run speed, eye position)
     with h5py.File(dsfile,mode='r') as f:
@@ -977,8 +1076,14 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon'):
             print([key for key in session.keys()])
             if expttype in session:
                 sc0 = session[expttype]
-                nbefore = sc0['nbefore'][()]
-                nafter = sc0['nafter'][()]
+                if nbefore_default is None:
+                    nbefore = sc0['nbefore'][()]
+                else:
+                    nbefore = nbefore_default
+                if nafter_default is None:
+                    nafter = sc0['nafter'][()]
+                else:
+                    nafter = nafter_default
                 data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
                 stim_id = sc0['stimulus_id'][:]
                 if 'running_speed_cm_s' in sc0:
@@ -998,7 +1103,10 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon'):
                 if 'rf_displacement_deg' in sc0:
                     roidict['rf_displacement'] = sc0['rf_displacement_deg'][:]
                     roidict['pval'] = sc0['rf_mapping_pval'][:]
+                if 'cell_center' in session:
                     roidict['cell_center'] = session['cell_center'][:].T
+                if 'cell_depth' in session:
+                    roidict['cell_depth'] = session['cell_depth'][:].T
 
                 trialdict = {}
                 for iparam,param in enumerate(sc0['stimulus_parameters']):
@@ -1101,3 +1209,43 @@ def combine_rg(r,g):
     rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
     return rgb
 
+def compute_kernel_density(ctr,bw=0.1,grid_pts=None):
+    if grid_pts is None:
+        x,y = np.meshgrid(np.arange(0,sz[1],resolution),np.arange(0,sz[0],resolution))
+    else:
+        y,x = np.meshgrid(grid_pts[0],grid_pts[1],indexing='ij')
+    posns = np.vstack((y.ravel(),x.ravel()))
+    kernel_density = sst.gaussian_kde(ctr,bw_method=bw)(posns).reshape(x.shape)
+    return kernel_density
+
+def gen_size_list(v):
+    var_list = list(v.keys())
+    size_list = {}
+    for name in var_list:
+        sz = asizeof.asizeof(v[name])
+#         print(name + ':' + str(sz))
+        size_list[name] = sz
+    return size_list
+
+def plot_traces_grid(arr):
+    # arr is nc1 x nc2 x T (x ntrials)
+    nc1,nc2 = arr.shape[:2]
+    for ic1 in range(nc1):
+        for ic2 in range(nc2):
+            plt.subplot(nc1,nc2,ic1*nc2+ic2+1)
+            plt.plot(arr[ic1,ic2])
+            plt.ylim((arr.min(),arr.max()))
+            plt.axis('off')
+
+def interp_nans(arr,axis=-1):
+    nan_loc = np.where(np.isnan(arr))
+    arr_new = arr.copy()
+    for loc in zip(*nan_loc):
+        loc_before,loc_after = np.array(loc).copy(),np.array(loc).copy()
+        loc_before[axis] = loc_before[axis]-1
+        loc_after[axis] = loc_after[axis]+1
+        try:
+            arr_new[loc] = 0.5*(arr[tuple(loc_before)]+arr[tuple(loc_after)])
+        except:
+            print('could not interpolate '+str(loc))
+    return arr_new

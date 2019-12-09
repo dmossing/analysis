@@ -513,6 +513,8 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     featurenames=['locY','locX']
     datasetnames = ['stimulus_location_y_deg','stimulus_location_x_deg']
     grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    # UNCOMMENT THIS TO SAVE SQERROR INFO INTO DATA_STRUCT
+    # add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
     #save_rf_center_info(filename,grouplist)
     return grouplist
 
@@ -530,7 +532,6 @@ def save_rf_center_info(dsname,keylist):
     
     paramdict = []
     for i in range(len(tuning)):
-        print(i)
         paramdict.append(None)
         if not tuning[i] is None:
             paramdict[i] = ut.fit_2d_gaussian(uparam[i],np.nanmean(tuning[i][:,:,:,nbefore:-nafter],-1))
@@ -564,7 +565,15 @@ def compute_ret_vars_proc(proc):
     nafter = proc['nafter']
 
     if not tuning is None:
-        paramdict = ut.fit_2d_gaussian(uparam,np.nanmean(tuning[:,:,:,nbefore:-nafter],-1))
+        #paramdict = ut.fit_2d_gaussian(uparam,np.nanmean(tuning[:,:,:,nbefore:-nafter],-1))
+        paramdict = ut.fit_2d_gaussian_before_after(uparam,tuning,nbefore=nbefore,nafter=nafter)
+        
+    running = np.nanmean(proc['trialrun'],-1)>7*4*np.pi/180
+    paramdict_run = {}
+    paramdict_nonrun = {}
+    for criteria,pd in zip([running,~running],[paramdict_run,paramdict_nonrun]):
+        tuning = ut.compute_tuning(strialwise,stim_id,cell_criteria=None,trial_criteria=criteria)
+        pd = ut.fit_2d_gaussian_before_after(uparam,tuning,nbefore=nbefore,nafter=nafter)
 
     pval_ret = np.zeros(strialwise.shape[0])
     for i in range(strialwise.shape[0]):
@@ -573,6 +582,8 @@ def compute_ret_vars_proc(proc):
             
     ret_vars = {}
     ret_vars['paramdict_normal'] = paramdict
+    ret_vars['paramdict_run'] = paramdict_run
+    ret_vars['paramdict_nonrun'] = paramdict_nonrun
     ret_vars['pval_ret'] = pval_ret
 
     return ret_vars
