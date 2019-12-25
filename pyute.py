@@ -1209,7 +1209,6 @@ def combine_rg(r,g):
     rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
     return rgb
 
-<<<<<<< HEAD
 def compute_kernel_density(ctr,bw=0.1,grid_pts=None):
     if grid_pts is None:
         x,y = np.meshgrid(np.arange(0,sz[1],resolution),np.arange(0,sz[0],resolution))
@@ -1250,3 +1249,43 @@ def interp_nans(arr,axis=-1):
         except:
             print('could not interpolate '+str(loc))
     return arr_new
+
+def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',keylist=None,expttype='size_contrast_opto_0'):
+    with h5py.File(dsfile,mode='r') as f:
+        if keylist is None:
+            keylist = [key for key in f.keys()]
+        tuning = [None]*len(keylist)
+        for ikey in range(len(keylist)):
+            session = f[keylist[ikey]]
+            if expttype in session:
+#                 print([key for key in session.keys()])
+                data = session[expttype][fieldname][:]
+                stim_id = session[expttype]['stimulus_id'][:]
+                trialrun = session[expttype]['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10
+                if not running:
+                    trialrun = ~trialrun
+                    
+                if 'rf_displacement_deg' in session[expttype]:
+                    pval = session[expttype]['rf_mapping_pval'][:]
+                    X = session['cell_center'][:]
+                    y = session[expttype]['rf_displacement_deg'][:].T
+                    lkat = ut.k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]))
+                    linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
+                    displacement = np.zeros_like(y)
+                    displacement[~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
+                if center:
+                    cell_criteria = np.sqrt((displacement**2).sum(1))<10
+                else:
+                    cell_criteria = np.sqrt((displacement**2).sum(1))>10
+                tuning[ikey] = ut.compute_tuning(data,stim_id,cell_criteria=cell_criteria,trial_criteria=trialrun)
+                print('%s: %.1f' % (keylist[ikey], trialrun.mean()))
+            else:
+                print('could not do '+keylist[ikey])
+    return tuning
+
+    def compute_auroc(a1,a2):
+        vals = np.concatenate((a1,a2))
+        grps = np.concatenate((np.zeros_like(a1),np.ones_like(a2)))
+        vals_argsort = np.argsort(-vals)
+        fp,tp = [np.cumsum(grps[vals_argsort]==thing)/np.sum(grps[vals_argsort]==thing) for thing in (0,1)]
+        return skm.auc(fp,tp)
