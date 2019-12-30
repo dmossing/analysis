@@ -226,7 +226,8 @@ plotmainaxes(gd);
 function plotmainaxes(gd)
 axes(gd.axes)
 % img = gd.Images(:,:, gd.Position(1), gd.Position(2), gd.Position(3));
-img = cat(3,gd.origImage,gd.Images(:,:,gd.Position(1)),zeros(size(gd.origImage)));
+% img = cat(3,gd.origImage,gd.Images(:,:,gd.Position(1)),zeros(size(gd.origImage)));
+img = cat(3,gd.origImage,gd.Images(:,:,gd.Position(1)),gd.Images(:,:,end));
 if gd.Selection.Value==1 % imagesc
 %     gd.histeq.Enable = 'on';
 %     if gd.histeq.Value

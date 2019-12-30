@@ -20,6 +20,7 @@ import shutil
 import pandas as pd
 import scipy.stats as sst
 from pympler import asizeof
+import sklearn.metrics as skm
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -1283,9 +1284,13 @@ def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',key
                 print('could not do '+keylist[ikey])
     return tuning
 
-    def compute_auroc(a1,a2):
-        vals = np.concatenate((a1,a2))
-        grps = np.concatenate((np.zeros_like(a1),np.ones_like(a2)))
-        vals_argsort = np.argsort(-vals)
-        fp,tp = [np.cumsum(grps[vals_argsort]==thing)/np.sum(grps[vals_argsort]==thing) for thing in (0,1)]
-        return skm.auc(fp,tp)
+def compute_auroc(a1,a2):
+    # computes area under receiver operating characteristic curve
+    # for two arrays of numbers a1 and a2. returns 1 if numbers in a2
+    # are strictly larger than a1, 0 if strictly smaller, and intermediate
+    # values for varying degrees of overlap in the distributions
+    vals = np.concatenate((a1,a2))
+    grps = np.concatenate((np.zeros_like(a1),np.ones_like(a2)))
+    vals_argsort = np.argsort(-vals)
+    fp,tp = [np.cumsum(grps[vals_argsort]==thing)/np.sum(grps[vals_argsort]==thing) for thing in (0,1)]
+    return skm.auc(fp,tp)

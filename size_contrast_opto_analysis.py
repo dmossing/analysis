@@ -8,7 +8,7 @@ import h5py
 from oasis.functions import deconvolve
 from oasis import oasisAR1, oasisAR2
 import pyute as ut
-
+import sklearn
 from importlib import reload
 reload(ut)
 import scipy.ndimage.filters as sfi
@@ -528,3 +528,150 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     featurenames=['size','contrast','angle','light']
     datasetnames = ['stimulus_size_deg','stimulus_contrast','stimulus_direction_deg','stimulus_light']
     at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    
+def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False):
+    na = len(alphas)
+    with ut.hdf5read(dsname) as ds:
+        keylist = list(ds.keys())
+        nkey = len(keylist)
+        R = [None for k in range(nkey)]
+        reg = [None for k in range(nkey)]
+#         pred = [None for k in range(nkey)]
+        top_score = [None for k in range(nkey)]
+        proc = [{} for k in range(nkey)]
+        auroc = [None for k in range(nkey)]
+        for k in range(len(keylist)):
+            R[k] = [None for icutoff in range(len(cutoffs))]
+            reg[k] = [None for icutoff in range(len(cutoffs))]
+#             pred[k] = [None for icutoff in range(len(cutoffs))]
+            sc0 = ds[keylist[k]][expttype]
+            nbefore = sc0['nbefore'][()]
+            nafter = sc0['nafter'][()]
+            decon = np.nanmean(sc0['decon'][()][:,:,nbefore:-nafter],-1)
+            data = sst.zscore(decon,axis=1)
+            data[np.isnan(data)] = 0
+
+            pval_ret = sc0['rf_mapping_pval'][()]
+            dist_ret = sc0['rf_distance_deg'][()]
+            
+            ontarget_ret_lax = np.logical_and(dist_ret<40,pval_ret<0.05)
+            ntokeep = 20
+            if ontarget_ret_lax.sum() > ntokeep:
+                ot = np.where(ontarget_ret_lax)[0]
+                throw_out = ot[np.random.choice(len(ot),len(ot)-ntokeep,replace=False)]
+                ontarget_ret_lax[throw_out] = False
+            
+            data = data[ontarget_ret_lax]
+            print(data.shape[0])
+            u,sigma,v = np.linalg.svd(data)
+            
+            running_speed_cm_s = sc0['running_speed_cm_s'][()]
+            running = np.nanmean(running_speed_cm_s[:,nbefore:-nafter],1)>7
+            if not running_trials:
+                running = ~running
+            size = sc0['stimulus_id'][()][0]
+            contrast = sc0['stimulus_id'][()][1]
+            angle = sc0['stimulus_id'][()][2]
+            light = sc0['stimulus_id'][()][3]
+
+            proc[k]['u'] = u
+            proc[k]['sigma'] = sigma
+            proc[k]['v'] = v  
+            proc[k]['pval_ret'] = pval_ret
+            proc[k]['dist_ret'] = dist_ret
+            proc[k]['ontarget_ret_lax'] = ontarget_ret_lax
+            proc[k]['running_speed_cm_s'] = running_speed_cm_s
+            proc[k]['running'] = running
+            proc[k]['size'] = size
+            proc[k]['contrast'] = contrast
+            proc[k]['angle'] = angle
+            proc[k]['light'] = light
+            proc[k]['cutoffs'] = cutoffs
+
+            uangle,usize,ucontrast,ulight = [sc0[key][()] for key in ['stimulus_direction_deg','stimulus_size_deg','stimulus_contrast','stimulus_light']]
+
+            proc[k]['uangle'],proc[k]['usize'],proc[k]['ucontrast'],proc[k]['ulight'] = uangle,usize,ucontrast,ulight
+
+            if np.logical_and(ontarget_ret_lax.sum()>=ntokeep,running.mean()>0.5):
+                #uangle,usize,ucontrast = [np.unique(arr) for arr in [angle,size,contrast]]
+                nlight = len(ulight)
+                nsize = len(usize)
+                ncontrast = len(ucontrast)
+                nangle = len(uangle)
+                top_score[k] = np.zeros((len(cutoffs),nlight,nsize,nangle))
+                auroc[k] = np.zeros((nlight,nsize,ncontrast-1,nangle))
+                for icutoff,cutoff in enumerate(cutoffs):
+                    R[k][icutoff] = np.zeros((nlight,nsize,nangle,cutoff))
+                    reg[k][icutoff] = [None for ilight in range(nlight)]
+#                     pred[k][icutoff] = [None for ilight in range(nlight)]
+#                     actual[k][icutoff][ilight] = [None for ilight in range(nlight)]
+                    for ilight in range(nlight):
+                        reg[k][icutoff][ilight] = [None for s in range(nsize)]
+#                         pred[k][icutoff][ilight] = [None for s in range(nsize)]
+#                         actual[k][icutoff][ilight] = [None for s in range(nsize)]
+                        for s in range(nsize):
+                            reg[k][icutoff][ilight][s] = [None for i in range(nangle)]
+#                             pred[k][icutoff][ilight][s] = [None for i in range(nangle)]
+#                             actual[k][icutoff][ilight][s] = [None for i in range(nangle)]
+                            for i in range(nangle):
+                                stim_of_interest_all_contrast = ut.k_and(np.logical_or(np.logical_and(angle==i,size==s),contrast==0),running,light==ilight) #,eye_dist < np.nanpercentile(eye_dist,50))
+                                X = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[stim_of_interest_all_contrast]
+                                y = contrast[stim_of_interest_all_contrast] #>0
+    
+                                sc = np.zeros((na,))
+                                for ia,alpha in enumerate(alphas):
+                                    linreg = sklearn.linear_model.Ridge(alpha=alpha,normalize=True)
+                                    reg1 = linreg.fit(X,y)
+                                    scores = sklearn.model_selection.cross_validate(linreg,X,y,cv=5)
+                                    sc[ia] = scores['test_score'].mean()
+                                best_alpha = np.argmax(sc)
+                                top_score[k][icutoff,ilight,s,i] = sc.max()
+                                linreg = sklearn.linear_model.Ridge(alpha=alphas[best_alpha],normalize=True)
+                                pred = sklearn.model_selection.cross_val_predict(linreg,X,y,cv=5)
+                                actual = y # [k][icutoff][ilight][s][i]
+                                auroc[k][ilight,s,:,i] = compute_detection_auroc(pred,actual,nvals=contrast.max())
+                                reg[k][icutoff][ilight][s][i] = linreg.fit(X,y)
+    return reg,proc,top_score,auroc
+
+def compute_encoding_axis_auroc(reg,proc,pred):
+
+    auroc = [None for k in range(len(proc))]
+    uangle,usize,ucontrast,ulight = [[None for k in range(len(proc))] for iparam in range(4)]
+    icutoff = 0
+    
+    for iexpt in range(len(proc)):
+        if not reg[iexpt][icutoff] is None:
+            cutoff = proc[iexpt]['cutoffs'][icutoff]
+            desired_outputs = ['angle','size','contrast','light','running','sigma','v','uangle','usize','ucontrast','ulight']
+            angle,size,contrast,light,running,sigma,v,uangle[iexpt],usize[iexpt],ucontrast[iexpt],ulight[iexpt] = [proc[iexpt][output].copy() for output in desired_outputs]
+            zero_contrast = ut.k_and(contrast==0,running) #,eye_dist < np.nanpercentile(eye_dist,50))
+            nsize = len(usize[iexpt])
+            ncontrast = len(ucontrast[iexpt])
+            nangle = len(uangle[iexpt])
+            nlight = len(ulight[iexpt])
+            auroc[iexpt] = np.zeros((nlight,nsize,ncontrast,nangle))
+            for ilight in range(nlight):
+                for isize in range(nsize):
+                    for icontrast in range(ncontrast):
+                        for iangle in range(nangle):
+                            this_contrast = ut.k_and(light==ilight,angle==iangle,size==isize,contrast==icontrast,running) #,eye_dist < np.nanpercentile(eye_dist,50))
+                            if this_contrast.sum():
+                                X0 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[zero_contrast]
+                                X1 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[this_contrast]
+                                # this_model = reg[iexpt][icutoff][isize][iangle].copy()
+                                y0 = reg[iexpt][icutoff][ilight][isize][iangle].predict(X0)
+                                y1 = reg[iexpt][icutoff][ilight][isize][iangle].predict(X1)
+                                auroc[iexpt][ilight,isize,icontrast,iangle] = ut.compute_auroc(y0,y1)
+                            else:
+                                auroc[iexpt][ilight,isize,icontrast,iangle] = np.nan
+    return auroc
+
+def compute_detection_auroc(pred,actual,nvals=None):
+    if nvals is None:
+        nvals = actual.max()
+    zero_signal = actual==0
+    auroc = np.zeros((nvals,))
+    for ival in range(nvals):
+        this_signal = actual==ival+1
+        auroc[ival] = ut.compute_auroc(pred[zero_signal],pred[this_signal])
+    return auroc
