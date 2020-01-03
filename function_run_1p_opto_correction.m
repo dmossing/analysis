@@ -53,12 +53,103 @@ for ff=1:numel(filenames)
     
     sbxbase = sprintf('%s/%s/',sbxfold,foldname);
     filebase = filename;
-        
+    pad_nans = true;
+    levels = unique(lights_on);
+    levels = levels(levels>0);
+    nlevels = numel(levels);
+    %%
+%     from_raw = true; %true; %false;
+%     %
+%     %%
+%     artifact_levels_cell = cell(nplanes,nlevels);
+%     gain_artifact_levels_cell = cell(nplanes,nlevels);
+%     for ilevel=1:nlevels
+%         [artifact_levels_cell(:,ilevel),gain_artifact_levels_cell(:,ilevel)] = compute_artifact_optimizing_offsets(info,roifile,lights_on==levels(ilevel),noffset,sbxbase,filebase,from_raw,pad_nans);
+%     end
+%     artifact_cell = artifact_levels_cell(:,1);
+%     gain_artifact_cell = gain_artifact_levels_cell(:,1);
+%     for iplane=1:nplanes
+%         for ilevel=2:nlevels
+%             artifact_cell{iplane} = artifact_cell{iplane} + artifact_levels_cell{iplane,ilevel};
+%             gain_artifact_cell{iplane} = gain_artifact_cell{iplane}.*gain_artifact_levels_cell{iplane,ilevel};
+%         end
+%     end
+% %%
+%     for i=1:nplanes
+%         if ~isfield(roifile{i},'opto_stim_corrected')
+%             maxind = size(artifact_cell{i},2);
+% %             roifile{i}.Data(:,1:maxind) = roifile{i}.Data(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Data,1),1);
+% %             roifile{i}.Neuropil(:,1:maxind) = roifile{i}.Neuropil(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
+%             roifile{i}.Data(:,1:maxind) = apply_artifact_correction(roifile{i}.Data(:,1:maxind),0*artifact_cell{i},gain_artifact_cell{i}); %repmat(artifact',size(roifile{i}.Data,1),1);
+%             roifile{i}.Neuropil(:,1:maxind) = apply_artifact_correction(roifile{i}.Neuropil(:,1:maxind),0*artifact_cell{i},gain_artifact_cell{i});
+%         end
+%     end
     %%
     from_raw = false;
-    pad_nans = true;
-    artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on==1,noffset,sbxbase,filebase,from_raw,pad_nans);
+        %%
+    artifact_levels_cell = cell(nplanes,nlevels);
+    gain_artifact_levels_cell = cell(nplanes,nlevels);
+    for ilevel=1:nlevels
+        [artifact_levels_cell(:,ilevel),gain_artifact_levels_cell(:,ilevel)] = compute_artifact_optimizing_offsets(info,roifile,lights_on==levels(ilevel),noffset,sbxbase,filebase,from_raw,pad_nans);
+    end
+    artifact_cell = artifact_levels_cell(:,1);
+    gain_artifact_cell = gain_artifact_levels_cell(:,1);
+    for iplane=1:nplanes
+        for ilevel=2:nlevels
+            artifact_cell{iplane} = artifact_cell{iplane} + artifact_levels_cell{iplane,ilevel};
+            gain_artifact_cell{iplane} = gain_artifact_cell{iplane}.*gain_artifact_levels_cell{iplane,ilevel};
+        end
+    end
+    %%
     for i=1:nplanes
+        if ~isfield(roifile{i},'opto_stim_corrected')
+            maxind = size(artifact_cell{i},2);
+%             roifile{i}.Data(:,1:maxind) = roifile{i}.Data(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Data,1),1);
+%             roifile{i}.Neuropil(:,1:maxind) = roifile{i}.Neuropil(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
+            roifile{i}.Data(:,1:maxind) = apply_artifact_correction(roifile{i}.Data(:,1:maxind),artifact_cell{i},gain_artifact_cell{i}); %repmat(artifact',size(roifile{i}.Data,1),1);
+            roifile{i}.Neuropil(:,1:maxind) = apply_artifact_correction(roifile{i}.Neuropil(:,1:maxind),artifact_cell{i},gain_artifact_cell{i});
+            roifile{i}.opto_stim_corrected = 1;
+        end
+    end
+    %%
+    for i=1:nplanes
+        temp = roifile{i};
+        save(sprintf('%s/%s/ot/%s_ot_00%d.rois',datafold,foldname,filename,i-1),'-mat','-v7.3','-struct','temp');
+    end
+    
+end
+%%
+% lkat = 1;
+% data = roifile{i}.Data;
+% neuropil = roifile{i}.Neuropil;
+% d = data(lkat,:);
+% n = neuropil(lkat,:);
+% plot(d-n)
+
+%%
+% for i=1:nplanes
+%     temp = roifile{i};
+%     temp.redratio = [roifile{i}.ROIdata.rois(:).redratio];
+%     save(sprintf('%s/%s/%s_ot_00%d.rois',datafold,foldname,filename,i-1),'-mat','-v7.3','-struct','temp');
+% end
+%%
+run_preprocessing_fold(sprintf('%s/%s/ot/',datafold,foldname),'/home/mossing/modulation/running/');
+
+function artifact_corrected = apply_artifact_correction(arr,artifact,gain_artifact)
+if nargin < 2 || isempty(artifact)
+    artifact = zeros(size(arr));
+end
+if nargin < 3
+    gain_artifact = ones(size(artifact));
+end
+artifact_corrected = gain_artifact.*(arr-artifact);
+
+% function artifact_corrected = apply_gain_correction(arr,gain_artifact)
+% if nargin < 2
+%     gain_artifact = ones(size(artifact));
+% end
+% artifact_corrected = gain_artifact.*arr;
+
 %         roiline = round(roifile{i}.ctr(1,:));
 %         if isfield(info,'rect')
 %             roiline = roiline + info.rect(1);
@@ -96,33 +187,3 @@ for ff=1:numel(filenames)
         
         
 %         artifact = (artifact_size-control_size)*affected;
-        if ~isfield(roifile{i},'opto_stim_corrected')
-            maxind = size(artifact_cell{i},2);
-            roifile{i}.Data(:,1:maxind) = roifile{i}.Data(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Data,1),1);
-            roifile{i}.Neuropil(:,1:maxind) = roifile{i}.Neuropil(:,1:maxind)-artifact_cell{i}; %repmat(artifact',size(roifile{i}.Neuropil,1),1);
-            roifile{i}.opto_stim_corrected = 1;
-        end
-    end
-    %%
-    for i=1:nplanes
-        temp = roifile{i};
-        save(sprintf('%s/%s/ot/%s_ot_00%d.rois',datafold,foldname,filename,i-1),'-mat','-v7.3','-struct','temp');
-    end
-    
-end
-%%
-% lkat = 1;
-% data = roifile{i}.Data;
-% neuropil = roifile{i}.Neuropil;
-% d = data(lkat,:);
-% n = neuropil(lkat,:);
-% plot(d-n)
-
-%%
-% for i=1:nplanes
-%     temp = roifile{i};
-%     temp.redratio = [roifile{i}.ROIdata.rois(:).redratio];
-%     save(sprintf('%s/%s/%s_ot_00%d.rois',datafold,foldname,filename,i-1),'-mat','-v7.3','-struct','temp');
-% end
-%%
-run_preprocessing_fold(sprintf('%s/%s/ot/',datafold,foldname),'/home/mossing/modulation/running/');

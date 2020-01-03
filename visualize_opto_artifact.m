@@ -1,4 +1,4 @@
-function trigaligned = visualize_opto_artifact(sbxbase,filebase,neuropil,info,lights_on)
+function trigaligned = visualize_opto_artifact(sbxbase,filebase,neuropil,info,lights_on,on_aligned)
 
 % stimbase = '/home/mossing/modulation/visual_stim/190807/M0153/';
 % foldbase = '/home/mossing/modulation/matfiles/190807/M0153/ot/';
@@ -8,11 +8,19 @@ filename = sprintf('%s%s',sbxbase,filebase);
 % for i=1:4
 %     filenames{i} = sprintf('%s%s_ot_%03d.rois',foldbase,filebase,i-1);
 % end
+if nargin < 6 || isempty(on_aligned)
+    on_aligned = true;
+end
+if on_aligned
+    trig_offset = 1;
+else
+    trig_offset = 4;
+end
 
 %%
 offset = 1;
 toffset = 1;
-ts = 4*(find(lights_on)-1)+1+offset;
+ts = 4*(find(lights_on)-1)+trig_offset+offset;
 naround = 3;
 nbefore = 100;
 nafter = 200;

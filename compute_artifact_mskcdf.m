@@ -1,6 +1,11 @@
 function artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2,pad_nans)
 %%
-offset = 1; % the first these many triggers are fake
+offset = 0; % the first these many triggers are fake
+gd = info.event_id==1;
+info.frame = info.frame(gd);
+info.line = info.line(gd);
+info.event_id = info.event_id(gd);
+clear gd
 toffset = 1; % static, related to the timing properties of the triggers and LED
 
 % nplanes = 4; %numel(roifile);

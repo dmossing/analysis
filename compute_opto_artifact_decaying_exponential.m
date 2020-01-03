@@ -1,4 +1,4 @@
-function artifact = compute_opto_artifact_decaying_exponential(sbxbase,filebase,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2)
+function [artifact,gain_artifact] = compute_opto_artifact_decaying_exponential(sbxbase,filebase,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2)
 
 % stimbase = '/home/mossing/modulation/visual_stim/190807/M0153/';
 % foldbase = '/home/mossing/modulation/matfiles/190807/M0153/ot/';
@@ -21,7 +21,7 @@ sz = size(neuropil);
 signal = zeros(numel(ts),naround*nlines);
 for i=1:numel(ts)
     im = sbxreadpacked(filename,info.frame(ts(i))-1,naround);
-    signal(i,:) = reshape(mean(im(:,101:end,:),2),1,[]);
+    signal(i,:) = reshape(mean(im(:,151:end,:),2),1,[]);
 end
 %%
 trigaligned = zeros(numel(ts),nbefore+nafter+1);
@@ -43,8 +43,12 @@ a = 5e3;
 b = 30;
 x0 = [a b c d];
 xstar = fminunc(costfun,x0);
-line_offset_to_artifact = @(t) expfun_(t,0,xstar);
+line_offset_to_artifact = @(t) expfun_(t,0,[xstar(1:2) 0 xstar(4)]); % don't include baseline in artifact
 [artifact,~] = compute_affected_mskcdf(mskcdf,sz,info,yoff,iplane,lights_on,offset,toffset,loffset1,loffset2,line_offset_to_artifact);
+gain_artifact = zeros(size(artifact));
+artifact_on = artifact>=xstar(4);
+gain_artifact(~artifact_on) = 1;
+gain_artifact(artifact_on) = (xstar(1)+xstar(4)+xstar(3))./(artifact(artifact_on)+xstar(3));
 
 %%
 % nplanes = max(iplane);
@@ -86,11 +90,15 @@ mskpdf = diff(mskcdf,[],2);
 mskpdf = sparse(mskpdf.*(mskpdf>1e-3));
 affected = zeros(sz);
 control = zeros(sz);
-nplanes = info.otparam(end);
+try
+    nplanes = info.otparam(end);
+catch
+    nplanes = 4;
+end
 nlines = info.sz(1);
-baseline = line_offset_to_artifact(inf);
+baseline = line_offset_to_artifact(inf); %-line_offset_to_artifact(-inf);
 t = 0:nplanes*nlines-1;
-first_frame = line_offset_to_artifact(t);
+first_frame = line_offset_to_artifact(t); %-line_offset_to_artifact(-inf);
 % second_frame = line_offset_to_artifact(t+nplanes*nlines);
 for j=1:numel(lights_on)
     frames = 1+floor((-toffset+info.frame(offset+(j-1)*4+1))/nplanes):1+floor((-toffset+info.frame(offset+j*4))/nplanes);

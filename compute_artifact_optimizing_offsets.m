@@ -1,4 +1,4 @@
-function artifact_cell = compute_artifact_optimizing_offsets(info,roifile,lights_on,noffset,sbxbase,filebase,from_raw,pad_nans)
+function [artifact_cell,gain_artifact_cell] = compute_artifact_optimizing_offsets(info,roifile,lights_on,noffset,sbxbase,filebase,from_raw,pad_nans)
 
 
 if nargin < 4
@@ -37,20 +37,24 @@ ys = [evaluation_fn(-noffset) evaluation_fn(noffset)];
 loffset2 = binary_search_offset([-noffset noffset],ys,evaluation_fn);
 
 if from_raw
-    artifact = compute_opto_artifact_decaying_exponential(sbxbase,filebase,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2);
-    costfun = @(x) evaluate_tv_multiplier(x,artifact,neuropil);
-    multiplier = fminunc(costfun,1);
+    [artifact,gain_artifact] = compute_opto_artifact_decaying_exponential(sbxbase,filebase,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2);
+%     costfun = @(x) evaluate_tv_multiplier(x,artifact,neuropil);
+%     multiplier = fminunc(costfun,1);
 
     artifact_cell = cell(size(roifile));
+    gain_artifact_cell = cell(size(roifile));
     for i=1:numel(roifile)
-        artifact_cell{i} = multiplier*artifact(iplane==i,:);
+        artifact_cell{i} = artifact(iplane==i,:);
+        gain_artifact_cell{i} = gain_artifact(iplane==i,:);
     end
 else
     artifact = compute_artifact_mskcdf(roiline,mskcdf,iplane,neuropil,info,yoff,lights_on,loffset1,loffset2,pad_nans);
     % artifact = compute_artifact_mskcdf(roiline,iplane,neuropil,info,lights_on,loffset1,loffset2);
     artifact_cell = cell(size(roifile));
+    gain_artifact_cell = cell(size(roifile));
     for i=1:numel(roifile)
         artifact_cell{i} = artifact(iplane==i,:);
+        gain_artifact_cell{i} = ones(size(artifact_cell{i}));
     end
 end
 

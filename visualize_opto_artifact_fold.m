@@ -1,4 +1,4 @@
-function trigaligned = visualize_opto_artifact_fold(foldname,varargin)
+function [ontrigaligned,offtrigaligned,meanex,p] = visualize_opto_artifact_fold(foldname,varargin)
 p = inputParser;
 
 p.addParameter('datafold','/media/mossing/backup_0/data/2P/');
@@ -32,7 +32,8 @@ nplanes = 4;
 noffset = 200;
 
 %%
-trigaligned = cell(size(filenames));
+ontrigaligned = cell(size(filenames));
+offtrigaligned = cell(size(filenames));
 for ff=1:numel(filenames)
     filename = filenames{ff}(1:end-4);
     
@@ -57,5 +58,9 @@ for ff=1:numel(filenames)
     %%
     [neuropil,~] = append_roifile_parts(roifile,'Neuropil',false);
     
-    trigaligned{ff} = visualize_opto_artifact(sbxbase,filebase,neuropil,info,lights_on);
+    ontrigaligned{ff} = visualize_opto_artifact(sbxbase,filebase,neuropil,info,lights_on,true);
+    offtrigaligned{ff} = visualize_opto_artifact(sbxbase,filebase,neuropil,info,lights_on,false);
+    if ff==1
+        [meanex,p] = visualize_opto_artifact_polynomial(sbxbase,filebase,neuropil,info,lights_on,true);
+    end
 end
