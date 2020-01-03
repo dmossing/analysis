@@ -686,7 +686,7 @@ def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucont
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')
 
-def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6):
+def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1):
     if len(y1.shape)==2:
         nsize,ncontrast = y1.shape
     z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
@@ -694,7 +694,7 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6):
     mx = np.maximum(y1.max(),y2.max())
     colors = plt.cm.viridis(np.linspace(0,1,ncontrast))
     for s in range(nsize):
-        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*10)
+        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*10,alpha=alpha)
     plt.plot((mn,mx),(mn,mx),c='k')
     wiggle = 0.05*(mx-mn)
     plt.xlim((mn-wiggle,mx+wiggle))

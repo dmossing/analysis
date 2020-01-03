@@ -555,11 +555,12 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
             dist_ret = sc0['rf_distance_deg'][()]
             
             ontarget_ret_lax = np.logical_and(dist_ret<40,pval_ret<0.05)
-            ntokeep = 20
-            if ontarget_ret_lax.sum() > ntokeep:
-                ot = np.where(ontarget_ret_lax)[0]
-                throw_out = ot[np.random.choice(len(ot),len(ot)-ntokeep,replace=False)]
-                ontarget_ret_lax[throw_out] = False
+            #ntokeep = 20
+            #if ontarget_ret_lax.sum() > ntokeep:
+            #    ot = np.where(ontarget_ret_lax)[0]
+            #    throw_out = ot[np.random.choice(len(ot),len(ot)-ntokeep,replace=False)]
+            #    ontarget_ret_lax[throw_out] = False
+            ntokeep = -np.inf
             
             data = data[ontarget_ret_lax]
             print(data.shape[0])
@@ -633,7 +634,7 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
                                 reg[k][icutoff][ilight][s][i] = linreg.fit(X,y)
     return reg,proc,top_score,auroc
 
-def compute_encoding_axis_auroc(reg,proc,pred):
+def compute_encoding_axis_auroc(reg,proc):
 
     auroc = [None for k in range(len(proc))]
     uangle,usize,ucontrast,ulight = [[None for k in range(len(proc))] for iparam in range(4)]
