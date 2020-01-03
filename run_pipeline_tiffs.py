@@ -11,6 +11,8 @@ sys.path.insert(0, '/home/mossing/code/downloads/s2p_github')
 import suite2p
 from suite2p.run_s2p import run_s2p
 from suite2p import utils
+from suite2p.io.tiff import tiff_to_binary
+from suite2p.io import save
 from suite2p.registration import register
 from suite2p.detection import chan2detect
 import timeit
@@ -54,8 +56,8 @@ ops = {
         # cell detection settings
         'connected': True, # whether or not to keep ROIs fully connected (set to 0 for dendrites)
         'navg_frames_svd': 5000, # max number of binned frames for the SVD
-        'nsvd_for_roi': 1000, # max number of SVD components to keep for ROI detection
-        'max_iterations': 20, # maximum number of iterations to do cell detection
+        'nsvd_for_roi': 2000, # max number of SVD components to keep for ROI detection
+        'max_iterations': 25, # maximum number of iterations to do cell detection
         'ratio_neuropil': 6., # ratio between neuropil basis size and cell radius
         'ratio_neuropil_to_cell': 3, # minimum ratio between neuropil radius and cell radius
         'tile_factor': 1., # use finer (>1) or coarser (<1) tiles for neuropil estimation during cell detection
@@ -135,7 +137,7 @@ def add_2ch_data(animalid,date,expt_ids_1ch,expt_ids_2ch,raw_base='/home/mossing
     blk  = expt_ids_1ch #int(dat[mouse]['blk'][k])
     blk_ = '_'.join(blk)
     redblk  = expt_ids_2ch #int(dat[mouse]['redblk'][k])
-    #redblk_ = '_'.join(redblk)
+    redblk_ = '_'.join(redblk)
             
     # green experiment save_path0
     froot = result_base+'%s/%s/%s/' % (mouse, date, blk_)
@@ -153,11 +155,14 @@ def add_2ch_data(animalid,date,expt_ids_1ch,expt_ids_2ch,raw_base='/home/mossing
     ops['functional_chan'] = 1
     
     # compute binaries for 2 channels       
-    ops2 = utils.tiff_to_binary(ops)
+    ops2 = tiff_to_binary(ops)
+
     
     for iplane in range(0,len(ops1)):
         #ops2 = np.load("/media/carsen/SSD/BIN/suite2p/plane%d/ops.npy"%iplane).item()
         #opsOut = register.register_binary(ops2, ops1[iplane]['refImg'])
+        if 'yoff' in ops2[iplane]:
+            del ops2[iplane]['yoff']
         
         opsOut = register.register_binary(ops2[iplane], ops1[iplane]['refImg'])
         ops1[iplane]['meanImg_chan2'] = opsOut['meanImg_chan2']
@@ -168,7 +173,7 @@ def add_2ch_data(animalid,date,expt_ids_1ch,expt_ids_2ch,raw_base='/home/mossing
         np.save(os.path.join(froot, "suite2p/plane%d/redcell.npy"%iplane), redcell, allow_pickle=True)
         ops1[iplane]['save_path'] = os.path.join(froot, "suite2p/plane%d"%iplane)
         ops1[iplane]['save_path0'] = os.path.join(froot)
-    utils.combined(ops1) 
+    save.combined(ops1) 
 
     if delete_raw:
         for fold in data_path:

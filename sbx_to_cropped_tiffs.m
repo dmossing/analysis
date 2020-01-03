@@ -99,7 +99,7 @@ end
 opto_offsets = [];
 for i=1:chunksize:info.max_idx
     % just_filename was sbxfile
-    tifffile = [targetfold strrep(just_filename,'.sbx',['_t' ddigit(ctr,2) '.tif'])];
+    tifffile = [targetfold strrep(just_filename,'.sbx',['_t' ddigit(ctr,3) '.tif'])];
     if exist(tifffile,'file')
         delete(tifffile)
         disp('deleted old vsn')
