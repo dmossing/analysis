@@ -504,6 +504,9 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
 
         ut.dict_to_hdf5(procname,session_id,proc)
         session_ids.append(session_id)
+        
+        del proc
+        
     return session_ids
 
 def size_contrast_opto_params():
@@ -523,11 +526,11 @@ def size_contrast_opto_params_kludge():
     params_and_fns[3] = ('light',lambda result: result['gratingInfo'][()]['lightsOn'][()])
     return params_and_fns
 
-def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8):
+def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8, replace=False):
     groupname = 'size_contrast_opto'
     featurenames=['size','contrast','angle','light']
     datasetnames = ['stimulus_size_deg','stimulus_contrast','stimulus_direction_deg','stimulus_light']
-    at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname,replace=replace)
     
 def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False):
     na = len(alphas)

@@ -599,6 +599,10 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('stimulus_contrast',data=stimulus_contrast)
             this_expt.create_dataset('stimulus_direction',data=stimulus_direction)
             this_expt['rf_mapping_pval'] = ret_vars[key]['pval_ret'][:]
+            this_expt['rf_sq_error'] = ret_vars[key]['paramdict_normal']['sqerror'][:]
+            sx = ret_vars[key]['paramdict_normal']['sigma_x'][:]
+            sy = ret_vars[key]['paramdict_normal']['sigma_y'][:]
+            this_expt['rf_sigma'] = np.sqrt(sx**2+sy**2)
             this_expt['rf_distance_deg'] = rf_distance_deg
             this_expt['rf_displacement_deg'] = rf_displacement_deg
             this_expt['rf_ctr'] = rf_ctr

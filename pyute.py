@@ -399,7 +399,7 @@ def assign_tuple(tup,ind,tgt):
         lis[ind[0]][ind[1]] = tgt
     return tuple([tuple(x) for x in lis])
 
-def fit_2d_gaussian_before_after(locs,ret,verbose=True,bounds=((None,None,0,0,0,0),(None,None,np.inf,None,None,2*np.pi)),nbefore=8,nafter=8,xoyo_predictions=None,xoyo_prediction_wt=None):
+def fit_2d_gaussian_before_after(locs,ret,verbose=False,bounds=((None,None,0,0,0,0),(None,None,np.inf,None,None,2*np.pi)),nbefore=8,nafter=8,xoyo_predictions=None,xoyo_prediction_wt=None):
 #     
     xx,yy = np.meshgrid(locs[0],locs[1])
     x = xx.flatten()
@@ -806,9 +806,27 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
         frm = info['frame'][()]
         line = info['line'][()]
+        event_id = info['event_id'][()]
+        ignore_first = 0
+        ignore_last = 0
+        while event_id[0]==2:
+            event_id = event_id[1:]
+            frm = frm[1:]
+            line = line[1:]
+            ignore_first = ignore_first+1
+        while event_id[-1]==2:
+            event_id = event_id[:-1]
+            frm = frm[:-1]
+            line = line[:-1]
+            ignore_last = ignore_last+1
         if not rg is None:
-            frm = frm[rg[0]:frm.size+rg[1]]
-            line = line[rg[0]:line.size+rg[1]]
+            thisrg = (rg[0]-ignore_first,rg[1]+ignore_last)
+            print(thisrg)
+            frm = frm[thisrg[0]:frm.size+thisrg[1]]
+            line = line[thisrg[0]:line.size+thisrg[1]]
+        else:
+            frm = frm[event_id==1]
+            line = line[event_id==1]
         if not frame_adjust is None:
             frm = frame_adjust(frm)
             line = frame_adjust(line)
@@ -1238,7 +1256,7 @@ def plot_traces_grid(arr):
             plt.ylim((arr.min(),arr.max()))
             plt.axis('off')
 
-def interp_nans(arr,axis=-1):
+def interp_nans(arr,axis=-1,verbose=False):
     nan_loc = np.where(np.isnan(arr))
     arr_new = arr.copy()
     for loc in zip(*nan_loc):
@@ -1248,7 +1266,8 @@ def interp_nans(arr,axis=-1):
         try:
             arr_new[loc] = 0.5*(arr[tuple(loc_before)]+arr[tuple(loc_after)])
         except:
-            print('could not interpolate '+str(loc))
+            if verbose:
+                print('could not interpolate '+str(loc))
     return arr_new
 
 def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',keylist=None,expttype='size_contrast_opto_0'):
@@ -1363,3 +1382,16 @@ def output_training_test(condition_list,training_frac):
         in_training_set[to_train] = True
     #assert(True==False)
     return in_training_set
+
+def compute_size_tuning(sc,contrast_axis=2):
+    slc = [slice(None) for idim in range(len(sc.shape))]
+    slc[contrast_axis] = slice(0,1)
+    gray = sc[slc].mean(contrast_axis-1) #(nroi,1,nother...)
+    slc = [slice(None) for idim in range(len(sc.shape))]
+    slc[contrast_axis-1] = np.newaxis
+    slc[contrast_axis] = [0 for icontrast in range(sc.shape[contrast_axis])]
+    size_by_contrast = np.concatenate((gray[slc],sc),axis=contrast_axis-1)
+    slc = [slice(None) for idim in range(len(sc.shape))]
+    slc[contrast_axis] = slice(1,None)
+    size_by_contrast = size_by_contrast[slc]
+    return size_by_contrast
