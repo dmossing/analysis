@@ -671,36 +671,47 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     return grouplist
 
 def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100)),vmin=None,vmax=None,flipud=False):
+    this_usize = [str(int(np.floor(this))) for this in usize]
+    this_ucontrast = [str(int(np.floor(this))) for this in ucontrast]
     nsize = len(usize)
     ncontrast = len(ucontrast)
     to_show = arr.copy()
     if flipud:
         to_show = np.flipud(to_show)
     plt.imshow(to_show,vmin=vmin,vmax=vmax,extent=[-0.5,ncontrast-0.5,-0.5,nsize-0.5])
-    plt.xticks(np.arange(ncontrast),ucontrast)
+    plt.xticks(np.arange(ncontrast),this_ucontrast)
     if flipud:
-        plt.yticks(np.arange(nsize),usize)
+        plt.yticks(np.arange(nsize),this_usize)
     else:
-        plt.yticks(np.arange(nsize)[::-1],usize)
+        plt.yticks(np.arange(nsize)[::-1],this_usize)
     if show_labels:
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')
 
-def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1):
+def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False):
     if len(y1.shape)==2:
         nsize,ncontrast = y1.shape
     z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
     mn = np.minimum(y1.min(),y2.min())
     mx = np.maximum(y1.max(),y2.max())
     colors = plt.cm.viridis(np.linspace(0,1,ncontrast))
+    if equate_0:
+        zero = [z[idim][:,0].mean() for idim in range(2)]
+        zero_color = colors[0]
+        z = [z[idim][:,1:] for idim in range(2)]
+        colors = colors[1:]
+    if equate_0:
+        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*10,alpha=alpha)
     for s in range(nsize):
         plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*10,alpha=alpha)
-    plt.plot((mn,mx),(mn,mx),c='k')
-    wiggle = 0.05*(mx-mn)
-    plt.xlim((mn-wiggle,mx+wiggle))
-    plt.ylim((mn-wiggle,mx+wiggle))
+    if equality_line:
+        plt.plot((mn,mx),(mn,mx),c='k')
+    if square:
+        wiggle = 0.05*(mx-mn)
+        plt.xlim((mn-wiggle,mx+wiggle))
+        plt.ylim((mn-wiggle,mx+wiggle))
 
-def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False):
+def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False,training_set=None):
     na = len(alphas)
     with ut.hdf5read(dsname) as ds:
         keylist = list(ds.keys())
@@ -718,6 +729,13 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
             decon = np.nanmean(sc0['decon'][()][:,:,nbefore:-nafter],-1)
             data = sst.zscore(decon,axis=1)
             data[np.isnan(data)] = 0
+            if training_set is None:
+                train = np.ones((decon.shape[1],),dtype='bool')
+            else:
+                if isinstance(training_set[keylist[k]],list):
+                    train = training_set[keylist[k]][0]
+                else:
+                    train = training_set[keylist[k]]
 
             u,sigma,v = np.linalg.svd(data)
 
@@ -744,6 +762,7 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
             proc[k]['contrast'] = contrast
             proc[k]['angle'] = angle
             proc[k]['cutoffs'] = cutoffs
+            proc[k]['train'] = train
 
             uangle,usize,ucontrast = [sc0[key][()] for key in ['stimulus_direction_deg','stimulus_size_deg','stimulus_contrast']]
 
@@ -761,7 +780,7 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
                     for s in range(nsize):
                         reg[k][icutoff][s] = [None for i in range(nangle)]
                         for i in range(nangle):
-                            stim_of_interest_all_contrast = ut.k_and(np.logical_or(np.logical_and(angle==i,size==s),contrast==0),running) #,eye_dist < np.nanpercentile(eye_dist,50))
+                            stim_of_interest_all_contrast = ut.k_and(np.logical_or(np.logical_and(angle==i,size==s),contrast==0),running,train) #,eye_dist < np.nanpercentile(eye_dist,50))
                             X = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[stim_of_interest_all_contrast]
                             y = contrast[stim_of_interest_all_contrast] #>0
 
@@ -787,8 +806,8 @@ def compute_encoding_axis_auroc(reg,proc):
     for iexpt in range(len(proc)):
         if not reg[iexpt][icutoff] is None:
             cutoff = proc[iexpt]['cutoffs'][icutoff]
-            desired_outputs = ['angle','size','contrast','running','sigma','v','uangle','usize','ucontrast']
-            angle,size,contrast,running,sigma,v,uangle[iexpt],usize[iexpt],ucontrast[iexpt] = [proc[iexpt][output].copy() for output in desired_outputs]
+            desired_outputs = ['angle','size','contrast','running','sigma','v','uangle','usize','ucontrast','train']
+            angle,size,contrast,running,sigma,v,uangle[iexpt],usize[iexpt],ucontrast[iexpt],train = [proc[iexpt][output].copy() for output in desired_outputs]
             zero_contrast = ut.k_and(contrast==0,running) #,eye_dist < np.nanpercentile(eye_dist,50))
             nsize = len(usize[iexpt])
             ncontrast = len(ucontrast[iexpt])
@@ -797,7 +816,7 @@ def compute_encoding_axis_auroc(reg,proc):
             for isize in range(nsize):
                 for icontrast in range(ncontrast):
                     for iangle in range(nangle):
-                        this_contrast = ut.k_and(angle==iangle,size==isize,contrast==icontrast,running) #,eye_dist < np.nanpercentile(eye_dist,50))
+                        this_contrast = ut.k_and(angle==iangle,size==isize,contrast==icontrast,running,~train) #,eye_dist < np.nanpercentile(eye_dist,50))
                         if this_contrast.sum():
                             X0 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[zero_contrast]
                             X1 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[this_contrast]
@@ -808,3 +827,8 @@ def compute_encoding_axis_auroc(reg,proc):
                         else:
                             auroc[iexpt][isize,icontrast,iangle] = np.nan
     return auroc
+
+def show_auroc(auroc,usize=None,ucontrast=None,label='Population decoder detection AUROC'):
+    show_size_contrast(auroc[:,1:],flipud=True,usize=usize,ucontrast=ucontrast[1:])
+    plt.colorbar().set_label(label)
+    plt.clim([0.5,1])

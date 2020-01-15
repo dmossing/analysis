@@ -514,8 +514,8 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     datasetnames = ['stimulus_location_y_deg','stimulus_location_x_deg']
     grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
     # UNCOMMENT THIS TO SAVE SQERROR INFO INTO DATA_STRUCT
-    # add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
-    #save_rf_center_info(filename,grouplist)
+    add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
+    save_rf_center_info(filename,grouplist)
     return grouplist
 
 def save_rf_center_info(dsname,keylist):

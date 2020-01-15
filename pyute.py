@@ -1363,3 +1363,64 @@ def output_training_test(condition_list,training_frac):
         in_training_set[to_train] = True
     #assert(True==False)
     return in_training_set
+
+def assign_from_uparam(modal,modal_uparam,this,this_uparam,ignore_first=0):
+    nparam = len(this_uparam)
+    bool_in_this,bool_in_modal = [[None for iparam in range(nparam)] for ivar in range(2)]
+    for iparam in range(nparam): #
+        tu,mu = [a[iparam] for a in [this_uparam,modal_uparam]]
+        bool_in_this[iparam],bool_in_modal[iparam] = assign_to_modal_uparams(tu,mu)
+    #bool_in_this,bool_in_modal = assign_to_modal_uparams(this_uparam,modal_uparam)
+    assign_(modal,bool_in_modal,this,bool_in_this,ignore_first=ignore_first)
+    
+def assign_to_modal_uparams(this_uparam,modal_uparam):
+    try:
+        mid_pts = 0.5*(modal_uparam[1:]+modal_uparam[:-1])
+        bins = np.concatenate(((-np.inf,),mid_pts,(np.inf,)))
+        inds_in_modal = np.digitize(this_uparam,bins)-1
+        numerical = True
+    except:
+        print('non-numerical parameter')
+        numerical = False
+    if numerical:
+        uinds = np.unique(inds_in_modal)
+        inds_in_this = np.zeros((0,),dtype='int')
+        for uind in uinds:
+            candidates = np.where(inds_in_modal==uind)[0]
+            dist_from_modal = np.abs(this_uparam[candidates]-modal_uparam[uind])
+            to_keep = candidates[np.argmin(dist_from_modal)]
+            inds_in_this = np.concatenate((inds_in_this,(to_keep,)))
+        inds_in_modal = inds_in_modal[inds_in_this]
+        bool_in_this = np.zeros((len(this_uparam),),dtype='bool')
+        bool_in_modal = np.zeros((len(modal_uparam),),dtype='bool')
+        bool_in_this[inds_in_this] = True
+        bool_in_modal[inds_in_modal] = True
+    else:
+        assert(np.all(this_uparam==modal_uparam))
+        bool_in_this,bool_in_modal = [np.ones(this_uparam.shape,dtype='bool') for iparam in range(2)]
+    return bool_in_this,bool_in_modal
+    
+def assign_(a,a_ind,b,b_ind,ignore_first=1):
+    a_bool = gen_big_bool(a_ind)
+    b_bool = gen_big_bool(b_ind)
+    a[[slice(None) for iind in range(ignore_first)]+[a_bool]] = b[[slice(None) for iind in range(ignore_first)]+[b_bool]]
+    
+def gen_big_bool(bool_list):
+    nind = len(bool_list)
+    slicers = [[np.newaxis for iind in range(nind)] for iind in range(nind)]
+    for iind in range(nind):
+        slicers[iind][iind] = slice(None)
+    big_ind = np.ones(tuple([iit.shape[0] for iit in bool_list]),dtype='bool')
+    for iit,slc in zip(bool_list,slicers):
+        big_ind = big_ind*iit[slc]
+    return big_ind
+
+def set_lims(*arrs,wiggle_pct=0.05):
+    mn = np.inf
+    mx = -np.inf
+    for arr in arrs:
+        mn = np.minimum(np.nanmin(arr),mn)
+        mx = np.maximum(np.nanmax(arr),mx)
+    wiggle = wiggle_pct*(mx-mn)
+    plt.xlim((mn-wiggle,mx+wiggle))
+    plt.ylim((mn-wiggle,mx+wiggle))
