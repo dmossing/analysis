@@ -1424,3 +1424,7 @@ def set_lims(*arrs,wiggle_pct=0.05):
     wiggle = wiggle_pct*(mx-mn)
     plt.xlim((mn-wiggle,mx+wiggle))
     plt.ylim((mn-wiggle,mx+wiggle))
+
+def pca_denoise(arr,Npc):
+    u,s,vh = np.linalg.svd(arr.T,full_matrices=False)
+    return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
