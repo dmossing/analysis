@@ -33,7 +33,11 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     info = ut.loadmat(datafiles[0][:-12]+'.mat','info')[()] # original .mat file
     #frame = infofile['info'][()]['frame'][()]
     frame = info['frame'][()].astype(np.int64)
-    frame = frame[rg[0]:frame.size+rg[1]]
+    if not rg is None:
+        frame = frame[rg[0]:frame.size+rg[1]]
+    else:
+        event_id = info['event_id'][()].astype(np.int64)
+        frame = frame[event_id==1]
     if frame_adjust:
         frame = frame_adjust(frame)
 
@@ -143,29 +147,47 @@ def get_nbydepth(datafiles):
             #nbydepth[i] = (f['corrected'][:].T.shape[0])
     return nbydepth
 
+def assign_(dicti,field,val):
+    if not field in dicti:
+        dicti[field] = val
+
 def add_ret_to_data_struct(filename, keylist=None, proc=None, grouplist=None):
     with ut.hdf5edit(filename) as data_struct:
         for key,group in zip(keylist,grouplist):
+            print((key,group))
+            print(list(proc[key].keys()))
 
             if 'ret_vars' in proc[key]:
                 ret_vars = proc['/'.join([key,'ret_vars'])]
                 paramdict = proc['/'.join([key,'ret_vars','paramdict_normal'])]
                 rf_ctr = np.concatenate((paramdict['xo'][:][np.newaxis,:],-paramdict['yo'][:][np.newaxis,:]),axis=0)
-                stim_offset = ret_vars['position'][:] - paramdict['ctr'][:]
-                rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
-                rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
-                rf_sq_error = ret_vars[key]['paramdict_normal'][()]['sqerror']
+                
+                rf_sq_error = ret_vars['paramdict_normal']['sqerror'][:]
+                sx = ret_vars['paramdict_normal']['sigma_x'][:]
+                sy = ret_vars['paramdict_normal']['sigma_y'][:]
 
                 this_expt = data_struct[group]
 
-                this_expt['rf_mapping_pval'] = ret_vars['pval_ret'][:]
-                this_expt['rf_distance_deg'] = rf_distance_deg
-                this_expt['rf_displacement_deg'] = rf_displacement_deg
-                this_expt['rf_ctr'] = rf_ctr
-                this_expt['stim_offset_deg'] = stim_offset
-                this_expt['rf_sq_error'] = rf_sq_error
+                assign_(this_expt,'rf_mapping_pval',ret_vars['pval_ret'][:])
+                assign_(this_expt,'rf_ctr',rf_ctr)
+                assign_(this_expt,'rf_sq_error',rf_sq_error)
+                assign_(this_expt,'rf_sigma',np.sqrt(sx**2+sy**2))
+                #this_expt['rf_mapping_pval'] = ret_vars['pval_ret'][:]
+               # this_expt['rf_ctr'] = rf_ctr
+               # this_expt['rf_sq_error'] = rf_sq_error
+               # this_expt['rf_sigma'] = np.sqrt(sx**2+sy**2)
+                if 'position' in ret_vars:
+                    stim_offset = ret_vars['position'][:] - paramdict['ctr'][:]
+                    rf_distance_deg = np.sqrt(((rf_ctr-stim_offset[:,np.newaxis])**2).sum(0))
+                    rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
+                    for kkey,vval in zip(['rf_distance_deg','rf_displacement_deg','stim_offset_deg'],[rf_distance_deg,rf_displacement_deg,stim_offset]):
+                        assign_(this_expt,kkey,vval)
+                   # this_expt['rf_distance_deg'] = rf_distance_deg
+                   # this_expt['rf_displacement_deg'] = rf_displacement_deg
+                   # this_expt['stim_offset_deg'] = stim_offset
+                    
 
-def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8,featurenames=['size','contrast','angle'],datasetnames=None,groupname='size_contrast'):
+def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_dict=None, proc=None, nbefore=8, nafter=8,featurenames=['size','contrast','angle'],datasetnames=None,groupname='size_contrast',replace=False):
     if datasetnames is None:
         datasetnames = ['stimulus_'+name for name in featurenames]
     #with h5py.File(filename,mode='w+') as data_struct:
@@ -237,8 +259,11 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             #    rf_displacement_deg = rf_ctr-stim_offset[:,np.newaxis]
 
             exptno = 0
-            while groupname+'_'+str(exptno) in this_session.keys():
-                exptno = exptno+1
+            if replace and groupname+'_0' in this_session.keys():
+                del this_session[groupname+'_0']
+            else:
+                while groupname+'_'+str(exptno) in this_session.keys():
+                    exptno = exptno+1
             this_expt = this_session.create_group(groupname+'_'+str(exptno))
 
             grouplist[ikey] = session_id + '/' + groupname + '_' + str(exptno)

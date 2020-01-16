@@ -419,6 +419,7 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     featurenames=[gen_stimtype,'angle']
     datasetnames = ['stimulus_type','stimulus_direction_deg']
     grouplist = at.add_data_struct_h5(filename,cell_type=cell_type,keylist=keylist,frame_rate_dict=frame_rate_dict,proc=proc,nbefore=nbefore,nafter=nafter,featurenames=featurenames,datasetnames=datasetnames,groupname=groupname)
+    at.add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
     return grouplist
 
 def gen_stimtype(proc):
