@@ -3,7 +3,7 @@
 import os
 import scipy.io as sio
 import matplotlib.pyplot as plt
-import numpy as np
+import autograd.numpy as np
 import h5py
 from oasis.functions import deconvolve
 from oasis import oasisAR1, oasisAR2
@@ -19,6 +19,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import scipy.optimize as sop
 import pdb
 import sklearn
+from autograd import grad
 
 blcutoff = 1
 ds = 10
@@ -836,3 +837,51 @@ def show_auroc(auroc,usize=None,ucontrast=None,label='Population decoder detecti
     show_size_contrast(auroc[:,1:],flipud=True,usize=usize,ucontrast=ucontrast[1:])
     plt.colorbar().set_label(label)
     plt.clim([0.5,1])
+    
+# def naka_rushton(c,params):
+#     a = params[0]
+#     b = params[1]
+#     c50 = params[2]
+#     n = params[3]
+#     return (a*(c/c50)**n + b)/(1+(c/c50)**n)
+
+def fit_opt_params_(c,r):
+    if np.all(~np.isnan(r)):
+        a_0 = r.max()
+        b_0 = 1e-12
+        c50_0 = 50
+        n_0 = 1
+        params_0 = np.array((a_0,b_0,c50_0,n_0))
+        params_opt = sop.least_squares(lambda params: r-nra.naka_rushton(c,params),params_0,bounds=((0,0,0,1-1e-12),(np.inf,np.inf,500,1+1e-12)))
+        return params_opt['x']
+    else:
+        return None
+        
+def fit_crfs(arr,contrast_axis=2):
+    popt = np.zeros(arr.shape[0:contrast_axis]+(4,))
+    for iroi in range(arr.shape[0]):
+        for isize in range(arr.shape[1]):
+            popt[iroi,isize] = fit_opt_params_(cvals,arr[iroi,isize])
+    return popt #np.diff(arr,axis=contrast_axis)
+
+arr = Rs[1][0].reshape((-1,nsize,ncontrast))
+
+def compute_size_contrast_deriv(arr,popt=None,cvals=np.array([0,6,12,25,50,100])):
+    
+    if popt is None:
+        popt = fit_crfs(arr,contrast_axis=2)
+
+    nr_contrast_deriv = np.zeros(arr.shape)
+    for iroi in range(nr_deriv.shape[0]):
+        for isize in range(nr_deriv.shape[1]):
+            params = popt[iroi,isize]
+            nr_contrast_deriv[iroi,isize] = grad(lambda c: naka_rushton(c,params))(cvals)
+
+    modeled = np.array([[naka_rushton(cvals,popt[iroi,isize]) for isize in range(popt.shape[1])] for iroi in range(popt.shape[0])])
+    nr_size_slope = np.nanmean(np.abs(np.diff(modeled,axis=1)),axis=0)
+    nr_size_deriv = np.zeros((nr_size_slope.shape[0]+1,nr_size_slope.shape[1]))
+    nr_size_deriv[0] = nr_size_slope[0]
+    nr_size_deriv[-1] = nr_size_slope[-1]
+    nr_size_deriv[1:-1] = 0.5*(nr_size_slope[1:]+nr_size_slope[:-1])
+
+    return popt,nr_contrast_deriv,nr_size_deriv
