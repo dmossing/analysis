@@ -19,7 +19,8 @@ from mpl_toolkits.mplot3d import Axes3D
 import scipy.optimize as sop
 import pdb
 import sklearn
-from autograd import grad
+from autograd import elementwise_grad as egrad
+import naka_rushton_analysis as nra
 
 blcutoff = 1
 ds = 10
@@ -857,27 +858,25 @@ def fit_opt_params_(c,r):
     else:
         return None
         
-def fit_crfs(arr,contrast_axis=2):
+def fit_crfs(arr,cvals,contrast_axis=2):
     popt = np.zeros(arr.shape[0:contrast_axis]+(4,))
     for iroi in range(arr.shape[0]):
         for isize in range(arr.shape[1]):
             popt[iroi,isize] = fit_opt_params_(cvals,arr[iroi,isize])
     return popt #np.diff(arr,axis=contrast_axis)
 
-arr = Rs[1][0].reshape((-1,nsize,ncontrast))
-
 def compute_size_contrast_deriv(arr,popt=None,cvals=np.array([0,6,12,25,50,100])):
     
     if popt is None:
-        popt = fit_crfs(arr,contrast_axis=2)
+        popt = fit_crfs(arr,cvals,contrast_axis=2)
 
     nr_contrast_deriv = np.zeros(arr.shape)
-    for iroi in range(nr_deriv.shape[0]):
-        for isize in range(nr_deriv.shape[1]):
+    for iroi in range(nr_contrast_deriv.shape[0]):
+        for isize in range(nr_contrast_deriv.shape[1]):
             params = popt[iroi,isize]
-            nr_contrast_deriv[iroi,isize] = grad(lambda c: naka_rushton(c,params))(cvals)
+            nr_contrast_deriv[iroi,isize] = egrad(lambda c: nra.naka_rushton(c,params))(cvals)
 
-    modeled = np.array([[naka_rushton(cvals,popt[iroi,isize]) for isize in range(popt.shape[1])] for iroi in range(popt.shape[0])])
+    modeled = np.array([[nra.naka_rushton(cvals,popt[iroi,isize]) for isize in range(popt.shape[1])] for iroi in range(popt.shape[0])])
     nr_size_slope = np.nanmean(np.abs(np.diff(modeled,axis=1)),axis=0)
     nr_size_deriv = np.zeros((nr_size_slope.shape[0]+1,nr_size_slope.shape[1]))
     nr_size_deriv[0] = nr_size_slope[0]
