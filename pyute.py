@@ -1222,9 +1222,11 @@ def plot_ellipse(x,y,ctr_fn=np.mean,rad_fn=np.std,alpha=None,c=None,edge=True):
     if edge:
         ell.set_edgecolor('k')
 
-def combine_rg(r,g):
-    rn = (r/r.max())[:,:,np.newaxis]
-    gn = (g/g.max())[:,:,np.newaxis]
+def combine_rg(r,g,redfactor=1,greenfactor=1):
+    rn = redfactor*(r/r.max())[:,:,np.newaxis]
+    gn = greenfactor*(g/g.max())[:,:,np.newaxis]
+    rn[rn>1] = 1
+    gn[gn>1] = 1
     rgb = np.concatenate((rn,gn,np.zeros_like(rn)),axis=2)
     return rgb
 
