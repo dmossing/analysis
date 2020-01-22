@@ -11,6 +11,67 @@ blspan = 3000
 nbefore = 4
 nafter = 4
 
+#def loadmat_from_names_(matfile,varnames):
+#    return ut.loadmat(matfile,varnames)
+
+def load_roi_info(datafiles):
+    nplanes = len(datafiles)
+    msk,ctr = load_msk_ctr(datafiles[0])
+    cell_mask = np.zeros((0,)+msk.shape[1:],dtype='bool')
+    cell_center = np.zeros((0,2))
+    cell_depth = np.zeros((0,))
+    for iplane in range(nplanes):
+        msk,ctr = load_msk_ctr(datafiles[iplane])
+        cell_mask = np.concatenate((cell_mask,msk),axis=0)
+        cell_center = np.concatenate((cell_center,ctr),axis=0)
+        cell_depth = np.concatenate((cell_depth,iplane*np.ones((msk.shape[0],))))
+
+    varnames1 = ['green_mean','red_mean']
+    varnames2= ['meanImg','meanImgE','meanImg_chan2','meanImg_chan2_corrected']
+    outputs1 = ut.loadmat(datafiles[0],varnames1)
+    outputs2 = ut.loadmat(datafiles[0],varnames2)
+    use_first,use_second = [not outputs[0] is None for outputs in [outputs1,outputs2]]
+
+    if use_first:
+        mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+        mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+        for iplane in range(nplanes):
+            mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],varnames1)
+            mean_green_channel[iplane] = mean_image_green
+            mean_red_channel[iplane] = mean_image_red
+        mean_red_channel_corrected = None
+        mean_green_channel_enhanced = None
+    elif use_second:
+        mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+        mean_green_channel_enhanced = np.zeros((nplanes,)+cell_mask.shape[1:])
+        mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+        mean_red_channel_corrected = np.zeros((nplanes,)+cell_mask.shape[1:])
+        for iplane in range(nplanes):
+            mean_image_green,mean_image_green_enhanced,mean_image_red,mean_image_red_corrected = ut.loadmat(datafiles[iplane],['meanImg','meanImgE','meanImg_chan2','meanImg_chan2_corrected'])
+            #mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],['meanImg','meanImg_chan2_corrected'])
+            mean_red_channel[iplane] = mean_image_red
+            mean_red_channel_corrected[iplane] = mean_image_red_corrected
+            mean_green_channel[iplane] = mean_image_green
+            mean_green_channel_enhanced[iplane] = mean_image_green_enhanced
+    else:
+        print('no mean image data for ' + stimfile)
+        mean_red_channel = None
+        mean_red_channel_corrected = None
+        mean_green_channel = None
+        mean_green_channel_enhanced = None
+
+    proc = {}
+
+    proc['mean_red_channel'] = mean_red_channel
+    proc['mean_red_channel_corrected'] = mean_red_channel_corrected
+    proc['mean_green_channel'] = mean_green_channel
+    proc['mean_green_channel_enhanced'] = mean_green_channel_enhanced
+    proc['cell_depth'] = cell_depth
+    proc['cell_center'] = cell_center
+    proc['cell_mask'] = cell_mask
+
+    return proc
+
 def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter=nafter,stim_params=None):
     # stim_params: list (or similar) of tuples, where first element is a string corresponding to a field of the
     # output hdf5 file proc, and second element is a function taking result as an input, to yield the correct data
@@ -67,42 +128,72 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
         cell_center = np.concatenate((cell_center,ctr),axis=0)
         cell_depth = np.concatenate((cell_depth,iplane*np.ones((msk.shape[0],))))
 
-    try:
-        try:
-        #if True:
-            #mean_image_red,mean_image_green = ut.loadmat(datafiles[0],['red_mean','green_mean'])
-            #mean_red_channel = np.zeros((len(datafiles),)+mean_image_red.shape)
-            #mean_green_channel = np.zeros((len(datafiles),)+mean_image_green.shape)
-            mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-            mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-            for iplane in range(nplanes):
-                mean_image_red,mean_image_green = ut.loadmat(datafiles[iplane],['red_mean','green_mean'])
-                mean_red_channel[iplane] = mean_image_red
-                mean_green_channel[iplane] = mean_image_green
-        except:
-            mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-            mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-            for iplane in range(nplanes):
-                mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],['meanImgE','meanImg_chan2'])
-                #mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],['meanImg','meanImg_chan2_corrected'])
-                mean_red_channel[iplane] = mean_image_red
-                mean_green_channel[iplane] = mean_image_green
-    except:
-        print('no mean image data for ' + stimfile)
-        mean_red_channel = None
-        mean_green_channel = None
-    #if stimfile == '/home/mossing/modulation/visual_stim/190807/M0153/M0153_090_005.mat': 
-    #    assert True==False
+#    try:
+#        try:
+#        #if True:
+#            #mean_image_red,mean_image_green = ut.loadmat(datafiles[0],['red_mean','green_mean'])
+#            #mean_red_channel = np.zeros((len(datafiles),)+mean_image_red.shape)
+#            #mean_green_channel = np.zeros((len(datafiles),)+mean_image_green.shape)
+#            mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+#            mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+#            for iplane in range(nplanes):
+#                mean_image_red,mean_image_green = ut.loadmat(datafiles[iplane],['red_mean','green_mean'])
+#                mean_red_channel[iplane] = mean_image_red
+#                mean_green_channel[iplane] = mean_image_green
+#        except:
+#            mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+#            mean_red_channel_corrected = np.zeros((nplanes,)+cell_mask.shape[1:])
+#            mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+#            mean_green_channel_enhanced = np.zeros((nplanes,)+cell_mask.shape[1:])
+#            for iplane in range(nplanes):
+#                mean_image_green,mean_image_green_enhanced,mean_image_red,mean_image_red_corrected = ut.loadmat(datafiles[iplane],['meanImg','meanImgE','meanImg_chan2','meanImg_chan2_corrected'])
+#                #mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],['meanImg','meanImg_chan2_corrected'])
+#                mean_red_channel[iplane] = mean_image_red
+#                mean_red_channel_corrected[iplane] = mean_image_red_corrected
+#                mean_green_channel[iplane] = mean_image_green
+#                mean_green_channel_enhanced[iplane] = mean_image_green_enhanced
+#    except:
+#        print('no mean image data for ' + stimfile)
+#        mean_red_channel = None
+#        mean_red_channel_corrected = None
+#        mean_green_channel = None
+#        mean_green_channel_enhanced = None
 
-    
+    #varnames1 = ['green_mean','red_mean']
+    #varnames2= ['meanImg','meanImgE','meanImg_chan2','meanImg_chan2_corrected']
+    #outputs1 = ut.loadmat(datafiles[0],varnames1)
+    #outputs2 = ut.loadmat(datafiles[0],varnames2)
+    #use_first,use_second = [not outputs[0] is None for outputs in [outputs1,outputs2]]
 
-    #try:
-    #    dxdt = sio.loadmat(datafiles[0],squeeze_me=True)['dxdt']
-    #except:
-    #    with h5py.File(datafiles[0],mode='r') as f:
-    #        dxdt = f['dxdt'][:].T
-            
+    #if use_first:
+    #    mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+    #    mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+    #    for iplane in range(nplanes):
+    #        mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],varnames1)
+    #        mean_green_channel[iplane] = mean_image_green
+    #        mean_red_channel[iplane] = mean_image_red
+    #    mean_red_channel_corrected = None
+    #    mean_green_channel_enhanced = None
+    #elif use_second:
+    #    mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+    #    mean_green_channel_enhanced = np.zeros((nplanes,)+cell_mask.shape[1:])
+    #    mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+    #    mean_red_channel_corrected = np.zeros((nplanes,)+cell_mask.shape[1:])
+    #    for iplane in range(nplanes):
+    #        mean_image_green,mean_image_green_enhanced,mean_image_red,mean_image_red_corrected = ut.loadmat(datafiles[iplane],['meanImg','meanImgE','meanImg_chan2','meanImg_chan2_corrected'])
+    #        #mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],['meanImg','meanImg_chan2_corrected'])
+    #        mean_red_channel[iplane] = mean_image_red
+    #        mean_red_channel_corrected[iplane] = mean_image_red_corrected
+    #        mean_green_channel[iplane] = mean_image_green
+    #        mean_green_channel_enhanced[iplane] = mean_image_green_enhanced
+    #else:
+    #    print('no mean image data for ' + stimfile)
+    #    mean_red_channel = None
+    #    mean_red_channel_corrected = None
+    #    mean_green_channel = None
+    #    mean_green_channel_enhanced = None
     # trialize running and pupil data
+    roi_proc = load_roi_info(datafiles)
     frame_div = np.floor(frame/nplanes).astype(np.int64)
     trialrun = ut.trialize(dxdt.T,frame,nbefore=nbefore,nafter=nafter)
     trialctr = ut.trialize(pupil_ctr,frame_div,nbefore=nbefore,nafter=nafter)
@@ -120,11 +211,15 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     proc['trialwise_t_offset'] = proc1['trialwise_t_offset']
     proc['raw_trialwise'] = proc1['raw_trialwise']
     proc['neuropil_trialwise'] = proc1['neuropil_trialwise']
-    proc['mean_red_channel'] = mean_red_channel
-    proc['mean_green_channel'] = mean_green_channel
-    proc['cell_depth'] = cell_depth
-    proc['cell_center'] = cell_center
-    proc['cell_mask'] = cell_mask
+    for key in roi_proc:
+        proc[key] = roi_proc[key]
+    #proc['mean_red_channel'] = mean_red_channel
+    #proc['mean_red_channel_corrected'] = mean_red_channel_corrected
+    #proc['mean_green_channel'] = mean_green_channel
+    #proc['mean_green_channel_enhanced'] = mean_green_channel_enhanced
+    #proc['cell_depth'] = cell_depth
+    #proc['cell_center'] = cell_center
+    #proc['cell_mask'] = cell_mask
     proc['nbefore'] = nbefore
     proc['nafter'] = nafter
               
@@ -165,6 +260,7 @@ def add_ret_to_data_struct(filename, keylist=None, proc=None, grouplist=None):
                 rf_sq_error = ret_vars['paramdict_normal']['sqerror'][:]
                 sx = ret_vars['paramdict_normal']['sigma_x'][:]
                 sy = ret_vars['paramdict_normal']['sigma_y'][:]
+                amp = ret_vars['paramdict_normal']['amplitude'][:]
 
                 this_expt = data_struct[group]
 
@@ -172,6 +268,7 @@ def add_ret_to_data_struct(filename, keylist=None, proc=None, grouplist=None):
                 assign_(this_expt,'rf_ctr',rf_ctr)
                 assign_(this_expt,'rf_sq_error',rf_sq_error)
                 assign_(this_expt,'rf_sigma',np.sqrt(sx**2+sy**2))
+                assign_(this_expt,'rf_amplitude',amp)
                 #this_expt['rf_mapping_pval'] = ret_vars['pval_ret'][:]
                # this_expt['rf_ctr'] = rf_ctr
                # this_expt['rf_sq_error'] = rf_sq_error
@@ -215,13 +312,17 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             session_id = key
             mouse_id = key.split('_')[1]
             
+            if session_id in data_struct.keys():
+                if len(cell_id) != len(data_struct[session_id]['cell_id']):
+                    del data_struct[session_id]
+            
             if not session_id in data_struct.keys():
                 this_session = data_struct.create_group(session_id)
                 this_session['mouse_id'] = mouse_id
                 this_session['cell_type'] = cell_type
                 this_session.create_dataset('cell_id',data=cell_id)
                 
-                for field in ['cell_depth','cell_mask','cell_center','mean_red_channel','mean_green_channel']:
+                for field in ['cell_depth','cell_mask','cell_center','mean_red_channel','mean_red_channel_corrected','mean_green_channel','mean_green_channel_enhanced']:
                     if field in proc[key]:
                         this_session.create_dataset(field,data=proc[key][field])
             else:
@@ -420,3 +521,4 @@ def compute_tuning(dsfile,exptname='retinotopy_0',run_cutoff=-np.inf,criterion_c
                 uparam[ikey] = [sc0[x][:] for x in stim_params]
         relevant_list = [key for key in keylist if exptname in f[key]]    
     return tuning,uparam,relevant_list
+

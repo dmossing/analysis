@@ -733,15 +733,26 @@ def loadmat(filename,desired_vars):
         
     try:
         matfile = sio.loadmat(filename,squeeze_me=True)
-        to_return = tuple([matfile[var] for var in desired_vars])
+        #to_return = tuple([matfile[var] for var in desired_vars])
+        to_return = tuple([safe_get_(matfile,var,h5=False) for var in desired_vars])
     except:
         with h5py.File(filename,mode='r') as f:
-            to_return = tuple([f[var][:].T for var in desired_vars])
+            #to_return = tuple([f[var][:].T for var in desired_vars])
+            to_return = tuple([safe_get_(f,var,h5=True) for var in desired_vars])
             
     if not tuple_flag:
         to_return = to_return[0]
         
     return to_return
+
+def safe_get_(matfile,var,h5=False):
+    if var in matfile:
+        if not h5:
+            return matfile[var]
+        else:
+            return matfile[var][:].T
+    else:
+        return None
 
 def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None,frame_adjust=None):
     
