@@ -625,8 +625,8 @@ def imshow_in_pairs(arr1,arr2,rowlen=10,scale=0.5):
     rowlen = rowlen*2
     plt.figure(figsize=(scale*rowlen,scale*nrows))
     for k in range(arr1.shape[0]):
-        mn = np.minimum(arr1[k].min(),arr2[k].min())
-        mx = np.maximum(arr1[k].max(),arr2[k].max())
+        mn = np.minimum(np.nanmin(arr1[k]),np.nanmin(arr2[k]))
+        mx = np.maximum(np.nanmax(arr1[k]),np.nanmax(arr2[k]))
         plt.subplot(nrows,rowlen,2*k+1)
         plt.imshow(arr1[k],vmin=mn,vmax=mx)
         plt.axis('off')
