@@ -54,7 +54,7 @@ def load_roi_info(datafiles):
             mean_green_channel[iplane] = mean_image_green
             mean_green_channel_enhanced[iplane] = mean_image_green_enhanced
     else:
-        print('no mean image data for ' + stimfile)
+        print('no mean image data for ' + datafiles[0])
         mean_red_channel = None
         mean_red_channel_corrected = None
         mean_green_channel = None
@@ -193,7 +193,10 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     #    mean_green_channel = None
     #    mean_green_channel_enhanced = None
     # trialize running and pupil data
-    roi_proc = load_roi_info(datafiles)
+    try:
+        roi_proc = load_roi_info(datafiles)
+    except:
+        roi_proc = None
     frame_div = np.floor(frame/nplanes).astype(np.int64)
     trialrun = ut.trialize(dxdt.T,frame,nbefore=nbefore,nafter=nafter)
     trialctr = ut.trialize(pupil_ctr,frame_div,nbefore=nbefore,nafter=nafter)
@@ -211,8 +214,11 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     proc['trialwise_t_offset'] = proc1['trialwise_t_offset']
     proc['raw_trialwise'] = proc1['raw_trialwise']
     proc['neuropil_trialwise'] = proc1['neuropil_trialwise']
-    for key in roi_proc:
-        proc[key] = roi_proc[key]
+    if roi_proc:
+        for key in roi_proc:
+            proc[key] = roi_proc[key]
+    else:
+        print('could not compute roi info')
     #proc['mean_red_channel'] = mean_red_channel
     #proc['mean_red_channel_corrected'] = mean_red_channel_corrected
     #proc['mean_green_channel'] = mean_green_channel
