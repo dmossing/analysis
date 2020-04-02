@@ -12,6 +12,7 @@ if frameno>0
         s = s{1};
         idxframe(i) = str2num(s);
     end
+    d(idxframe) = d; % now correcting the order here
     ctr = zeros(frameno,2);
     area = zeros(frameno,1);
     ctr2 = zeros(frameno,2);
@@ -59,13 +60,14 @@ if frameno>0
                 ctr2(iframe,:),area2(iframe),props2(iframe,:)] = deal(nan);
         end
     end
-    ctr(idxframe,:) = ctr;
-    area(idxframe) = area;
-    props(idxframe,:) = props;
-    ctr2(idxframe,:) = ctr2;
-    area2(idxframe) = area2;
-    props2(idxframe,:) = props2;
-    hulls(idxframe,:) = hulls;
+%     ctr(idxframe,:) = ctr; % order of d corrected; no longer need to
+%     % correct here
+%     area(idxframe) = area;
+%     props(idxframe,:) = props;
+%     ctr2(idxframe,:) = ctr2;
+%     area2(idxframe) = area2;
+%     props2(idxframe,:) = props2;
+%     hulls(idxframe,:) = hulls;
     hulls = hulls(:,1:find(sum(hulls>0)==0,1));
 else
     [ctr,area,props,ctr2,area2,props2,hulls] = deal([]);

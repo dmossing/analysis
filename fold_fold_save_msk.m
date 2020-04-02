@@ -1,10 +1,10 @@
 function fold_fold_save_msk(basefold,rg)
 d = dir(basefold);
-forbidden = {'.','..','Duplicate'};
+forbidden = {'.','..','Duplicate','.DS_Store'};
 for i=1:numel(d)
     foldname = d(i).name;
     if ~ismember(foldname,forbidden)
-        in_bounds = str2num(foldname) >= rg(1) && str2num(foldname) <= rg(2);
+        in_bounds = (str2num(foldname) >= rg(1)) && (str2num(foldname) <= rg(2));
         if in_bounds
             fold_save_msk([basefold '/' foldname])
         end

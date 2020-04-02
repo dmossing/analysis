@@ -1,6 +1,6 @@
 function fold_fold_track_eyes_kmeans_convex(basefold,rg)
 d = dir(basefold);
-forbidden = {'.','..','Duplicate'};
+forbidden = {'.','..','Duplicate','.DS_Store'};
 dry_run = true;
 for i=1:numel(d)
     foldname = d(i).name;

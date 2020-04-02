@@ -21,6 +21,7 @@ import pandas as pd
 import scipy.stats as sst
 from pympler import asizeof
 import sklearn.metrics as skm
+import sklearn
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -105,6 +106,22 @@ def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     L = len(arr.shape)
     resamp=np.rollaxis(arr,axis,0)
     resamp=resamp[c]
+    resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
+    resamp=np.rollaxis(resamp,0,L+1)
+    stat = fn(resamp,axis=axis)
+    #lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
+    #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
+    return tuple([np.percentile(stat,p,axis=-1) for p in pct])
+
+def bootstrap_df(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
+    # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
+    # and report percentiles pct
+    N = df.shape[axis]
+    c = np.random.choice(np.arange(N),size=(N,nreps))
+    L = len(df.shape)
+    if axis==1:
+        resamp=df.T
+    resamp=resamp.iloc[c]
     resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
     resamp=np.rollaxis(resamp,0,L+1)
     stat = fn(resamp,axis=axis)
@@ -926,8 +943,9 @@ def parse_options(opt,opt_keys,*args):
 
 def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None,markersize=None):
     opt_keys = ['c','linestyle','linewidth','markersize']
-    opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
-    c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
+    if not plot_options is None:
+        opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
+        c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
 
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
@@ -1092,11 +1110,12 @@ def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
     tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
     return tuning
 
-def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None):
+def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None,keylist=None,run_fn=None):
     # will return a pandas dataframe, consisting of data from every trial in every expt
     # and two dicts: each indexed by session id, one listing roi parameters (location, rf center, rf pval), and one listing trialwise parameters (run speed, eye position)
     with h5py.File(dsfile,mode='r') as f:
-        keylist = [key for key in f.keys()]
+        if keylist is None:
+            keylist = [key for key in f.keys()]
         df = [None for i in range(len(keylist))]
         roi_info = {}
         trial_info = {}
@@ -1114,10 +1133,12 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                     nafter = sc0['nafter'][()]
                 else:
                     nafter = nafter_default
+                if run_fn is None:
+                    run_fn = lambda x: x[:,nbefore:-nafter].mean(-1)>10
                 data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
                 stim_id = sc0['stimulus_id'][:]
                 if 'running_speed_cm_s' in sc0:
-                    trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10 #
+                    trialrun = run_fn(sc0['running_speed_cm_s'][:]) #[:,nbefore:-nafter].mean(-1)>10 #
                 else:
                     trialrun = sc0['trialrun'][:]
                 #uparam[ikey] = [None for iparam in range(len(sc0['stimulus_parameters']))]
@@ -1283,7 +1304,8 @@ def interp_nans(arr,axis=-1,verbose=False):
                 print('could not interpolate '+str(loc))
     return arr_new
 
-def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',keylist=None,expttype='size_contrast_opto_0'):
+def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',keylist=None,expttype='size_contrast_opto_0'): #,subsample=1.):
+    #output = compute_tuning_ret_run_subsample(dsfile,running=running,center=center,fieldname=fieldname,keylist=keylist,expttype=expttype): #,subsample=1.):
     with h5py.File(dsfile,mode='r') as f:
         if keylist is None:
             keylist = [key for key in f.keys()]
@@ -1293,16 +1315,20 @@ def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',key
             if expttype in session:
 #                 print([key for key in session.keys()])
                 data = session[expttype][fieldname][:]
+                nbefore = session[expttype]['nbefore'][()]
+                nafter = session[expttype]['nafter'][()]
                 stim_id = session[expttype]['stimulus_id'][:]
                 trialrun = session[expttype]['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10
                 if not running:
                     trialrun = ~trialrun
+
+                #trialrun = trialrun & np.random.rand(trialrun.shape)<subsample
                     
                 if 'rf_displacement_deg' in session[expttype]:
                     pval = session[expttype]['rf_mapping_pval'][:]
                     X = session['cell_center'][:]
                     y = session[expttype]['rf_displacement_deg'][:].T
-                    lkat = ut.k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]))
+                    lkat = k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]))
                     linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
                     displacement = np.zeros_like(y)
                     displacement[~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
@@ -1310,7 +1336,58 @@ def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',key
                     cell_criteria = np.sqrt((displacement**2).sum(1))<10
                 else:
                     cell_criteria = np.sqrt((displacement**2).sum(1))>10
-                tuning[ikey] = ut.compute_tuning(data,stim_id,cell_criteria=cell_criteria,trial_criteria=trialrun)
+                tuning[ikey] = compute_tuning(data,stim_id,cell_criteria=cell_criteria,trial_criteria=trialrun)
+                print('%s: %.1f' % (keylist[ikey], trialrun.mean()))
+            else:
+                print('could not do '+keylist[ikey])
+    return tuning
+
+def compute_tuning_ret_run_subsample(dsfile,running=True,center=True,fieldname='decon',keylist=None,expttype='size_contrast_opto_0',dcutoff=10,sample=None):
+    with h5py.File(dsfile,mode='r') as f:
+        if keylist is None:
+            keylist = [key for key in f.keys()]
+        tuning = [None]*len(keylist)
+        for ikey in range(len(keylist)):
+            session = f[keylist[ikey]]
+            if expttype in session:
+#                 print([key for key in session.keys()])
+                data = session[expttype][fieldname][:]
+                nbefore = session[expttype]['nbefore'][()]
+                nafter = session[expttype]['nafter'][()]
+                stim_id = session[expttype]['stimulus_id'][:]
+                if not 'trialrun' in session[expttype]:
+                    trialrun = session[expttype]['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10
+                else:
+                    trialrun = session[expttype]['trialrun'][:]
+                if not running:
+                    trialrun = ~trialrun
+
+                if sample is None:
+                    this_sample = np.random.randn(*trialrun.shape)>0
+                else:
+                    this_sample = sample
+
+                these_samples = [this_sample,~this_sample]
+                    
+                if 'rf_displacement_deg' in session[expttype]:
+                    pval = session[expttype]['rf_mapping_pval'][:]
+                    X = session['cell_center'][:]
+                    y = session[expttype]['rf_displacement_deg'][:].T
+                    lkat = k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]))
+                    linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
+                    displacement = np.zeros_like(y)
+                    displacement[~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
+                if not center is None:
+                    if center:
+                        cell_criteria = np.sqrt((displacement**2).sum(1))<dcutoff
+                    else:
+                        cell_criteria = np.sqrt((displacement**2).sum(1))>dcutoff
+                else:
+                    cell_criteria = np.ones(data.shape[0:1],dtype='bool')
+                nsamples = 2
+                tuning[ikey] = [None for isample in range(nsamples)]
+                for isample in range(nsamples):
+                    tuning[ikey][isample] = compute_tuning(data,stim_id,cell_criteria=cell_criteria,trial_criteria=(trialrun & these_samples[isample]))
                 print('%s: %.1f' % (keylist[ikey], trialrun.mean()))
             else:
                 print('could not do '+keylist[ikey])
@@ -1352,7 +1429,7 @@ def select_trials(trial_info,selector,training_frac,include_all=False):
             if callable(selector[param]): # all the values of selector that are functions, ignore trials where that function evaluates to False
                 exclude = ~selector[param](ti[param])
                 gd[exclude] = False
-        condition_list = gen_condition_list(ti,selector) # automatically, separated out such that each half of the data gets an equivalent fraction of trials with each condition type
+        condition_list,_ = gen_condition_list(ti,selector) # automatically, separated out such that each half of the data gets an equivalent fraction of trials with each condition type
         condition_list = [c[gd] for c in condition_list]
         in_training_set = np.zeros((ntrials,),dtype='bool')
         in_test_set = np.zeros((ntrials,),dtype='bool')
@@ -1389,7 +1466,7 @@ def gen_condition_list(ti,selector,filter_selector=lambda x:True):
     for param in params:
         if not callable(selector[param]) and filter_selector(selector[param]):
             condition_list.append(ti[param])
-    return condition_list
+    return condition_list,params
 
 def output_training_test(condition_list,training_frac):
     # output training and test sets balanced for conditions
@@ -1486,3 +1563,118 @@ def set_lims(*arrs,wiggle_pct=0.05):
 def pca_denoise(arr,Npc):
     u,s,vh = np.linalg.svd(arr.T,full_matrices=False)
     return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
+
+def bar_pdf(data,bins=None,alpha=1):
+    h,_ = np.histogram(data,bins=bins)
+    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=0.5)
+
+def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac=0.5): 
+    selector_s1 = gen_nub_selector_s1() 
+    selector_v1 = gen_nub_selector_v1() 
+    keylist = list(trial_info.keys()) 
+    train_test = {} 
+    for key in keylist: 
+        if trial_info[key]['area'][:2]=='s1': 
+            selector = gen_nub_selector_s1() 
+        else: 
+            selector = gen_nub_selector_v1() 
+        train_test[key] = [None for ipartitioning in range(npartitionings)] 
+        for ipartitioning in range(npartitionings): 
+            train_test[key][ipartitioning] = select_trials(trial_info[key],selector,training_frac) 
+    tuning = pd.DataFrame() 
+    ttls = ['s1_l4','s1_l23','v1_l4','v1_l23'] 
+    selectors = [selector_s1, selector_s1, selector_v1, selector_v1] 
+    tt = [{k:v[ipartitioning] for k,v in zip(train_test.keys(),train_test.values())} for ipartitioning in range(npartitionings)] 
+    for ttl,selector in zip(ttls,selectors): 
+        for ipartitioning in range(npartitionings): 
+            new_tuning = compute_tuning_df(df.loc[df.area==ttl],trial_info,selector,include=tt[ipartitioning]) 
+            new_tuning.insert(new_tuning.shape[1],'partitioning',ipartitioning) 
+            #new_tuning['partitioning'] = ipartitioning 
+            tuning = tuning.append(new_tuning) 
+    return tuning
+
+def select_trials(trial_info,selector,training_frac,include_all=False):
+    # dict saying what to do with each trial type. If a function, apply that function to the trial info column to
+    # obtain a boolean indexing variable
+    # if 0, then the tuning output should be indexed by that variable
+    # if 1, then that variable will be marginalized over in the tuning output
+    def gen_train_test_exptwise(ti):
+        ntrials = ti[params[0]].size
+        gd = np.ones((ntrials,),dtype='bool')
+        for param in params:
+            if callable(selector[param]): # all the values of selector that are functions, ignore trials where that function evaluates to False
+                exclude = ~selector[param](ti[param])
+                gd[exclude] = False
+        condition_list,_ = gen_condition_list(ti,selector) # automatically, separated out such that each half of the data gets an equivalent fraction of trials with each condition type
+        condition_list = [c[gd] for c in condition_list]
+        in_training_set = np.zeros((ntrials,),dtype='bool')
+        in_test_set = np.zeros((ntrials,),dtype='bool')
+        to_keep = output_training_test(condition_list,training_frac)
+        in_training_set[gd] = to_keep
+        in_test_set[gd] = ~to_keep
+        if include_all:
+            train_test = [in_training_set,in_test_set,np.logical_or(in_training_set,in_test_set)]
+        else:
+            train_test = [in_training_set,in_test_set]
+        return train_test,ntrials
+
+    params = list(selector.keys())
+    keylist = list(trial_info.keys())
+    if isinstance(trial_info[keylist[0]],dict):
+        ntrials = {}
+        train_test = {}
+        for key in trial_info.keys():
+            ti = trial_info[key]
+            train_test[key],ntrials[key] = gen_train_test_exptwise(ti)
+    else:
+        ti = trial_info
+        train_test,ntrials = gen_train_test_exptwise(ti)
+
+    return train_test
+
+def compute_tuning_df(df,trial_info,selector,include=None):
+    params = list(selector.keys())
+#     expts = list(trial_info.keys())
+    expts = df.session_id.unique()
+    nexpt = len(expts)
+    tuning = pd.DataFrame()
+    if include is None:
+        include = {expt:None for expt in expts}
+    for iexpt,expt in enumerate(expts):
+        in_this_expt = (df.session_id == expt)
+        trialwise = df.loc[in_this_expt].pivot(values='data',index='roi_index',columns='trial_index')
+        nroi = trialwise.shape[0]
+        ntrial = trialwise.shape[1]
+        if include[expt] is None:
+            print('including all trials in one partition')
+            include[expt] = np.ones((ntrial,),dtype='bool')
+        if not isinstance(include[expt],list):
+            include[expt] = [include[expt]]
+        npart = len(include[expt])
+#         if isinstance(include[expt],list):
+#             tuning[iexpt] = [None for ipart in range(npart)]
+        #condition_list = []
+        # args to gen_condition_list
+        # ti
+# selector: dict where each key is a param in ti.keys(), and each value is either a callable returning a boolean,
+# to be applied to ti[param], or an input to the function filter_selector
+# filter selector: if filter_selector(selector[param]), the tuning curve will be separated into the unique elements of ti[param]. 
+        condition_list,_ = gen_condition_list(trial_info[expt],selector,filter_selector=np.logical_not)
+        iconds,uconds = zip(*[pd.factorize(c,sort=True) for c in condition_list])
+        nconds = [len(u) for u in uconds]
+        for ipart in range(npart):
+            tip = np.zeros((nroi,)+tuple(nconds))
+            for iflat in range(np.prod(nconds)):
+                coords = np.unravel_index(iflat,tuple(nconds))
+                lkat = k_and(include[expt][ipart],*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
+                tip[(slice(None),)+coords] = np.nanmean(trialwise.loc[:,lkat],-1)
+            shp = [np.arange(s) for s in tip.shape[1:]]
+            column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
+            index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
+            #tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=np.arange(tip.shape[0]),columns=column_labels)
+            tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
+            #tip_df['partition'] = ipart
+            #tip_df['session_id'] = expt
+            #tip_df['area'] = trial_info[expt]['area']
+            tuning = tuning.append(tip_df)
+    return tuning
