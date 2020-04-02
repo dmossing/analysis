@@ -3,7 +3,7 @@ if nargin < 2
     dry_run = false;
 end
 d = dir(foldname);
-forbidden = {'.','..','Duplicate','.DS_Store'};
+forbidden = {'.','..','Duplicate','.DS_Store','new_tree'};
 msk = [];
 for i=1:numel(d)
     if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
