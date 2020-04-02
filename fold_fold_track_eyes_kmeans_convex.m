@@ -14,7 +14,7 @@ end
 dry_run = false;
 for i=1:numel(d)
     foldname = d(i).name;
-    if ~ismember(foldname,forbidden) %&& ~contains(foldname,'eye_tracking')
+    if ~isnan(str2double(foldname))%~ismember(foldname,forbidden) %&& ~contains(foldname,'eye_tracking')
         in_bounds = str2num(foldname) >= rg(1) && str2num(foldname) <= rg(2);
         if in_bounds
             subfold_track_eyes_kmeans_convex([basefold '/' foldname],dry_run)
