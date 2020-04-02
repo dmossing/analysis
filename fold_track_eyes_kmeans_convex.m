@@ -6,7 +6,7 @@ d = dir(foldname);
 forbidden = {'.','..','Duplicate','.DS_Store','new_tree'};
 msk = [];
 for i=1:numel(d)
-    if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
+    if ~isnan(str2double(foldname))%~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
         thisfold = [foldname '/' d(i).name];
         if ~exist([thisfold '/msk.mat'])
             d2 = dir([thisfold '/*.tiff']);
