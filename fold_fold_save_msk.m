@@ -32,7 +32,7 @@ for i=1:numel(d)
             thisfold
             d2 = dir([thisfold '/*.tiff']);
             if numel(d2)>0
-                nframes = 50;
+                nframes = 1; %50;
                 foldnames = cell(nframes,1);
                 for i=1:nframes
                     foldnames{i} = [thisfold '/' d2(i).name];

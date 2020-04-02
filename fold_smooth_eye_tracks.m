@@ -9,7 +9,7 @@ if nargin < 4
     filt_ctr = 9;
 end
 d = dir(foldname);
-forbidden = {'.','..','Duplicate','.DS_Store'};
+forbidden = {'.','..','Duplicate','.DS_Store','new_tree'};
 if ~dry_run
     for i=1:numel(d)
         if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
