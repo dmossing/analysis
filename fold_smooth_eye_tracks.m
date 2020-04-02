@@ -1,6 +1,12 @@
-function fold_smooth_eye_tracks(foldname,dry_run)
+function fold_smooth_eye_tracks(foldname,dry_run,filt_area,filt_ctr)
 if nargin < 2
     dry_run = false;
+end
+if nargin < 3
+    filt_area = 25;
+end
+if nargin < 4
+    filt_ctr = 9;
 end
 d = dir(foldname);
 forbidden = {'.','..','Duplicate','.DS_Store'};
@@ -13,14 +19,14 @@ if ~dry_run
                 tic
                 load([foldname '/eye_tracking_' d(i).name '.mat'],'ctr','area','props','ctr2','area2','props2','hulls');
                 toc
-                [ctr_sm,area_sm] = smooth_eye_tracks(thisfold,props2);
+                [ctr_sm,area_sm] = smooth_eye_tracks(thisfold,props2,filt_area,filt_ctr);
                 save([foldname '/eye_tracking_' d(i).name '.mat'],'ctr_sm','area_sm','-append')
             end
         end
     end
 end
 
-function [ctr_sm,area_sm] = smooth_eye_tracks(foldname,props2)
+function [ctr_sm,area_sm] = smooth_eye_tracks(foldname,props2,filt_area,filt_ctr)
 area = props2(:,3);
 ctr = props2(:,4:5);
 load([foldname '/msk.mat'],'msk');
@@ -42,8 +48,7 @@ data = double(imread([foldname '/' d(iframe).name]));
 data = impyramid(data,'reduce');
 [xx,yy] = meshgrid(1:size(data,2),1:size(data,1));
 ctr_sm = ctr;
-filt_area = 25;
-filt_ctr = 5;
+
 for i=1:2
     ctr_sm(:,i) = medfilt1(ctr(:,i),filt_ctr,'omitnan');
 end

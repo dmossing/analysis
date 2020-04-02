@@ -29,5 +29,6 @@ for i=1:numel(d)
     foldname = d(i).name;
     if ~ismember(foldname,forbidden)
         fold_track_eyes_kmeans_convex([basefold '/' foldname],dry_run)
+        fold_smooth_eye_tracks([basefold '/' foldname],dry_run)
     end
 end
