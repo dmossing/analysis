@@ -7,11 +7,10 @@ forbidden = {'.','..','Duplicate','.DS_Store','new_tree'};
 if ~dry_run
     for i=1:numel(d)
         drois = dir([foldname_rois '/ot/M*_*_' d(i).name '_ot_000.rois']);
-        if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
+    if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking') && ~isempty(drois)
             eyefoldname = [foldname_eyes '/eye_tracking_' d(i).name '.mat'];
             if exist(eyefoldname)
-                i
-                roifoldname = [foldname_rois '/ot/' drois(i).name];
+                roifoldname = [foldname_rois '/ot/' drois(1).name];
                 save_eye_tracking(eyefoldname,roifoldname);
             end
         end
