@@ -5,8 +5,8 @@ load(eyefoldname,'ctr_sm','area_sm')
 msk_area = sum(msk(:));
 msk_width = 2*sqrt(msk_area/pi); % diameter, assuming a circular mask
 [xx,yy] = meshgrid(1:size(msk,2),1:size(msk,1));
-msk_ctrx = mean(xx.*msk);
-msk_ctry = mean(yy.*msk);
+msk_ctrx = mean(mean(xx.*msk));
+msk_ctry = mean(mean(yy.*msk));
 msk_ctr = [msk_ctrx msk_ctry];
 if exist('ctr_sm','var')
     pupil_ctr = ctr_sm';
