@@ -10,9 +10,9 @@ msk_ctry = mean(mean(yy.*msk));
 msk_ctr = [msk_ctrx msk_ctry];
 if exist('ctr_sm','var')
     pupil_ctr = ctr_sm';
-    pupil_frac_ctr = (ctr_sm - repmat(msk_ctr,size(ctr_sm,1),1))/msk_width;
+    pupil_frac_ctr = (ctr_sm - repmat(msk_ctr,size(ctr_sm,1),1))'/msk_width;
     pupil_area = area_sm';
-    pupil_frac_area = area_sm/msk_area;
+    pupil_frac_area = area_sm'/msk_area;
     save(roifoldname,'-mat','pupil_ctr','pupil_frac_ctr','pupil_area','pupil_frac_area','-append')
 else
     disp('info not saved')
