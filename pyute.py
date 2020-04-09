@@ -1141,6 +1141,10 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                     trialrun = run_fn(sc0['running_speed_cm_s'][:]) #[:,nbefore:-nafter].mean(-1)>10 #
                 else:
                     trialrun = sc0['trialrun'][:]
+                if 'pupil_area_trialwise_pct_eye_area' in sc0:
+                    trialpupil = sc0['pupil_area_trialwise_pct_eye_area']
+                else:
+                    trialpupil = None
                 #uparam[ikey] = [None for iparam in range(len(sc0['stimulus_parameters']))]
                 dfdict = {}
                 dfdict['data'] = data.flatten()
@@ -1163,7 +1167,8 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                 for iparam,param in enumerate(sc0['stimulus_parameters']):
                     this_info = sc0[param][:][stim_id[iparam]]
                     trialdict[param.decode('UTF-8')] = this_info
-                    trialdict['running'] = trialrun
+                trialdict['running'] = trialrun
+                trialdict['trialpupil'] = trialpupil
                     #dfdict[param.decode('UTF-8')] = np.tile(trial_info[np.newaxis,:],(data.shape[0],1)).flatten()
 
                 df[ikey] = pd.DataFrame(dfdict)
