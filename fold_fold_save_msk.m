@@ -1,6 +1,6 @@
 function fold_fold_save_msk(basefold,rg)
 d = dir(basefold);
-forbidden = {'.','..','Duplicate','.DS_Store'};
+forbidden = {'.','..','Duplicate','.DS_Store','new_tree','run_eye_tracking.sh'};
 for i=1:numel(d)
     foldname = d(i).name;
     if ~ismember(foldname,forbidden)

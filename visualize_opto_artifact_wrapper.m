@@ -19,7 +19,7 @@ animalid = path_parts{end-2};
 targetfold = sprintf('%s/%s/%s/',datafold,datestr,animalid);
 foldname_short = sprintf('%s/%s/',datestr,animalid);
 
-[ontrigaligned,offtrigaligned,meanex,p] = visualize_opto_artifact_fold(foldname_short,'datafold',p.Results.datafold,...
+[ontrigaligned,offtrigaligned,meanex,p] = visualize_opto_artifact_fold(foldname_short,'datafold',datafold,...
      'sbxfold',p.Results.sbxfold);
 
  %%
