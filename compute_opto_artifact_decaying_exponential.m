@@ -10,7 +10,11 @@ filename = sprintf('%s%s',sbxbase,filebase);
 % end
 
 %%
-offset = 1;
+gd = info.event_id==1;
+info.frame = info.frame(gd);
+info.line = info.line(gd);
+info.event_id = info.event_id(gd);
+offset = 0;
 toffset = 1;
 ts = 4*(find(lights_on)-1)+1+offset;
 naround = 3;

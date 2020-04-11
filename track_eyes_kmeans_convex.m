@@ -206,9 +206,10 @@ while isempty(area_new) || area_new > sum(msk(:))
     props = extract_properties(in_pupil);
     ctr_new = props(end-1:end);
     area_new = props(end-2);
+    minrad = 6;
     if area_new > sum(msk(:))*0.5
-        [ctr_new,radius_new] = imfindcircles(data,[floor(sz/2.5) floor(sz)]);
-        [ctr_newb,radius_newb] = imfindcircles(data,[floor(sz)+1 floor(sz*2.5)]);
+        [ctr_new,radius_new] = imfindcircles(data,[max(floor(sz/2.5),minrad) max(floor(sz),minrad+1)]);
+        [ctr_newb,radius_newb] = imfindcircles(data,[max(floor(sz)+1,minrad) max(floor(sz*2.5),minrad+1)]);
         ctr_new = [ctr_new; ctr_newb];
         radius_new = [radius_new; radius_newb];
         [~,mxind] = max(radius_new);
