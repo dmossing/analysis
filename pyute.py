@@ -55,9 +55,12 @@ def zscore(arr):
     return (arr-mn)/st
 
 def threeand(a,b,c):
-    return np.logical_and(np.logical_and(a,b),c)
+    return k_and(a,b,c)
 
 def print_multipage(args,fn,filename):
+    # args a list of lists
+    # operate fn on another list, of the ith element of each of args
+    # each generates a figure, and saves it as a pdf
     if type(args) is np.ndarray:
         args = [args]
     plt.close()
@@ -69,6 +72,9 @@ def print_multipage(args,fn,filename):
             plt.close()
 
 def sortbymultiple(variables):
+    # variables a list of arrays
+    # return an array that will sort those variables, first by the first,
+    # then by the second, and so on
     N = len(variables)
     fieldnames = ['a'*(i+1) for i in range(N)]
     xtype = np.dtype([(name,var.dtype) for name,var in zip(fieldnames,variables)])
@@ -78,6 +84,11 @@ def sortbymultiple(variables):
     return np.argsort(x,order=tuple(fieldnames))
 
 def shapeup(arr,variables):
+    # arr a 3-D array, e.g. ROI x trial (N) x time pt
+    # middle axis corresponds to the (p) elements of list variables
+    # each element of list is an array of N elements
+    # reshape arr so that the middle axes correspond to the unique elements
+    # of variables in order
     x = sortbymultiple(variables)
     star = tuple([len(np.unique(var)) for var in variables])
     return arr[:,x].reshape((arr.shape[0],)+star+(-1,)+(arr.shape[-1],))
@@ -153,20 +164,27 @@ def subsample(arr,fn,axis=0,nsubsample=None,nreps=1000,pct=(2.5,97.5)):
     return lb,ub
 
 def reindex(C,inds):
+    # C an NxN square array. Swap rows and columns according to inds
     return C[inds,:][:,inds]
 
 def showclustered(C,n_clusters=3,cmap=plt.cm.viridis):
+    # C an NxN square array. Cluster the rows, and reindex according to the clustering
     km = skc.KMeans(n_clusters=n_clusters).fit(C)
     plt.imshow(reindex(C,np.argsort(km.labels_)),interpolation='nearest',cmap=cmap)
     return km.labels_
 
 def ddigit(n,d):
+    # equivalent to %0{d}d %(n)
     q = str(n)
     z = '0'*(d-len(q))
     return z + str(n)
 
-def genmovie(mchunk,movpath='temp_movie/',vmax=None,K=4):
+def genmovie(mchunk,movpath='temp_movie/',vmax=None,K=None):
+    # mchunk: (T,Ny,Nx). Movie to save to movpath. 
+    # save as multiple tiffs in folder movpath
     T = mchunk.shape[0]
+    if K is None:
+        K = np.max(len(str(T)),4)
     if vmax is None:
         try:
             vmax = np.iinfo(mchunk.dtype).max
@@ -186,16 +204,24 @@ def saveaspdf(filename):
         pdf.savefig()
 
 def heatmap(x,y,bins=20):
+    # convert scatterplot to heatmap with (bins) bins on a side
     h,xedges,yedges = np.histogram2d(x,y,bins=bins)
     plt.imshow(np.rot90(np.log(h),1),interpolation='nearest',cmap=plt.cm.viridis)
     plt.axis('off')
     return xedges,yedges
 
 def plotstacked(arr,offset=1):
+    # plot the columns of arr, with each one offset by (offset) in the 
+    # y direction from the last
     addto = offset*np.arange(arr.shape[1])[np.newaxis,:]
     plt.plot(arr+addto)
 
 def trialize(arr,frm,nbefore=15,nafter=30):
+    # arr an (N,T) or (T,) array
+    # frame (Nf*2,) or (Nf,2)
+    # frame gives starting and ending frame of each trial
+    # include nbefore frames before, and nafter frames after
+    # return (N,Nf,Nt+nbefore+nafter) array, where Nt is the mean of np.diff(frame,axis=1)
     if len(frm.shape)==1:
         frm = frm.reshape((-1,2))
     if arr is None:
@@ -226,93 +252,24 @@ def trialize(arr,frm,nbefore=15,nafter=30):
     return trialwise
 
 def resample(signal1,trig1,trig2):
-        assert(trig1.sum()==trig2.sum())
-        frametrig1 = np.where(trig1)[0]
-        frametrig2 = np.where(trig2)[0]
-        signal2 = np.zeros(trig2.shape,dtype=signal1.dtype)
-        for i,tr in enumerate(frametrig1[:-1]):
-            ptno1 = frametrig1[i+1]-frametrig1[i]
-            ptno2 = frametrig2[i+1]-frametrig2[i]
-            signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
-        return signal2[frametrig2[0]:frametrig2[-1]]
+    # given signal1 (N1,), and corresponding trigger frames trig1 (Nt,)
+    # and trigger frames trig2 (Nt,) corresponding to a second signal signal2
+    # sampled at a different rate, resample signal1 according to the inferred
+    # rate of signal2
+    assert(trig1.sum()==trig2.sum())
+    frametrig1 = np.where(trig1)[0]
+    frametrig2 = np.where(trig2)[0]
+    signal2 = np.zeros(trig2.shape,dtype=signal1.dtype)
+    for i,tr in enumerate(frametrig1[:-1]):
+        ptno1 = frametrig1[i+1]-frametrig1[i]
+        ptno2 = frametrig2[i+1]-frametrig2[i]
+        signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
+    return signal2[frametrig2[0]:frametrig2[-1]]
 
-#def gen_trialwise(datafiles,nbefore=0,nafter=0,blcutoff=5,blspan=3000,ds=10,rg=None):
-#    def tack_on(to_add,trialwise,ctrialwise,strialwise,dfof):
-#        to_add[np.isnan(to_add)] = 0
-#        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-#        baseline = np.repeat(baseline,ds,axis=1)
-#        if baseline.shape[1]>to_add.shape[1]:
-#            baseline = baseline[:,:to_add.shape[1]]
-#        c = np.zeros_like(to_add)
-#        s = np.zeros_like(to_add)
-#        this_dfof = np.zeros_like(to_add)
-#        for i in range(c.shape[0]):
-#            this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
-#            c[i],s[i],_,_,_  = deconvolve(this_dfof[i],penalty=1)
-#            to_add[np.isnan(to_add)] = 0
-#            to_add = trialize(to_add,frm,nbefore,nafter)
-#        c = trialize(c,frm,nbefore,nafter)
-#        s = trialize(s,frm,nbefore,nafter)
-#        try:
-#            trialwise = np.concatenate((trialwise,to_add),axis=0)
-#            ctrialwise = np.concatenate((ctrialwise,c),axis=0)
-#            strialwise = np.concatenate((strialwise,s),axis=0)
-#            dfof = np.concatenate((dfof,this_dfof),axis=0)
-#        except:
-#            trialwise = to_add.copy()
-#            ctrialwise = c.copy()
-#            strialwise = s.copy()
-#            dfof = this_dfof.copy()
-#        return trialwise,ctrialwise,strialwise,dfof
-#        
-#    trialwise = np.array(())
-#    ctrialwise = np.array(())
-#    strialwise = np.array(())
-#    dfof = np.array(())
-#    try:
-#        for datafile in datafiles:
-#            if not rg is None:
-#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]
-#            else:
-#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]
-#            to_add = sio.loadmat(datafile,squeeze_me=True)['corrected']
-#            trialwise,ctrialwise,strialwise,dfof = tack_on(to_add,trialwise,ctrialwise,strialwise,dfof)   
-#    except:
-#        for datafile in datafiles:
-#            if not rg is None:
-#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()][rg[0]:rg[1]]
-#            else:
-#                frm = sio.loadmat(datafile.replace('.rois','.mat'),squeeze_me=True)['info']['frame'][()]
-#            with h5py.File(datafile,mode='r') as f:
-#                to_add = f['corrected'][:].T[:,1:]
-#                print(to_add.shape)
-#                trialwise,ctrialwise,strialwise,dfof = tack_on(to_add,trialwise,ctrialwise,strialwise,dfof)   
-#   #             baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-#   #             baseline = np.repeat(baseline,ds,axis=1)
-#   #             if baseline.shape[1]>to_add.shape[1]:
-#   #                 baseline = baseline[:,:to_add.shape[1]]
-#   #             c = np.zeros_like(to_add)
-#   #             s = np.zeros_like(to_add)
-#   #             to_add[np.isnan(to_add)] = 0
-#   #             for i in range(c.shape[0]):
-#   #                 dfof = (to_add[i]-baseline[i,:])/baseline[i,:]
-#   #                 try:
-#   #                     c[i],s[i],_,_,_  = deconvolve(dfof,penalty=1)
-#   #                 except:
-#   #                     print("in "+datafile+" couldn't do "+str(i))
-#   #             to_add = trialize(to_add,frm,nbefore,nafter)
-#   #             c = trialize(c,frm,nbefore,nafter)
-#   #             s = trialize(s,frm,nbefore,nafter)
-#   #             try:
-#   #                 trialwise = np.concatenate((trialwise,to_add),axis=0)
-#   #                 ctrialwise = np.concatenate((ctrialwise,c),axis=0)
-#   #                 strialwise = np.concatenate((strialwise,s),axis=0)
-#   #             except:
-#   #                 trialwise = to_add.copy()
-#   #                 ctrialwise = c.copy()
-#   #                 strialwise = s.copy()
-#    return trialwise,ctrialwise,strialwise,dfof
 def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4):
+    # convert neuropil-corrected calcium traces to df/f. compute baseline as
+    # blcutoff percentile filter, over a moving window of blspan frame, down
+    # sampled by a factor of ds. Deconvolve using OASIS, and trialize
     to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
     if to_add.max():
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
@@ -1110,7 +1067,14 @@ def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
     tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
     return tuning
 
-def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None,keylist=None,run_fn=None):
+def centered_fn_one_sigma(x,nbefore=8,nafter=8):
+    md = np.nanmedian(x[:,:,nbefore:-nafter],axis=-1)
+    mn_md = np.nanmean(md,axis=-1)
+    dist = np.sqrt(np.nansum((md-mn_md[:,np.newaxis])**2,axis=0))
+    std_dist = np.nanstd(dist)
+    return dist < std_dist
+
+def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None,keylist=None,run_fn=None,dilation_fn=None,centered_fn=None):
     # will return a pandas dataframe, consisting of data from every trial in every expt
     # and two dicts: each indexed by session id, one listing roi parameters (location, rf center, rf pval), and one listing trialwise parameters (run speed, eye position)
     with h5py.File(dsfile,mode='r') as f:
@@ -1135,6 +1099,11 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                     nafter = nafter_default
                 if run_fn is None:
                     run_fn = lambda x: x[:,nbefore:-nafter].mean(-1)>10
+                if dilation_fn is None:
+                    # dilated: pupil area > 2% of eye area
+                    dilation_fn = lambda x: np.nanmedian(x[:,nbefore:-nafter],axis=-1)>0.02
+                if centered_fn is None:
+                    centered_fn = centered_fn_one_sigma
                 data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
                 stim_id = sc0['stimulus_id'][:]
                 if 'running_speed_cm_s' in sc0:
@@ -1142,9 +1111,13 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                 else:
                     trialrun = sc0['trialrun'][:]
                 if 'pupil_area_trialwise_pct_eye_area' in sc0:
-                    trialpupil = sc0['pupil_area_trialwise_pct_eye_area']
+                    trialpupil = dilation_fn(sc0['pupil_area_trialwise_pct_eye_area'][:])
                 else:
                     trialpupil = None
+                if 'pupil_ctr_trialwise_pct_eye_diam' in sc0:
+                    trialctr = centered_fn(sc0['pupil_ctr_trialwise_pct_eye_diam'][:])
+                else:
+                    trialctr = None
                 #uparam[ikey] = [None for iparam in range(len(sc0['stimulus_parameters']))]
                 dfdict = {}
                 dfdict['data'] = data.flatten()
@@ -1168,7 +1141,8 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                     this_info = sc0[param][:][stim_id[iparam]]
                     trialdict[param.decode('UTF-8')] = this_info
                 trialdict['running'] = trialrun
-                trialdict['trialpupil'] = trialpupil
+                trialdict['dilated'] = trialpupil
+                trialdict['centered'] = trialctr
                     #dfdict[param.decode('UTF-8')] = np.tile(trial_info[np.newaxis,:],(data.shape[0],1)).flatten()
 
                 df[ikey] = pd.DataFrame(dfdict)
