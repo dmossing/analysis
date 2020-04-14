@@ -109,12 +109,15 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     # load running and pupil data
     dxdt = ut.loadmat(datafiles[0],'dxdt').flatten()
     try:
-        pupil_ctr,pupil_area = ut.loadmat(datafiles[0],['pupil_ctr','pupil_area'])
+        pupil_ctr,pupil_area,pupil_frac_ctr,pupil_frac_area = ut.loadmat(datafiles[0],['pupil_ctr','pupil_area','pupil_frac_ctr','pupil_frac_area'])
         pupil_area = pupil_area.flatten()
+        pupil_frac_area = pupil_frac_area.flatten()
     except:
         print('no eye tracking data for ' + stimfile)
         pupil_ctr = None
+        pupil_frac_ctr = None
         pupil_area = None
+        pupil_frac_area = None
 
     nplanes = len(datafiles)
 
@@ -197,15 +200,19 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
         roi_proc = load_roi_info(datafiles)
     except:
         roi_proc = None
-    frame_div = np.floor(frame/nplanes).astype(np.int64)
+    frame_div = np.floor(2*frame/nplanes).astype(np.int64)
     trialrun = ut.trialize(dxdt.T,frame,nbefore=nbefore,nafter=nafter)
     trialctr = ut.trialize(pupil_ctr,frame_div,nbefore=nbefore,nafter=nafter)
+    trialfracctr = ut.trialize(pupil_frac_ctr,frame_div,nbefore=nbefore,nafter=nafter)
     trialarea = ut.trialize(pupil_area,frame_div,nbefore=nbefore,nafter=nafter)
+    trialfracarea = ut.trialize(pupil_frac_area,frame_div,nbefore=nbefore,nafter=nafter)
 
     proc = {}
     proc['trialrun'] = trialrun
     proc['trialctr'] = trialctr
     proc['trialarea'] = trialarea
+    proc['trialfracctr'] = trialfracctr
+    proc['trialfracarea'] = trialfracarea
     proc['trialwise'] = trialwise
     proc['strialwise'] = strialwise
     proc['nbydepth'] = nbydepth
@@ -398,7 +405,9 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             this_expt.create_dataset('neuropil_trialwise',data=proc[key]['neuropil_trialwise'][:])
             if 'trialctr' in proc[key]:
                 this_expt.create_dataset('pupil_ctr_trialwise_pix',data=proc[key]['trialctr'][:])
+                this_expt.create_dataset('pupil_ctr_trialwise_pct_eye_diam',data=proc[key]['trialfracctr'][:])
                 this_expt.create_dataset('pupil_area_trialwise_pix',data=proc[key]['trialarea'][:])
+                this_expt.create_dataset('pupil_area_trialwise_pct_eye_area',data=proc[key]['trialfracarea'][:])
             this_expt.create_dataset('decon',data=decon)
             this_expt.create_dataset('t_offset',data=t_offset)
             this_expt.create_dataset('stimulus_parameters',data=stimulus_parameters)

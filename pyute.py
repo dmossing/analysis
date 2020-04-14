@@ -1168,7 +1168,7 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                     this_info = sc0[param][:][stim_id[iparam]]
                     trialdict[param.decode('UTF-8')] = this_info
                 trialdict['running'] = trialrun
-                trialdict['trialpupil'] = trialpupil
+                trialdict['pupil'] = trialpupil
                     #dfdict[param.decode('UTF-8')] = np.tile(trial_info[np.newaxis,:],(data.shape[0],1)).flatten()
 
                 df[ikey] = pd.DataFrame(dfdict)
