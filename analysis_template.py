@@ -5,7 +5,7 @@ import pyute as ut
 import os
 import h5py
 
-blcutoff = 1
+blcutoff = 5
 ds = 10
 blspan = 3000
 nbefore = 4
