@@ -1074,7 +1074,7 @@ def centered_fn_one_sigma(x,nbefore=8,nafter=8):
     std_dist = np.nanstd(dist)
     return dist < std_dist
 
-def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None,keylist=None,run_fn=None,dilation_fn=None,centered_fn=None):
+def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',nbefore_default=None,nafter_default=None,keylist=None,run_fn=None,dilation_fn=None,centered_fn=None,trialwise_dfof=False):
     # will return a pandas dataframe, consisting of data from every trial in every expt
     # and two dicts: each indexed by session id, one listing roi parameters (location, rf center, rf pval), and one listing trialwise parameters (run speed, eye position)
     with h5py.File(dsfile,mode='r') as f:
@@ -1104,7 +1104,11 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
                     dilation_fn = lambda x: np.nanmedian(x[:,nbefore:-nafter],axis=-1)>0.02
                 if centered_fn is None:
                     centered_fn = centered_fn_one_sigma
-                data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
+                if ~trialwise_dfof:
+                    data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1) # N neurons x P trials (previously x T timepoints)
+                else:
+                    data = np.nanmean(sc0[datafield][:,:,nbefore:-nafter][:],-1)/np.nanmean(sc0[datafield][:,:,:nbefore][:],-1)
+
                 stim_id = sc0['stimulus_id'][:]
                 if 'running_speed_cm_s' in sc0:
                     trialrun = run_fn(sc0['running_speed_cm_s'][:]) #[:,nbefore:-nafter].mean(-1)>10 #

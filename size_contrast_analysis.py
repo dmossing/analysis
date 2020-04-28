@@ -703,7 +703,7 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
     colors = colormap(np.linspace(0,1,ncontrast))
     if equate_0:
         zero = [z[idim][:,0].mean() for idim in range(2)]
-        zero_color = colors[0]
+        zero_color = colors[0:1]
         z = [z[idim][:,1:] for idim in range(2)]
         colors = colors[1:]
     if equate_0:
