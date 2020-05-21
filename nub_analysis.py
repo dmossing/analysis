@@ -19,7 +19,7 @@ from mpl_toolkits.mplot3d import Axes3D
 import scipy.optimize as sop
 import pdb
 
-blcutoff = 1
+blcutoff = 20
 ds = 10
 blspan = 3000
 nbefore = 4

@@ -5,7 +5,7 @@ import pyute as ut
 import os
 import h5py
 
-wlcutoff = 1
+blcutoff = 20 # 1 before
 ds = 10
 blspan = 3000
 nbefore = 4
@@ -33,8 +33,11 @@ def load_roi_info(datafiles):
     use_first,use_second = [not outputs[0] is None for outputs in [outputs1,outputs2]]
 
     if use_first:
-        mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-        mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
+        iplane = 0
+        mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],varnames1)
+        shp = mean_image_green.shape
+        mean_red_channel = np.zeros((nplanes,)+shp)
+        mean_green_channel = np.zeros((nplanes,)+shp)
         for iplane in range(nplanes):
             mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],varnames1)
             mean_green_channel[iplane] = mean_image_green
@@ -42,12 +45,15 @@ def load_roi_info(datafiles):
         mean_red_channel_corrected = None
         mean_green_channel_enhanced = None
     elif use_second:
-        mean_green_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-        mean_green_channel_enhanced = np.zeros((nplanes,)+cell_mask.shape[1:])
-        mean_red_channel = np.zeros((nplanes,)+cell_mask.shape[1:])
-        mean_red_channel_corrected = np.zeros((nplanes,)+cell_mask.shape[1:])
+        iplane = 0
+        mean_image_green,mean_image_green_enhanced,mean_image_red,mean_image_red_corrected = ut.loadmat(datafiles[iplane],varnames2)
+        shp = mean_image_green.shape
+        mean_green_channel = np.zeros((nplanes,)+shp)
+        mean_green_channel_enhanced = np.zeros((nplanes,)+shp)
+        mean_red_channel = np.zeros((nplanes,)+shp)
+        mean_red_channel_corrected = np.zeros((nplanes,)+shp)
         for iplane in range(nplanes):
-            mean_image_green,mean_image_green_enhanced,mean_image_red,mean_image_red_corrected = ut.loadmat(datafiles[iplane],['meanImg','meanImgE','meanImg_chan2','meanImg_chan2_corrected'])
+            mean_image_green,mean_image_green_enhanced,mean_image_red,mean_image_red_corrected = ut.loadmat(datafiles[iplane],varnames2)
             #mean_image_green,mean_image_red = ut.loadmat(datafiles[iplane],['meanImg','meanImg_chan2_corrected'])
             mean_red_channel[iplane] = mean_image_red
             mean_red_channel_corrected[iplane] = mean_image_red_corrected
@@ -196,10 +202,10 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     #    mean_green_channel = None
     #    mean_green_channel_enhanced = None
     # trialize running and pupil data
-    try:
-        roi_proc = load_roi_info(datafiles)
-    except:
-        roi_proc = None
+    #try:
+    roi_proc = load_roi_info(datafiles)
+    #except:
+    #    roi_proc = None
     frame_div = np.floor(2*frame/nplanes).astype(np.int64)
     trialrun = ut.trialize(dxdt.T,frame,nbefore=nbefore,nafter=nafter)
     trialctr = ut.trialize(pupil_ctr,frame_div,nbefore=nbefore,nafter=nafter)
