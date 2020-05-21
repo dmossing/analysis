@@ -286,7 +286,7 @@ def resample(signal1,trig1,trig2):
         signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
     return signal2[frametrig2[0]:frametrig2[-1]]
 
-def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=True):
+def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=False,normalize_tavg=False):
     # convert neuropil-corrected calcium traces to df/f. compute baseline as
     # blcutoff percentile filter, over a moving window of blspan frame, down
     # sampled by a factor of ds. Deconvolve using OASIS, and trialize
@@ -313,6 +313,8 @@ def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,naf
             if reestimate_noise:
                 sn = ofun.GetSn(y-c[i])
                 c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=(g[i],),sn=sn)
+            if normalize_tavg:
+                s[i] = s[i]/(1-g[i])
 
     else:
         this_dfof = np.zeros_like(to_add)
@@ -376,10 +378,10 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
             with h5py.File(datafile,mode='r') as f:
                 to_add = f['corrected'][:].T
         #to_add,c,s,this_dfof = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm)
-        to_add,c,s,this_dfof,b,g = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm)
+        to_add,c,s,this_dfof,b,g = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm,normalize_tavg=True,b_nonneg=True,g0=(None,),reestimate_noise=False)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
-        strialwise = tack_on(s,strialwise/(1-g))
+        strialwise = tack_on(s,strialwise)
         dfof = tack_on(this_dfof,dfof)
 
     return trialwise,ctrialwise,strialwise,dfof
