@@ -9,7 +9,8 @@ import scipy.misc as smi
 import scipy.io as sio
 import h5py
 import scipy.ndimage.filters as sfi
-from oasis.functions import deconvolve
+import oasis.functions as ofun
+#from oasis.functions import deconvolve
 import scipy.optimize as sop
 import scipy.ndimage.measurements as snm
 import re
@@ -110,6 +111,7 @@ def overlay_mg(a,b,normalize=True):
     return np.dstack((imr,img,imb))
 
 def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
+    np.random.seed(0)
     # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
     # and report percentiles pct
     N = arr.shape[axis]
@@ -124,7 +126,24 @@ def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
     return tuple([np.percentile(stat,p,axis=-1) for p in pct])
 
+def bootstat(arr,fns,axis=0,nreps=1000,pct=(2.5,97.5)):
+    np.random.seed(0)
+    # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
+    # and report percentiles pct
+    N = arr.shape[axis]
+    c = np.random.choice(np.arange(N),size=(N,nreps))
+    L = len(arr.shape)
+    resamp=np.rollaxis(arr,axis,0)
+    resamp=resamp[c]
+    resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
+    resamp=np.rollaxis(resamp,0,L+1)
+    stat = [fn(resamp,axis=axis) for fn in fns]
+    #lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
+    #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
+    return stat
+
 def bootstrap_df(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
+    np.random.seed(0)
     # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
     # and report percentiles pct
     N = df.shape[axis]
@@ -141,6 +160,7 @@ def bootstrap_df(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     return tuple([np.percentile(stat,p,axis=-1) for p in pct])
 
 def subsample(arr,fn,axis=0,nsubsample=None,nreps=1000,pct=(2.5,97.5)):
+    np.random.seed(0)
     # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
     # and report percentiles pct
     N = arr.shape[axis]
@@ -266,10 +286,12 @@ def resample(signal1,trig1,trig2):
         signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
     return signal2[frametrig2[0]:frametrig2[-1]]
 
-def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4):
+def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=True):
     # convert neuropil-corrected calcium traces to df/f. compute baseline as
     # blcutoff percentile filter, over a moving window of blspan frame, down
     # sampled by a factor of ds. Deconvolve using OASIS, and trialize
+    # b_nonneg: whether to constrain baseline to be nonnegative
+    # g0: if not none, pre-defined AR(1) parameter
     to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
     if to_add.max():
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
@@ -280,20 +302,29 @@ def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,naf
             baseline = baseline[:,:to_add.shape[1]]
         c = np.zeros_like(to_add)
         s = np.zeros_like(to_add)
+        b = np.zeros((to_add.shape[0],))
+        g = np.zeros((to_add.shape[0],))
         this_dfof = np.zeros_like(to_add)
         for i in range(c.shape[0]):
             this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
             this_dfof[i][np.isnan(this_dfof[i])] = 0
-            c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+            y = this_dfof[i].astype(np.float64)
+            c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=g0)
+            if reestimate_noise:
+                sn = ofun.GetSn(y-c[i])
+                c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=(g[i],),sn=sn)
+
     else:
         this_dfof = np.zeros_like(to_add)
         c = np.zeros_like(to_add)
         s = np.zeros_like(to_add)
+        b = np.zeros((to_add.shape[0],))
+        g = np.zeros((to_add.shape[0],2))
     to_add = trialize(to_add,frm,nbefore,nafter)
     c = trialize(c,frm,nbefore,nafter)
     s = trialize(s,frm,nbefore,nafter)
     d = trialize(this_dfof,frm,nbefore,nafter)
-    return to_add,c,s,d #,this_dfof #(non-trialized)
+    return to_add,c,s,d,b,g #,this_dfof #(non-trialized)
 
 def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None):
     
@@ -319,7 +350,7 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
    #         for i in range(c.shape[0]):
    #             this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
    #             this_dfof[i][np.isnan(this_dfof[i])] = 0
-   #             c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+   #             c[i],s[i],_,_,_  = ofun.deconvolve(this_dfof[i].astype(np.float64),penalty=1)
    #     else:
    #         this_dfof = np.zeros_like(to_add)
    #         c = np.zeros_like(to_add)
@@ -344,10 +375,11 @@ def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=N
         except:
             with h5py.File(datafile,mode='r') as f:
                 to_add = f['corrected'][:].T
-        to_add,c,s,this_dfof = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm)
+        #to_add,c,s,this_dfof = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm)
+        to_add,c,s,this_dfof,b,g = process_ca_traces(to_add,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff,blspan=blspan,ds=ds,frm=frm)
         trialwise = tack_on(to_add,trialwise)
         ctrialwise = tack_on(c,ctrialwise)
-        strialwise = tack_on(s,strialwise)
+        strialwise = tack_on(s,strialwise/(1-g))
         dfof = tack_on(this_dfof,dfof)
 
     return trialwise,ctrialwise,strialwise,dfof
@@ -760,7 +792,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
                 this_dfof[i] = (to_add[i]-baseline[i,:])/np.maximum(fudge,baseline[i,:])
             else:
                 print('roi '+str(i)+' all zeros')
-            c[i],s[i],_,_,_  = deconvolve(this_dfof[i].astype(np.float64),penalty=1)
+            c[i],s[i],_,_,_  = ofun.deconvolve(this_dfof[i].astype(np.float64),penalty=1)
             #except:
             #    print("couldn't do "+str(i))
         #to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
@@ -1177,6 +1209,7 @@ def nested_list_to_flat_plus_indices(nested):
     return final
     
 def noisy_scatter(x,y,noise=0.1):
+    np.random.seed(0)
     def prepare_to_plot(u):
         return u + noise*np.random.randn(*u.shape)
     xplot = prepare_to_plot(x)
@@ -1326,6 +1359,7 @@ def compute_tuning_ret_run(dsfile,running=True,center=True,fieldname='decon',key
     return tuning
 
 def compute_tuning_ret_run_subsample(dsfile,running=True,center=True,fieldname='decon',keylist=None,expttype='size_contrast_opto_0',dcutoff=10,sample=None):
+    np.random.seed(0)
     with h5py.File(dsfile,mode='r') as f:
         if keylist is None:
             keylist = [key for key in f.keys()]
@@ -1452,6 +1486,7 @@ def gen_condition_list(ti,selector,filter_selector=lambda x:True):
     return condition_list,params
 
 def output_training_test(condition_list,training_frac):
+    np.random.seed(0)
     # output training and test sets balanced for conditions
     # condition list, generated by gen_condition_list, has a row for each condition that should be equally assorted
     if not isinstance(condition_list,list):
