@@ -303,6 +303,12 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             # returns value float
             Optoterm = compute_opto_error(W)
             cost = wtX*Xterm + wtY*Yterm + wtEta*Etaterm + wtXi*Xiterm + wtOpto*Optoterm
+            if isinstance(Xterm,float):
+                print('X:%f'%(wtX*Xterm))
+                print('Y:%f'%(wtY*Yterm))
+                print('Eta:%f'%(wtEta*Etaterm))
+                print('Xi:%f'%(wtXi*Xiterm))
+                print('Opto:%f'%(wtOpto*Optoterm))
             #lbls = ['Yterm']
             #vars = [Yterm]
             lbls = ['cost']
