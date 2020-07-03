@@ -70,15 +70,31 @@ def naka_rushton_all(c,params,ncells):
     aux = (c[np.newaxis]/c50[:,np.newaxis])**n
     return (a[:,np.newaxis]*aux + b)/(1+aux)
 
-def fit_opt_params_two_n(c,R):
+def zip_pairs(list_of_pairs):
+    lb = [lp[0] for lp in list_of_pairs]
+    ub = [lp[1] for lp in list_of_pairs]
+    return (lb,ub)
+
+def fit_opt_params_two_n(c,R,Rsem=None):
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
     c50_0 = 50*np.ones(nsizes)
     n_top_0 = 2
     n_bottom_0 = 2
+    bds_a = [(0,np.inf) for a in a_0]
+    bds_b = [(0,np.inf)]
+    bds_c50 = [(0,0.75*np.max(c)) for isize in range(nsizes)]
+    bds_n = [(0,4) for ivar in range(2)]
+    bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
     params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_top_0,),(n_bottom_0,)))
-    params_opt = sop.least_squares(lambda params: (R-naka_rushton_two_n(c,params,nsizes)).flatten(),params_0,bounds=(0,np.inf))
+    if Rsem is None:
+        Rsem = np.ones_like(R)
+    else:
+        Rsem[Rsem==0] = np.min(Rsem[Rsem>0])
+    def compute_this_cost(params):
+        return (R-naka_rushton_two_n(c,params,nsizes))/Rsem
+    params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
     return params_opt['x']
 
 def naka_rushton_two_n(c,params,ncells):

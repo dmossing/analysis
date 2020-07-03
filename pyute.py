@@ -124,7 +124,7 @@ def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     stat = fn(resamp,axis=axis)
     #lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
     #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
-    return tuple([np.percentile(stat,p,axis=-1) for p in pct])
+    return tuple([np.nanpercentile(stat,p,axis=-1) for p in pct])
 
 def bootstat(arr,fns,axis=0,nreps=1000,pct=(2.5,97.5)):
     np.random.seed(0)
@@ -880,8 +880,11 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
 def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False):
+    # rows of arr: repetitions to be averaged
+    # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
     lb_tgt,ub_tgt = bootstrap(arr,fn=np.nanmean,pct=pct)
+    print(np.nanmax(lb_tgt))
     if norm_to_max:
         normby = mn_tgt.max(-1)[:,np.newaxis] - mn_tgt.min(-1)[:,np.newaxis]
         baseline = mn_tgt.min(-1)[:,np.newaxis]
@@ -941,9 +944,14 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
-    plt.errorbar(x,mn_tgt,yerr=errors,c=c,linestyle=linestyle) #,fmt=None)
+    #if ~isinstance(c,str):
+    #    cc = c[np.newaxis]
+    #else:
+    #    cc = c
+    cc = c.copy()
+    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle) #,fmt=None)
     plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth)
-    plt.scatter(x,mn_tgt,c=c,s=markersize)
+    plt.scatter(x,mn_tgt,c=cc,s=markersize)
 
 def get_dict_ind(opt,i):
     opt_temp = {}
@@ -1100,6 +1108,30 @@ def compute_tuning(data,stim_id,cell_criteria=None,trial_criteria=None):
         tuning[:,itype] = np.nanmean(data[cell_criteria][:,these_trials],1)
     tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
     return tuning
+
+def compute_tuning_tavg_with_sem(data,stim_id,cell_criteria=None,trial_criteria=None,nbefore=8,nafter=8):
+    ndims = stim_id.shape[0]
+    maxind = tuple(stim_id.max(1).astype('int')+1)
+    if cell_criteria is None:
+        cell_criteria = np.ones((data.shape[0],),dtype='bool')
+    if trial_criteria is None:
+        trial_criteria = np.ones((data.shape[1],),dtype='bool')
+    nparams = len(maxind)
+    ntrialtypes = int(np.prod(maxind))
+    tuning = np.zeros((data[cell_criteria].shape[0],ntrialtypes))
+    tuning_sem = np.zeros((data[cell_criteria].shape[0],ntrialtypes))
+    for itype in range(ntrialtypes):
+        imultitype = np.unravel_index(itype,maxind)
+        these_trials = trial_criteria.copy()
+        for iparam in range(nparams):
+            these_trials = np.logical_and(these_trials,stim_id[iparam]==imultitype[iparam])
+        this_data = np.nanmean(data[cell_criteria][:,these_trials][:,:,nbefore:-nafter],-1)
+        tuning[:,itype] = np.nanmean(this_data,1)
+        n_non_nan = np.sum(~np.isnan(this_data),1)
+        tuning_sem[:,itype] = np.nanstd(this_data,1)/np.sqrt(n_non_nan)
+    tuning = np.reshape(tuning,(tuning.shape[0],)+maxind+tuning.shape[2:])
+    tuning_sem = np.reshape(tuning_sem,(tuning_sem.shape[0],)+maxind+tuning_sem.shape[2:])
+    return tuning,tuning_sem
 
 def centered_fn_one_sigma(x,nbefore=8,nafter=8):
     md = np.nanmedian(x[:,:,nbefore:-nafter],axis=-1)
