@@ -5,13 +5,104 @@ import matplotlib.pyplot as plt
 
 # fit models of the form (a*(c/c50)^n + b)/((c/c50)^n + 1), where subsets of a, b, and c50 are allowed to vary for each size
 
-def fit_opt_params(c,r):
-    a_0 = r.max()
+#def fit_opt_params(c,r):
+#    a_0 = r.max()
+#    b_0 = 0
+#    c50_0 = 50
+#    n_0 = 1
+#    params_0 = np.array((a_0,b_0,c50_0,n_0))
+#    params_opt = sop.least_squares(lambda params: r-naka_rushton(c,params),params_0,bounds=((0,0,0,0),(np.inf,np.inf,200,5)))
+#    return params_opt['x']
+
+def fit_opt_params(c,R,Rsem=None):
+    nsizes = R.shape[0]
+    a_0 = R.max(1)
     b_0 = 0
-    c50_0 = 50
-    n_0 = 1
-    params_0 = np.array((a_0,b_0,c50_0,n_0))
-    params_opt = sop.least_squares(lambda params: r-naka_rushton(c,params),params_0,bounds=((0,0,0,0),(np.inf,np.inf,200,5)))
+    c50_0 = c[1]#c.max()/2*np.ones(nsizes)
+    n_0 = 2
+    bds_a = [(0,np.inf) for a in a_0]
+    bds_b = [(0,np.inf)]
+    bds_c50 = [(0,np.max(c)) for isize in range(nsizes)]
+    bds_n = [(0,4) for ivar in range(1)]
+    bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
+    params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_0,)))
+    if Rsem is None:
+        Rsem = np.ones_like(R)
+    else:
+        Rsem[Rsem==0] = np.min(Rsem[Rsem>0])
+    def compute_this_cost(params):
+        return (R-naka_rushton(c,params,nsizes))/Rsem
+    params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
+    return params_opt['x']
+
+def fit_opt_params_offset(c,R,Rsem=None):
+    nsizes = R.shape[0]
+    a_0 = R.max(1)
+    b_0 = 0
+    c50_0 = c.max()/2*np.ones(nsizes)
+    n_0 = 2
+    bds_a = [(0,np.inf) for a in a_0]
+    bds_b = [(0,np.inf)]
+    bds_c50 = [(0,np.max(c)) for isize in range(nsizes)]
+    bds_n = [(0,4) for ivar in range(1)]
+    bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
+    params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_0,)))
+    if Rsem is None:
+        Rsem = np.ones_like(R)
+    else:
+        Rsem[Rsem==0] = np.min(Rsem[Rsem>0])
+    def compute_this_cost(params):
+        return (R-naka_rushton_offset(c,params,nsizes))/Rsem
+    params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
+    return params_opt['x']
+
+def fit_opt_params_monotonic(c,R,Rsem=None):
+    nsizes = R.shape[0]
+    cmax = (np.argmax(R,axis=1)).astype('int')
+    for isize in range(R.shape[0]):
+        R[isize,cmax[isize]+2:] = -1
+    a_0 = R.max(1)
+    b_0 = 0
+    c50_0 = c[cmax]/2
+    n_0 = 2
+    bds_a = [(0,np.inf) for a in a_0]
+    bds_b = [(0,np.inf)]
+    bds_c50 = [(0,cc+1) for cc in c[cmax]]
+    bds_n = [(0,4) for ivar in range(1)]
+    bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
+    params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_0,)))
+    if Rsem is None:
+        Rsem = np.ones_like(R)
+    else:
+        Rsem[Rsem==0] = np.min(Rsem[Rsem>0])
+    def compute_this_cost(params):
+        return (R>0)*(R-naka_rushton(c,params,nsizes))/Rsem
+    params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
+    return params_opt['x']
+
+def fit_opt_params_two_n_monotonic(c,R,Rsem=None):
+    nsizes = R.shape[0]
+    cmax = (np.argmax(R,axis=1)).astype('int')
+    for isize in range(R.shape[0]):
+        R[isize,cmax[isize]+2:] = -1
+    a_0 = R.max(1)
+    b_0 = 0
+    c50_0 = c[cmax]/2
+    n_top_0 = 2
+    n_bottom_0 = 2
+    bds_a = [(0,np.inf) for a in a_0]
+    bds_b = [(0,np.inf)]
+    bds_c50 = [(0,cc+1) for cc in c[cmax]]
+    bds_n = [(0,4) for ivar in range(2)]
+    bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
+    params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_top_0,n_bottom_0)))
+    if Rsem is None:
+        Rsem = np.ones_like(R)
+    else:
+        Rsem[Rsem==0] = np.min(Rsem[Rsem>0])
+    def compute_this_cost(params):
+        return (R>0)*(R-naka_rushton_two_n(c,params,nsizes))/Rsem
+    params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
     return params_opt['x']
 
 #def fit_opt_params_tv(c,r):
@@ -26,12 +117,28 @@ def fit_opt_params(c,r):
 #    cinterp = np.arange((100))
 #    np.abs(np.diff(naka_rushton_all
 
-def naka_rushton(c,params):
-    a = params[0]
-    b = params[1]
-    c50 = params[2]
-    n = params[3]
-    return (a*(c/c50)**n + b)/(1+(c/c50)**n)
+#def naka_rushton(c,params):
+#    a = params[0]
+#    b = params[1]
+#    c50 = params[2]
+#    n = params[3]
+#    return (a*(c/c50)**n + b)/(1+(c/c50)**n)
+
+def naka_rushton(c,params,ncells):
+    a = params[:ncells]
+    b = params[ncells]
+    c50 = params[ncells+1:-1]
+    n = params[-1]
+    aux = (c[np.newaxis]/c50[:,np.newaxis])
+    return (a[:,np.newaxis]*aux**n + b)/(1+aux**n)
+
+def naka_rushton_offset(c,params,ncells):
+    a = params[:ncells]
+    b = params[ncells]
+    c50 = params[ncells+1:-1]
+    n = params[-1]
+    aux = (c[np.newaxis]/c50[:,np.newaxis])
+    return (a[:,np.newaxis]*aux**n)/(1+aux**n) + b
 
 def fit_opt_params_only_a(c,R):
     nsizes = R.shape[0]
@@ -79,7 +186,7 @@ def fit_opt_params_two_n(c,R,Rsem=None):
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
-    c50_0 = 50*np.ones(nsizes)
+    c50_0 = c.max()/2*np.ones(nsizes)
     n_top_0 = 2
     n_bottom_0 = 2
     bds_a = [(0,np.inf) for a in a_0]

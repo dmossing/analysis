@@ -70,6 +70,43 @@ def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast
                     displacement[ikey][~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
     return tuning,uparam,displacement,pval
 
+def get_ret_info(dsfile,expttype='size_contrast_0'):
+    # take in an HDF5 data struct, and convert to an n-dimensional matrix
+    # describing the tuning curve of each neuron. For size-contrast stimuli, 
+    # the dimensions of this matrix are ROI index x size x contrast x direction x time. 
+    # This outputs a list of such matrices, where each element is one imaging session
+    with h5py.File(dsfile,mode='r') as f:
+        keylist = [key for key in f.keys()]
+        ret_info = [None for i in range(len(keylist))]
+        for ikey in range(len(keylist)):
+            session = f[keylist[ikey]]
+            print(session)
+            #print([key for key in session.keys()])
+            if expttype in session:
+                sc0 = session[expttype]
+                if 'rf_displacement_deg' in sc0:
+                    pval = sc0['rf_mapping_pval'][:]
+                    sqerror = session['retinotopy_0']['rf_sq_error'][:]
+                    sigma = session['retinotopy_0']['rf_sigma'][:]
+                    amplitude = session['retinotopy_0']['rf_amplitude'][:]
+                    cell_center = session['cell_center'][:]
+                    rf_center = sc0['rf_displacement_deg'][:].T
+                    X = cell_center
+                    y = rf_center
+                    rf_conditions = [ut.k_and(~np.isnan(X[:,0]),~np.isnan(y[:,0])),sqerror<0.75,sigma>3.3,pval<0.1]
+                    lkat = np.ones((X.shape[0],),dtype='bool')
+                    for cond in rf_conditions:
+                        lkat_new = (lkat & cond)
+                        if lkat_new.sum()>=5:
+                            lkat = lkat_new.copy()
+                    linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
+                    ret_map_loc = np.zeros_like(y)
+                    ret_map_loc[~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
+                    ret_info[ikey] = {'pval':pval,'sqerror':sqerror,'sigma':sigma,\
+                            'cell_center':cell_center,'rf_center':rf_center,\
+                            'ret_map_loc':ret_map_loc,'amplitude':amplitude}
+    return ret_info
+
 def compute_tunings(dsnames,datafield='decon',running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,fill_nans_under_cutoff=False):
     # compute tuning as above, for each of a list of HDF5 files each corresponding to a particular cell type
     tunings = []
@@ -199,7 +236,7 @@ def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.
             rs[icelltype].append(raligned)
     return rs
 
-def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,running=True,expttype='size_contrast_0'):
+def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -210,7 +247,7 @@ def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,ru
     nbefore = 8
     nafter = 8
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -234,7 +271,7 @@ def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,ru
         rs.append([raligned,rmisaligned])
     return rs
 
-def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0'):
+def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -245,7 +282,7 @@ def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,m
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -281,7 +318,7 @@ def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,m
         rs.append(this_rs)
     return rs
 
-def gen_rs_modal_uparam_all(dsnames=None,selection=None,modal_uparam=None,running=True,expttype='size_contrast_0'):
+def gen_rs_modal_uparam_all(dsnames=None,selection=None,modal_uparam=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -292,7 +329,7 @@ def gen_rs_modal_uparam_all(dsnames=None,selection=None,modal_uparam=None,runnin
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff)
     nrois = look_up_nrois(dsnames)
     
     rs = []

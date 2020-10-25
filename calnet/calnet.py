@@ -10,7 +10,7 @@ class Model(object):
     Wsx = None
     Wsy = None
     s02 = None
-    k = None
+    K = None
     kappa = None
     XX = None
     XXp = None
@@ -51,6 +51,9 @@ class Model(object):
         
     def compute_f_(self,Eta,Xi,s02):
         return self.rate_f(Eta,Xi**2+np.concatenate([s02 for ipixel in range(self.nS*self.nT)],axis=0))
+
+    def compute_fprime_(self,Eta,Xi,s02):
+        return self.rate_fprime(Eta,Xi**2+np.concatenate([s02 for ipixel in range(self.nS*self.nT)],axis=0))
         
     def u_fn_m(self,XX,YY):
         return self.u_fn(XX,YY,self.WWmx,self.WWmy)
@@ -58,18 +61,37 @@ class Model(object):
     def u_fn_s(self,XX,YY):
         return self.u_fn(XX,YY,self.WWsx,self.WWsy)
         
-    def fXY(self,XX,YY,istim=None,res_factor=1.):
+    def fXY(self,XX,YY,istim=None,res_factor=1.,current_inj=None):
         if istim is None:
             Eta = res_factor*self.resEta + self.u_fn_m(XX,YY)
             Xi = res_factor*self.resXi + self.u_fn_s(XX,YY)
         else:
             Eta = res_factor*self.resEta[istim] + self.u_fn_m(XX,YY)
             Xi = res_factor*self.resXi[istim] + self.u_fn_s(XX,YY)
+        if not current_inj is None:
+            Eta = Eta + current_inj
         return self.compute_f_(Eta,Xi,self.s02)
+
+    def fprimeXY(self,XX,YY,istim=None,res_factor=1.,current_inj=None):
+        if istim is None:
+            Eta = res_factor*self.resEta + self.u_fn_m(XX,YY)
+            Xi = res_factor*self.resXi + self.u_fn_s(XX,YY)
+        else:
+            Eta = res_factor*self.resEta[istim] + self.u_fn_m(XX,YY)
+            Xi = res_factor*self.resXi[istim] + self.u_fn_s(XX,YY)
+        if not current_inj is None:
+            Eta = Eta + current_inj
+        return self.compute_fprime_(Eta,Xi,self.s02)
      
     def fY(self,YY,istim=None,residuals_on=True):
         if residuals_on:
             return self.fXY(self.XX[istim],YY,istim=istim,res_factor=1.)
+        else:
+            return self.fXY(self.XX[istim],YY,istim=istim,res_factor=0.)    
+
+    def fprimeY(self,YY,istim=None,residuals_on=True):
+        if residuals_on:
+            return self.fprimeXY(self.XX[istim],YY,istim=istim,res_factor=1.)
         else:
             return self.fXY(self.XX[istim],YY,istim=istim,res_factor=0.)    
 
@@ -88,12 +110,15 @@ class ModelOri(Model):
         self.nS = nS
         self.nT = nT
         self.nN = self.Eta.shape[0]
+
+        if self.K is None:
+            self.K = self.k
         
         wws = ['WWmx','WWmy','WWsx','WWsy']
         ws = ['Wmx','Wmy','Wsx','Wsy']
         for w,ww in zip(ws,wws):
             W = getattr(self,w)
-            WW = calnet.utils.gen_Weight_k_kappa_t(W,self.k,self.kappa,self.T)
+            WW = calnet.utils.gen_Weight_k_kappa_t(W,self.K,self.kappa,self.T)
             setattr(self,ww,WW)
         
         self.YY = self.compute_f_(self.Eta,self.Xi,self.s02)

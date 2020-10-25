@@ -404,8 +404,9 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
         these_uparams = [these_uparams[i] for i in sel if not these_tunings[i] is None]
         these_displacements = [these_displacements[i].T for i in sel if not these_tunings[i] is None]
         these_pvals = [these_pvals[i] for i in sel if not these_tunings[i] is None]
+        these_tunings_sem = [these_tunings_sem[i] for i in sel if not these_tunings[i] is None]
+        these_expt_ids = [i for i in sel if not these_tunings[i] is None]
         these_tunings = [these_tunings[i] for i in sel if not these_tunings[i] is None]
-        these_tunings_sem = [these_tunings_sem[i] for i in sel if not these_tunings_sem[i] is None]
         nexpt = len(these_tunings)
         if nexpt>0:
             aligned = [include_aligned(d,dcutoff,p,pval_cutoff,less=True) for d,p in zip(these_displacements,these_pvals)]
@@ -418,7 +419,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
                 nrois = [get_nroi(tt[cc]) for tt,cc in zip(these_tunings,criterion)]
                 ra = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
                 ra_sem = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
-                expt_ida = [np.ones((nroi,))*iexpt for iexpt,nroi in enumerate(nrois)]
+                expt_ida = [np.ones((nroi,))*these_expt_ids[iexpt] for iexpt,nroi in enumerate(nrois)]
                 roi_ida = [np.where(cc)[0] for cc in criterion]
                 for iexpt in range(nexpt):
                     assign_from_uparam(ra[iexpt],modal_uparam,these_tunings[iexpt][criterion[iexpt]],these_uparams[iexpt])
@@ -801,6 +802,8 @@ def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2):
     return WW
 
 def circulate(V,M,nZ,Mu=None):
+    if not M.size:
+        return V
     Vpartlist = [V*(M[np.newaxis,:]**np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
     if Mu is None:
         Mu = np.ones((nZ,))
@@ -821,3 +824,108 @@ def u_fn_k_kappa_t(XX,YY,Wx,Wy,k,kappa,T):
 def u_fn_WW(XX,YY,WWx,WWy):
     return XX @ WWx + YY @ WWy
 
+def print_labeled(lbl,var):
+    print(lbl+': '+str(var))
+
+def combine_inside_out(item,combine_fn,niter=0):
+    combined_item = item.copy()
+    for iiter in range(niter):
+        for iel in range(len(combined_item)):
+            combined_item[iel] = combine_fn(item[iel])
+    return combined_item
+
+def access_nested_list_element(this_list,imulti):
+    current_el = this_list.copy()
+    for ithis in imulti:
+        current_el = current_el[ithis]
+    return current_el
+
+def flatten_nested_list_of_2d_arrays(this_list):
+    # innermost index changing most quickly, outermost most slowly
+    current_el = this_list.copy()
+    shp = tuple(())
+    while isinstance(current_el,list):
+        shp = shp + (len(current_el),)
+        current_el = current_el[0]
+    nflat = np.prod(shp)
+    n0,n1 = current_el.shape
+    to_return = np.zeros((n0,n1*nflat))
+    for iflat in range(nflat):
+        imulti = np.unravel_index(iflat,shp)
+        to_return[:,iflat*n1:(iflat+1)*n1] = access_nested_list_element(this_list,imulti)
+    return to_return
+        
+def add_up_lists(lst):
+    to_return = []
+    for item in lst:
+        to_return.append(item)
+    return to_return
+
+def parse_thing(V,shapes):
+    for shape in shapes:
+        if type(shape) is int:
+            shape = (shape,)
+    sizes = [np.prod(shape) for shape in shapes]
+    sofar = 0
+    outputs = []
+    for size,shape in zip(sizes,shapes):
+        if size > 1:
+            new_element = V[sofar:sofar+size].reshape(shape)
+        elif size==1:
+            new_element = V[sofar] # if just a float
+        elif size==0:
+            new_element = np.array(())
+        outputs.append(new_element)
+        sofar = sofar + size
+    return outputs
+    
+def compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nS=2,nT=2):
+    tot = 0
+    this_ncelltypes = len(pc_list[0][0])
+    for iel in range(stim_deriv.shape[1]):
+        iS,iT,icelltype = np.unravel_index(iel,(nS,nT,this_ncelltypes))
+        sigma2 = np.sum(stim_deriv[:,iel]**2)
+        #print_labeled('sigma2',sigma2)
+        if sigma2>0 and not pc_list[iS][iT][icelltype] is None:
+            inner_prod = np.sum([pc[0]**2*np.sqrt(sigma2)*inner_product_(stim_deriv[:,iel],pc[1]) for pc in pc_list[iS][iT][icelltype]])
+        else:
+            inner_prod = 0 
+        tot = tot - 1/noise/(noise + sigma2)*inner_prod #.sum()
+    return tot
+
+def compute_log_det_sig2(stim_deriv,noise):
+        sigma2 = inner_product_(stim_deriv,stim_deriv) #np.sum(stim_deriv**2,0)
+        return np.sum([np.log(s2+noise) for s2 in sigma2])
+
+def compute_mahalanobis_dist(stim_deriv,noise,mu_data,mu_model):
+        # in the case where stim_deriv = 0 (no variability model) only the noise (sqerror) term contributes
+    mu_dist = mu_model-mu_data
+    inner_prod = inner_product_(stim_deriv,mu_dist) #np.einsum(stim_deriv,mu_dist,'ik,jk->ij')
+    sigma2 = inner_product_(stim_deriv,stim_deriv) #np.sum(stim_deriv**2,0)
+    noise_term = 1/noise*np.sum(inner_product_(mu_dist,mu_dist)) #np.inner(mu_dist,mu_dist)
+    cov_term = np.sum([-1/noise/(noise+s2)*np.sum(ip**2) for s2,ip in zip(sigma2,inner_prod)])
+    return noise_term + cov_term
+    
+def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nS=2,nT=2):
+        # omitting a few terms: - d - log(sig1) # where d is the dimensionality
+        # in the case where stim_deriv = 0 (no variability model) only the noise (sqerror) 
+        # term in mahalanobis_dist contributes
+    log_det = compute_log_det_sig2(stim_deriv,noise)
+    tr_sig_quotient = compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nS=nS,nT=nT)
+    maha_dist = compute_mahalanobis_dist(stim_deriv,noise,mu_data,mu_model)
+    lbls = ['log_det','tr_sig_quotient','maha_dist']
+    vars = [log_det,tr_sig_quotient,maha_dist]
+    #for lbl,var in zip(lbls,vars):
+    #    print_labeled(lbl,var)
+    return 0.5*(log_det + tr_sig_quotient + maha_dist)
+    
+def inner_product_(a,b):
+    return np.sum(a*b,0)
+
+def minus_sum_log_ceil(log_arg,big_val):
+    if np.all(log_arg>0):
+        cost = -np.sum(np.log(log_arg))
+    else:
+        ok = (log_arg>0)
+        cost = -np.sum(np.log(log_arg[ok])) + big_val*np.sum(~ok)
+    return cost

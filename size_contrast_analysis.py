@@ -676,7 +676,7 @@ def add_data_struct_h5_simply(filename, cell_type='PyrL23', keylist=None, frame_
     at.add_ret_to_data_struct(filename,keylist=keylist,proc=proc,grouplist=grouplist)
     return grouplist
 
-def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucontrast=np.array((0,6,12,25,50,100)),vmin=None,vmax=None,flipud=False):
+def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100)),vmin=None,vmax=None,flipud=False,cmap=plt.cm.viridis):
     this_usize = [str(int(np.floor(this))) for this in usize]
     this_ucontrast = [str(int(np.floor(this))) for this in ucontrast]
     nsize = len(usize)
@@ -684,7 +684,7 @@ def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36)),ucont
     to_show = arr.copy()
     if flipud:
         to_show = np.flipud(to_show)
-    plt.imshow(to_show,vmin=vmin,vmax=vmax,extent=[-0.5,ncontrast-0.5,-0.5,nsize-0.5])
+    plt.imshow(to_show,vmin=vmin,vmax=vmax,extent=[-0.5,ncontrast-0.5,-0.5,nsize-0.5],cmap=cmap)
     plt.xticks(np.arange(ncontrast),this_ucontrast)
     if flipud:
         plt.yticks(np.arange(nsize),this_usize)
@@ -698,8 +698,8 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
     if len(y1.shape)==2:
         nsize,ncontrast = y1.shape
     z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
-    mn = np.minimum(y1.min(),y2.min())
-    mx = np.maximum(y1.max(),y2.max())
+    mn = np.minimum(np.nanmin(y1),np.nanmin(y2))
+    mx = np.maximum(np.nanmax(y1),np.nanmax(y2))
     colors = colormap(np.linspace(0,1,ncontrast))
     if equate_0:
         zero = [z[idim][:,0].mean() for idim in range(2)]
@@ -707,15 +707,36 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
         z = [z[idim][:,1:] for idim in range(2)]
         colors = colors[1:]
     if equate_0:
-        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*dot_scale,alpha=alpha)
+        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*dot_scale,alpha=alpha,edgecolors='k',linewidths=1)
     for s in range(nsize):
-        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*dot_scale,alpha=alpha)
+        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*dot_scale,alpha=alpha,edgecolors='k',linewidths=1)
     if equality_line:
         plt.plot((mn,mx),(mn,mx),c='k')
     if square:
         wiggle = 0.05*(mx-mn)
         plt.xlim((mn-wiggle,mx+wiggle))
         plt.ylim((mn-wiggle,mx+wiggle))
+
+def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis):
+    def compute_mean_sem(x):
+        xmean = np.nanmean(x,0)
+        n_non_nan = np.sum(~np.isnan(x),0)
+        xsem = np.nanstd(x,0)/np.sqrt(n_non_nan)
+        return xmean,xsem
+    def compute_mean_sem_zero_nonzero(x):
+        xmean,xsem = compute_mean_sem(x)
+        lkat = ~np.isnan(xsem[:,0])
+        xmean[lkat,0] = np.nanmean(xmean[lkat,0])
+        xsem[lkat,0] = np.sqrt(np.nansum(xsem[lkat,0]**2))/np.sum(lkat)
+        return xmean,xsem
+    if equate_0:
+        xmean,xsem = compute_mean_sem_zero_nonzero(x)
+        ymean,ysem = compute_mean_sem_zero_nonzero(y)
+    else:
+        xmean,xsem = compute_mean_sem(x)
+        ymean,ysem = compute_mean_sem(y)
+    plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1)
+    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap)
 
 def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False,training_set=None):
     na = len(alphas)

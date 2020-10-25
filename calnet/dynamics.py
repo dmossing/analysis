@@ -97,7 +97,7 @@ import numpy as np
 #     return YY_ss
 
 def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=None,stim_vals=None,dt=1e-1,sim_type='fix',inj_mag=np.array((0,))):
-    desired = ['Wmx','Wmy','Wsx','Wsy','s02','k','kappa','XX','XXp','Eta','Xi']
+    desired = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','XX','XXp','Eta','Xi']
     Wmx,Wmy,Wsx,Wsy,s02,k,kappa,XX,XXp,Eta,Xi = [getattr(Model,key) for key in desired]
     
     if fix_dim is None:
@@ -119,8 +119,8 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
     
     yvals = np.linspace(0,max_val,Ny)
     
-    def fY(XX,YY,stim_val):
-        return Model.fXY(XX,YY,istim=stim_val)
+    def fY(XX,YY,stim_val,current_inj=None):
+        return Model.fXY(XX,YY,istim=stim_val,current_inj=current_inj)
     
     def predict_YY_fix_dim(XX,YY0,stim_val,dt=dt,fix_dim=0,run_backward=False):
         def dYYdt(YY):
@@ -140,16 +140,17 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
         return YY
     
     def predict_YY_current_injection(XX,YY0,stim_val,dt=dt,inj_dim=0,run_backward=False,inj_mag=0):
-        def dYYdt(YY):
-            return -YY + fY(XX,YY,stim_val)
+        def dYYdt(YY,current_inj=None):
+            return -YY + fY(XX,YY,stim_val,current_inj=current_inj)
         YY = np.zeros((Niter+1,YY0.shape[0]))
         YY[0] = YY0.copy() #np.zeros((nN,nS*nQ))
         dYY = np.zeros_like(YY[0])
         iiter = 0
+        current_inj = np.zeros((YY0.shape[0],))
+        if not inj_dim is None:
+            current_inj[inj_dim] = inj_mag
         while iiter < Niter: #np.abs(dYY).sum()>1e-8*np.abs(YY).sum():
-            dYY = dt*dYYdt(YY[iiter])
-            if not inj_dim is None:
-                dYY[inj_dim] = dYY[inj_dim] + dt*inj_mag
+            dYY = dt*dYYdt(YY[iiter],current_inj=current_inj)
             if run_backward:
                 dYY = -dYY
             YY[iiter+1] = YY[iiter] + dYY

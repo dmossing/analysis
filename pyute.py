@@ -35,6 +35,19 @@ def norm01(arr,dim=1):
         mxm = arr.max(dim)
     return (arr-mnm)/(mxm-mnm)
 
+def norm01s(arrs,dim=1):
+    # normalize each row of arrs[0] to [0,1]
+    # normalize other entries in arrs using the max and min of arrs[0]
+    arr = arrs[0]
+    dim = np.minimum(dim,len(arr.shape)-1)
+    try:
+        mnm = arr.min(dim)[:,np.newaxis]
+        mxm = arr.max(dim)[:,np.newaxis]
+    except:
+        mnm = arr.min(dim)
+        mxm = arr.max(dim)
+    return [(arr-mnm)/(mxm-mnm) for arr in arrs]
+
 def zscore(arr):
     # zscore each row of arr
     if len(arr.shape)==1:
@@ -111,6 +124,7 @@ def overlay_mg(a,b,normalize=True):
     return np.dstack((imr,img,imb))
 
 def bootstrap(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
+    # note: seems to break if axis != 0 (!)
     np.random.seed(0)
     # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
     # and report percentiles pct
@@ -899,11 +913,54 @@ def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidt
     #for i in range(mn_tgt.shape[0]):
     #    plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
 
-def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,markersize=None):
+def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,norm_to_max=False):
+    # rows of arr: repetitions to be averaged
+    # columns of arr: lines to be plotted
+    mn_tgt = np.nanmean(arr,0)
+    std_tgt = np.nanstd(arr,0)
+    lb_tgt,ub_tgt = mn_tgt-std_tgt,mn_tgt+std_tgt 
+    if norm_to_max:
+        normby = mn_tgt.max(-1)[:,np.newaxis] - mn_tgt.min(-1)[:,np.newaxis]
+        baseline = mn_tgt.min(-1)[:,np.newaxis]
+        mn_tgt = mn_tgt - baseline
+        lb_tgt = lb_tgt - baseline
+        ub_tgt = ub_tgt - baseline
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize)
+    else:
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize)
+    #if colors is None:
+    #    colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
+    #for i in range(mn_tgt.shape[0]):
+    #    plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
+    return mn_tgt,std_tgt
+
+def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,delta=0):
+    # rows of arr: repetitions to be averaged
+    # columns of arr: lines to be plotted
+    mn_tgt = np.nanpercentile(arr,50,axis=0)
+    lb_tgt,ub_tgt = [np.nanpercentile(arr,p,axis=0) for p in pct]
+    if norm_to_max:
+        normby = mn_tgt.max(-1)[:,np.newaxis] - mn_tgt.min(-1)[:,np.newaxis]
+        baseline = mn_tgt.min(-1)[:,np.newaxis]
+        mn_tgt = mn_tgt - baseline
+        lb_tgt = lb_tgt - baseline
+        ub_tgt = ub_tgt - baseline
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize)
+    else:
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,delta=delta)
+
+def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,markersize=None,delta=0):
+    nlines = mn_tgt.shape[0]
+    deltas = np.linspace(-delta*nlines/2,delta*nlines/2,nlines)
     if colors is None:
-        colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
-    for i in range(mn_tgt.shape[0]):
-        plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize)
+        colors = plt.cm.viridis(np.linspace(0,1,nlines))
+    for i in range(nlines):
+        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize)
+
+def plot_sem_errorbars_hillel(x,mn_tgt,sem_tgt,colors=None,linewidth=None,markersize=None,delta=0):
+    lb_tgt = mn_tgt - sem_tgt
+    ub_tgt = mn_tgt + sem_tgt
+    plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,delta=delta)
 
 def plot_errorbars_in_rows(x,mn_tgt,lb_tgt,ub_tgt,rowlen=10,scale=0.5):
     nrows = np.ceil(mn_tgt.shape[0]/rowlen)
@@ -1617,8 +1674,19 @@ def pca_denoise(arr,Npc):
     return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
 
 def bar_pdf(data,bins=None,alpha=1):
+    # probability density function bar plot
     h,_ = np.histogram(data,bins=bins)
-    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=0.5)
+    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha)
+
+def line_pdf(data,bins=None):
+    # probability density function line plot
+    h,_ = np.histogram(data,bins=bins)
+    plt.plot(0.5*(bins[:-1]+bins[1:]),h/h.sum())
+
+def line_cdf(data,bins=None):
+    # cumulative density function line plot
+    h,_ = np.histogram(data,bins=bins)
+    plt.plot(0.5*(bins[:-1]+bins[1:]),np.cumsum(h)/h.sum())
 
 def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac=0.5): 
     selector_s1 = gen_nub_selector_s1() 
@@ -1723,10 +1791,137 @@ def compute_tuning_df(df,trial_info,selector,include=None):
             shp = [np.arange(s) for s in tip.shape[1:]]
             column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
             index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
-            #tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=np.arange(tip.shape[0]),columns=column_labels)
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
-            #tip_df['partition'] = ipart
-            #tip_df['session_id'] = expt
-            #tip_df['area'] = trial_info[expt]['area']
             tuning = tuning.append(tip_df)
     return tuning
+
+def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
+    params = list(selector.keys())
+#     expts = list(trial_info.keys())
+    expts = df.session_id.unique()
+    nexpt = len(expts)
+    tuning = pd.DataFrame()
+    lb = pd.DataFrame()
+    ub = pd.DataFrame()
+    if include is None:
+        include = {expt:None for expt in expts}
+    for iexpt,expt in enumerate(expts):
+        in_this_expt = (df.session_id == expt)
+        trialwise = df.loc[in_this_expt].pivot(values='data',index='roi_index',columns='trial_index')
+        nroi = trialwise.shape[0]
+        ntrial = trialwise.shape[1]
+        if include[expt] is None:
+            print('including all trials in one partition')
+            include[expt] = np.ones((ntrial,),dtype='bool')
+        if not isinstance(include[expt],list):
+            include[expt] = [include[expt]]
+        npart = len(include[expt])
+        #condition_list = []
+        # args to gen_condition_list
+        # ti
+# selector: dict where each key is a param in ti.keys(), and each value is either a callable returning a boolean,
+# to be applied to ti[param], or an input to the function filter_selector
+# filter selector: if filter_selector(selector[param]), the tuning curve will be separated into the unique elements of ti[param]. 
+        condition_list,_ = gen_condition_list(trial_info[expt],selector,filter_selector=np.logical_not)
+        iconds,uconds = zip(*[pd.factorize(c,sort=True) for c in condition_list])
+        nconds = [len(u) for u in uconds]
+        for ipart in range(npart):
+            tip = np.zeros((nroi,)+tuple(nconds))
+            tip_lb = np.zeros((nroi,)+tuple(nconds))
+            tip_ub = np.zeros((nroi,)+tuple(nconds))
+            for iflat in range(np.prod(nconds)):
+                coords = np.unravel_index(iflat,tuple(nconds))
+                lkat = k_and(include[expt][ipart],*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
+                tip[(slice(None),)+coords] = np.nanmean(trialwise.loc[:,lkat],-1)
+                this_lb,this_ub = bootstrap(trialwise.loc[:,lkat].to_numpy().T,np.nanmean,pct=pct,axis=0)
+                tip_lb[(slice(None),)+coords] = this_lb
+                tip_ub[(slice(None),)+coords] = this_ub
+            shp = [np.arange(s) for s in tip.shape[1:]]
+            column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
+            index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
+            tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
+            tip_lb_df = pd.DataFrame(tip_lb.reshape((tip_lb.shape[0],-1)),index=index,columns=column_labels)
+            tip_ub_df = pd.DataFrame(tip_ub.reshape((tip_ub.shape[0],-1)),index=index,columns=column_labels)
+            tuning = tuning.append(tip_df)
+            lb = lb.append(tip_lb_df)
+            ub = ub.append(tip_ub_df)
+    return tuning,lb,ub
+
+def erase_top_right():
+    plt.gca().spines['right'].set_visible(False)
+    plt.gca().spines['top'].set_visible(False)
+
+def compute_osi(arr,ori):
+    # ori axis must be second to last
+    trialno = ori.shape[0]
+    th = np.deg2rad(np.mod(ori,180))
+    sinterm = np.sin(2*th).dot(arr)
+    costerm = np.cos(2*th).dot(arr)
+    sumterm = np.sum(arr,axis=-2)
+    return np.sqrt(costerm**2+sinterm**2)/sumterm
+
+def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light on'],alpha=0.5,epsilon=0.1,errorstyle='sem',pct=(16,84)):
+    nx = data.shape[1]
+    for ilight in range(nx):
+        plt.bar((ilight,),np.nanmean(data,0)[ilight],color=colors[ilight],alpha=0.5)
+        if errorstyle is 'sem':
+            plt.errorbar(np.arange(nx),np.nanmean(data,0),np.nanstd(data,0)/np.sqrt(np.sum(~np.isnan(data),0)),fmt='none',c='k') 
+        elif errorstyle is 'std':
+            plt.errorbar(np.arange(nx),np.nanmean(data,0),np.nanstd(data,0),fmt='none',c='k')
+        elif errorstyle is 'pct':
+            lb,ub = [np.nanpercentile(data,p,axis=0) for p in pct]
+            mn = np.nanmean(data,0)
+            yerr = np.concatenate(((mn-lb)[np.newaxis],(ub-mn)[np.newaxis]),axis=0)
+            plt.errorbar(np.arange(nx),mn,yerr=yerr,fmt='none',c='k')
+        if nx == 2:
+            eps_vec = np.array((epsilon,-epsilon))
+        elif nx == 3:
+            eps_vec = np.array((epsilon,0,-epsilon))
+        else:
+            eps_vec = np.zeros((nx,))
+        plt.plot(np.arange(nx)+eps_vec,data.T,c='k',alpha=alpha)
+        plt.xticks(np.arange(nx),xticklabels)
+
+def align_to_entry(data,entry,axis=1):
+    shp = data.shape
+    ndim = len(shp)
+    naxis = shp[axis]
+    shp_aligned = shp[:axis]+(2*naxis-1,)+shp[axis+1:]
+    data_aligned = np.nan*np.ones(shp_aligned)
+    for iroi in range(data.shape[0]):
+        slicer = [iroi] + [slice(None) for idim in range(ndim-1)]
+        slicer[axis] = slice(naxis-entry[iroi]-1,2*naxis-entry[iroi]-1)
+        data_aligned[slicer] = data[iroi]
+    return data_aligned
+
+def circ_align_to_entry(data,entry,axis=1):
+    shp = data.shape
+    ndim = len(shp)
+    naxis = shp[axis]
+    data_aligned = np.nan*np.ones(shp)
+    for iroi in range(data.shape[0]):
+        slicer = [slice(None) for idim in range(ndim-1)]
+        slicer[axis-1] = list(np.arange(entry[iroi],naxis))+list(np.arange(0,entry[iroi]))
+        data_aligned[iroi] = data[iroi][slicer]
+    return data_aligned
+
+def align_to_pref_size(sc):
+    prefsize = np.argmax(np.nanmean(np.nanmean(sc,-1),-1),axis=1)
+    return align_to_entry(sc,prefsize,axis=1)
+
+def circ_align_to_pref(data,axis=1):
+    ndim = len(data.shape)
+    # roll axis of interest to second dimension
+    data_t = data.transpose((0,axis)+tuple(np.setdiff1d(np.arange(1,ndim),axis)))
+    # reshape to be 3d
+    data_t = data_t.reshape((data_t.shape[0],data_t.shape[1],-1))
+    # take mean along 3rd dimension
+    data_t = np.nanmean(data_t,2)
+    # find maximal entry along the 2nd dimension of the resulting 2d array
+    pref = np.argmax(data_t,axis=1)
+    data_aligned = circ_align_to_entry(data,pref,axis=axis)
+    return data_aligned
+
+def imshow_hot_cold(arr):
+    mx = np.nanmax(np.abs(arr))
+    plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx)

@@ -74,7 +74,7 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_data_file='vip_halo_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_data_file='vip_halo_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,l2_penalty=0.01,init_noise=0.,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None):
     
     
     nsize,ncontrast = 6,6
@@ -92,7 +92,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     
     nsize,ncontrast,ndir = 6,6,8
-    ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    ori_dirs = [[0,1,2,3,4,5,6,7]] #[[0,4],[1,3,5,7],[2,6]]
     nT = len(ori_dirs)
     #nS = len(rs_denoise[0])
     nS = len(rs[0])
@@ -154,7 +154,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     nN = 36
     nS = 2
     nP = 2
-    nT = 2
+    nT = 1
     nQ = 4
     
     # code for bounds: 0 , constrained to 0
@@ -203,14 +203,12 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     else:
         s02_bounds = np.ones((nQ,))
     
-    k_bounds = 1.5*np.ones((nQ,))
+    k_bounds = 1.5*np.ones((nQ*(nS-1),))
     
     kappa_bounds = np.ones((1,))
     # kappa_bounds = 2*np.ones((1,))
     
-    T_bounds = 1.5*np.ones((nQ,))
-    #T_bounds[2:4] = 1 # PV and VIP are constrained to have flat ori tuning
-    T_bounds[1:4] = 1 # SST,VIP, and PV are constrained to have flat ori tuning
+    T_bounds = 1.5*np.ones((nQ*(nT-1),))
     
     X_bounds = tile_nS_nT_nN(np.array([2,1]))
     # X_bounds = np.array([np.array([2,1,2,1])]*nN)
@@ -237,8 +235,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     
     # shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nN,nS*nP),(nN,nS*nQ),(nN,nS*nQ),(nN,nS*nQ)]
-    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nQ,),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
-    #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,T,   XX,            XXp,          Eta,          Xi
+    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
+    #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,   T,   XX,            XXp,          Eta,          Xi,   h
     
     lb = [-np.inf*np.ones(shp) for shp in shapes]
     ub = [np.inf*np.ones(shp) for shp in shapes]
@@ -355,9 +353,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     # In[12]:
     
     
-    #         0.Wmx,  1.Wmy,  2.Wsx,  3.Wsy,  4.s02,5.K,  6.kappa,7.T,8.XX,        9.XXp,        10.Eta,       11.Xi
+    #         0.Wmx,  1.Wmy,  2.Wsx,  3.Wsy,  4.s02,5.K,  6.kappa, 7.T, 8.XX,        9.XXp,        10.Eta,       11.Xi, 12.h
     
-    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nQ,),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
+    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
     
     
     # In[13]:
@@ -377,14 +375,15 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     
     Yhat_opto = opto_dict['Yhat_opto']
+    Yhat_opto = np.nanmean(np.reshape(Yhat_opto,(nN,2,nS,2,nQ)),3).reshape((nN*2,-1))
     Yhat_opto = Yhat_opto/Yhat_opto[0::2].max(0)[np.newaxis,:]
     print(Yhat_opto.shape)
     h_opto = opto_dict['h_opto']
     dYY = Yhat_opto[1::2]-Yhat_opto[0::2]
-    for to_overwrite in [1,2,5,6]:
-        dYY[:,to_overwrite] = dYY[:,to_overwrite+8]
-    for to_overwrite in [11,15]:
-        dYY[:,to_overwrite] = dYY[:,to_overwrite-8]
+    for to_overwrite in [1,2]:
+        dYY[:,to_overwrite] = dYY[:,to_overwrite+4]
+    for to_overwrite in [7]:
+        dYY[:,to_overwrite] = dYY[:,to_overwrite-4]
     
     
     # In[ ]:
@@ -403,9 +402,12 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['Xi'] = 0.1
     wt_dict['stims'] = np.ones((nN,1)) #(np.arange(30)/30)[:,np.newaxis]**1 #
     wt_dict['barrier'] = 0. #30.0 #0.1
-    wt_dict['opto'] = 1e0#1e-1#1e1
+    wt_dict['opto'] = 1e1#1e-1#1e1
     wt_dict['isn'] = 0.1
-
+    wt_dict['stimsOpto'] = 0.6*np.ones((nN,1))
+    wt_dict['stimsOpto'][0::6] = 3
+    wt_dict['celltypesOpto'] = 0.67*np.ones((1,nQ*nS*nT))
+    wt_dict['celltypesOpto'][0,0::nQ] = 2
 
     YYhat = calnet.utils.flatten_nested_list_of_2d_arrays(Yhat)
     XXhat = calnet.utils.flatten_nested_list_of_2d_arrays(Xhat)
@@ -414,7 +416,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     ntries = 1
     nhyper = 1
     dt = 1e-1
-    niter = int(np.round(50/dt)) #int(1e4)
+    niter = int(np.round(10/dt)) #int(1e4)
     perturbation_size = 5e-2
     # learning_rate = 1e-4 # 1e-5 #np.linspace(3e-4,1e-3,niter+1) # 1e-5
     #l2_penalty = 0.1
@@ -430,7 +432,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     for ihyper in range(nhyper):
         for itry in range(ntries):
             print((ihyper,itry))
-            W0list = [init_noise*(ihyper+1)*np.random.rand(*shp) for shp in shapes]
+            #W0list = [init_noise*(ihyper+1)*np.random.rand(*shp) for shp in shapes]
+            W0list = [-0.5*init_noise*np.log(1-np.random.rand(*shp)) for shp in shapes] # exponential distribution with expectation value 0.5*init_noise
             counter = 0
             for ishp,shp in enumerate(shapes):
                 W0list[ishp][negatize[ishp]] = -W0list[ishp][negatize[ishp]]
@@ -438,6 +441,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             W0list[5] = np.ones(shapes[5]) # K
             W0list[6] = np.ones(shapes[6]) # kappa
             W0list[7] = np.ones(shapes[7]) # T
+            #print('T0 shape: '+str(W0list[7].shape))
             W0list[8] = np.concatenate(Xhat,axis=1) #XX
             W0list[9] = np.zeros_like(W0list[8]) #XXp
             W0list[10] = Eta0 #np.zeros(shapes[10]) #Eta
@@ -459,21 +463,18 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             if init_W_from_file:
                 npyfile = np.load(init_file,allow_pickle=True)[()]
                 W0list = npyfile['as_list']
-
-                #W0list[7][0] = 0 # T
-
-                # alternative initialization
-                #n = 0.5
-                #W0list[7][0] = 1/(n+1)*(W0list[7][0] + n*0) # T
-                #W0list[7][3] = 1/(n+1)*(W0list[7][3] + n*1) # T
-                #W0list[1][1,0] = W0list[1][1,0]
-
+                if W0list[8].size == nN*nS*2*nP:
+                    W0list[7] = np.array(())
+                    W0list[1][1,0] = W0list[1][1,0]
+                    W0list[8] = np.nanmean(W0list[8].reshape((nN,nS,2,nP)),2).flatten() #XX
+                    W0list[9] = np.nanmean(W0list[9].reshape((nN,nS,2,nP)),2).flatten() #XXp
+                    W0list[10] = np.nanmean(W0list[10].reshape((nN,nS,2,nQ)),2).flatten() #Eta
+                    W0list[11] = np.nanmean(W0list[11].reshape((nN,nS,2,nQ)),2).flatten() #Xi
                 #[Wmx,Wmy,Wsx,Wsy,s02,k,kappa,T,XX,XXp,Eta,Xi]
                 for ivar in [0,1,4,5]: # Wmx, Wmy, s02, k
                     W0list[ivar] = W0list[ivar] + init_noise*np.random.randn(*W0list[ivar].shape)
 
-            # wt_dict['Xi'] = 10
-            # wt_dict['Eta'] = 10
+
             Wt[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_spatial_feature_opto.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W0list=W0list.copy(),bounds=bounds,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn)
     #         Wt[ihyper][itry] = [w[-1] for w in Wt_temp]
     #         loss[ihyper,itry] = loss_temp[-1]

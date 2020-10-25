@@ -156,12 +156,15 @@ def compute_image_features(r,g,msk,depth,summary_stat=np.median):
         feature_dict['redgreencorr'][iroi] = np.corrcoef(redvals,greenvals)[0,1]
     return feature_dict
 
-def show_roi_boundaries(red_green,msk,ctr=None,frame_width=25):
+def show_roi_boundaries(red_green,msk,ctr=None,frame_width=25,show_outline=True):
     if len(red_green.shape)==2:
         rgb = np.zeros(red_green.shape+(3,))
         rgb[:,:,0] = red_green
         red_green = rgb
-    img = sks.mark_boundaries(red_green,skm.binary_dilation(msk).astype('int'),color=(1,1,1))
+    if show_outline:
+        img = sks.mark_boundaries(red_green,skm.binary_dilation(msk).astype('int'),color=(1,1,1))
+    else:
+        img = red_green.copy()
     if not ctr is None:
         c = ctr.astype('int')
     else:
@@ -265,6 +268,28 @@ def sort_by_pref_dir(rs,ori_axis=3):
             slicer[ori_axis-1] = order
             rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
     return rs_sort
+
+def sort_both_by_pref_dir(rs,other,ori_axis=3):
+    rs_sort = rs.copy()
+    other_sort = other.copy()
+    for ir in range(len(rs_sort)):
+        rs_ori = rs_sort[ir].copy()
+        dims_to_avg = np.flip(np.arange(len(rs_ori.shape)))
+        dims_to_avg = dims_to_avg[dims_to_avg!=0]
+        dims_to_avg = dims_to_avg[dims_to_avg!=ori_axis]
+        for idim in dims_to_avg: #while len(rs_ori.shape)>2:
+            rs_ori = np.nanmean(rs_ori,idim) #np.nanmean(rs_ori,1)
+        nroi = rs_ori.shape[0]
+        nori = rs_ori.shape[1]
+        pref_dir = np.argmax(rs_ori,axis=1)
+#         ii,jj = np.meshgrid(np.arange(rs_ori.shape[0]),np.arange(rs_ori.shape[1]),indexing='ij')
+        slicer = [slice(None) for idim in range(len(rs_sort[ir].shape)-1)]
+        for iroi in range(nroi):
+            order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
+            slicer[ori_axis-1] = order
+            rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
+            other_sort[ir][iroi] = other_sort[ir][iroi][slicer]
+    return rs_sort,other_sort
 
 def fix_fg_dir(rs):
     rs_sort = rs.copy()

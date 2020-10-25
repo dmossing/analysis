@@ -16,7 +16,10 @@ if __name__=="__main__":
 
     ut.mkdir(calnet_data_fold+'weights/'+weight_base)
 
-    weights_files = [calnet_data_fold+'weights/'+weight_base+'/%03d.npy'%itry for itry in range(ntries)]
+    for i1 in range(4):
+        for i2 in range(4):
 
-    for itry in range(ntries):
-        fcowo.fit_weights_and_save(weights_files[itry],ca_data_file=ca_data_file,opto_data_file=opto_data_file)
+            weights_files = [calnet_data_fold+'weights/'+weight_base+'/constrain_%d_%d_%03d.npy'%(i1,i2,itry) for itry in range(ntries)]
+
+            for itry in range(ntries):
+                fcowo.fit_weights_and_save(weights_files[itry],ca_data_file=ca_data_file,opto_data_file=opto_data_file)
