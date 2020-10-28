@@ -118,7 +118,7 @@ class ModelOri(Model):
         ws = ['Wmx','Wmy','Wsx','Wsy']
         for w,ww in zip(ws,wws):
             W = getattr(self,w)
-            WW = calnet.utils.gen_Weight_k_kappa_t(W,self.K,self.kappa,self.T)
+            WW = calnet.utils.gen_Weight_k_kappa_t(W,self.K,self.kappa,self.T,nS=self.nS,nT=self.nT)
             setattr(self,ww,WW)
         
         self.YY = self.compute_f_(self.Eta,self.Xi,self.s02)

@@ -54,7 +54,8 @@ weights_files = np.load('/Users/dan/Documents/notebooks/mossing-PC/simulation/we
 init_files = weights_files
 ntries = len(init_files)
 
-init_noise = 0.1
+init_noise = 0.
+allow_var = True
 
 if __name__=="__main__":
     weight_base = sys.argv[1]
@@ -72,4 +73,4 @@ if __name__=="__main__":
 
     for irep in range(nreps):
         for itry in range(ntries):
-            fcowo.fit_weights_and_save(weights_files[irep*ntries+itry],ca_data_file=ca_data_file,opto_data_file=opto_data_file,allow_var=False,fit_s02=True,constrain_isn=True,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=True,scale_init_by=1,init_W_from_file=True,init_file=init_files[itry])
+            fcowo.fit_weights_and_save(weights_files[irep*ntries+itry],ca_data_file=ca_data_file,opto_data_file=opto_data_file,allow_var=allow_var,fit_s02=True,constrain_isn=True,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=True,scale_init_by=1,init_W_from_file=True,init_file=init_files[itry])
