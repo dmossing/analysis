@@ -56,7 +56,7 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_data_file='vip_halo_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,fit_s02=True,constrain_isn=True,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_data_file='vip_halo_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None):
     
     
     nsize,ncontrast = 6,6
@@ -134,24 +134,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     # W0y_bounds[3,1] = 0 # PVs are allowed to inhibit SSTs, consistent with Hillel's unpublished results, but not consistent with Pfeffer et al.
     W0y_bounds[2,0] = 0 # VIPs don't inhibit L2/3 PCs. According to Pfeffer et al., only L5 PCs were found to get VIP inhibition
 
-    if allow_var:
-        W1y_bounds = 3*np.ones(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
-        W1y_bounds[1,1] = 0
-        W1y_bounds[3,1] = 0 
-        W1y_bounds[2,0] = 0
-    else:
-        W1y_bounds = np.zeros(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
-
-    if multiout:
-        W2x_bounds = W1x_bounds.copy()
-        W2y_bounds = W1y_bounds.copy()
-        W3x_bounds = W1x_bounds.copy()
-        W3y_bounds = W1y_bounds.copy()
-    else:
-        W2x_bounds = W1x_bounds.copy()*0
-        W2y_bounds = W1y_bounds.copy()*0
-        W3x_bounds = W1x_bounds.copy()*0
-        W3y_bounds = W1y_bounds.copy()*0
 
     if not constrain_wts is None:
         for wt in constrain_wts:
@@ -168,14 +150,45 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     else:
         s02_bounds = np.ones((nQ,))
     
-    k_bounds = 1.5*np.ones((nQ,))
+    k0_bounds = 1.5*np.ones((nQ,))
     
     kappa_bounds = np.ones((1,))
     # kappa_bounds = 2*np.ones((1,))
     
-    T_bounds = 1.5*np.ones((nQ,))
+    T0_bounds = 1.5*np.ones((nQ,))
     #T_bounds[2:4] = 1 # PV and VIP are constrained to have flat ori tuning
-    T_bounds[1:4] = 1 # SST,VIP, and PV are constrained to have flat ori tuning
+    #T0_bounds[1:4] = 1 # SST,VIP, and PV are constrained to have flat ori tuning
+
+    if allow_var:
+        W1y_bounds = 3*np.ones(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+        W1y_bounds[1,1] = 0
+        W1y_bounds[3,1] = 0 
+        W1y_bounds[2,0] = 0
+        k1_bounds = 3*np.ones(k0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+        T1_bounds = 3*np.ones(T0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+    else:
+        W1y_bounds = np.zeros(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+        k1_bounds = 0*np.ones(k0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+        T1_bounds = 0*np.ones(T0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+
+    if multiout:
+        W2x_bounds = W1x_bounds.copy()
+        W2y_bounds = W1y_bounds.copy()
+        if multiout2:
+            W3x_bounds = W1x_bounds.copy()
+            W3y_bounds = W1y_bounds.copy()
+        else:
+            W3x_bounds = W1x_bounds.copy()*0
+            W3y_bounds = W1y_bounds.copy()*0
+    else:
+        W2x_bounds = W1x_bounds.copy()*0
+        W2y_bounds = W1y_bounds.copy()*0
+        W3x_bounds = W1x_bounds.copy()*0
+        W3y_bounds = W1y_bounds.copy()*0
+    k2_bounds = k1_bounds.copy()*0
+    T2_bounds = T1_bounds.copy()*0
+    k3_bounds = k1_bounds.copy()*0
+    T3_bounds = T1_bounds.copy()*0
     
     X_bounds = tile_nS_nT_nN(np.array([2,1]))
     # X_bounds = np.array([np.array([2,1,2,1])]*nN)
@@ -199,12 +212,12 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     h_bounds = -2*np.ones((1,))
     
     # shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nN,nS*nP),(nN,nS*nQ),(nN,nS*nQ),(nN,nS*nQ)]
-    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nQ,),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
+    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
     #         W0x,    W0y,    W1x,    W1y,    W2x,    W2y,    W3x,    W3y,    s02,  k,    kappa,T,   XX,            XXp,          Eta,          Xi
     
     lb = [-np.inf*np.ones(shp) for shp in shapes]
     ub = [np.inf*np.ones(shp) for shp in shapes]
-    bdlist = [W0x_bounds,W0y_bounds,W1x_bounds,W1y_bounds,W2x_bounds,W2y_bounds,W3x_bounds,W3y_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h_bounds]
+    bdlist = [W0x_bounds,W0y_bounds,W1x_bounds,W1y_bounds,W2x_bounds,W2y_bounds,W3x_bounds,W3y_bounds,s02_bounds,k0_bounds,k1_bounds,k2_bounds,k3_bounds,kappa_bounds,T0_bounds,T1_bounds,T2_bounds,T3_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h_bounds]
 
     #print([b.shape for b in bdlist])
     #print(np.sum([b.size for b in bdlist]))
@@ -295,7 +308,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     #         0.W0x,  1.W0y,  2.W1x,  3.W1y,  4.W2x,  5.W2y,  6.W3x,  7.W3y,  8.s02,9.K,  10.kappa,11.T,12.XX,        13.XXp,        14.Eta,       15.Xi    16.h
     
-    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nQ,),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
+    shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
     
     import calnet.fitting_spatial_feature
     import sim_utils
@@ -325,6 +338,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['barrier'] = 0. #30.0 #0.1
     wt_dict['opto'] = 1e0#1e-1#1e1
     wt_dict['isn'] = 0.1
+    wt_dict['tv'] = 1
 
 
     YYhat = calnet.utils.flatten_nested_list_of_2d_arrays(Yhat)
@@ -334,7 +348,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     ntries = 1
     nhyper = 1
     dt = 1e-1
-    niter = int(np.round(50/dt)) #int(1e4)
+    niter = int(np.round(10/dt)) #int(1e4)
     perturbation_size = 5e-2
     Wt = [[None for itry in range(ntries)] for ihyper in range(nhyper)]
     loss = np.zeros((nhyper,ntries))
@@ -352,15 +366,23 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             counter = 0
             for ishp,shp in enumerate(shapes):
                 W0list[ishp][negatize[ishp]] = -W0list[ishp][negatize[ishp]]
-            nextra = 4
-            W0list[nextra+4] = np.ones(shapes[nextra+4]) # s02
-            W0list[nextra+5] = np.ones(shapes[nextra+5]) # K
-            W0list[nextra+6] = np.ones(shapes[nextra+6]) # kappa
-            W0list[nextra+7] = np.ones(shapes[nextra+7]) # T
-            W0list[nextra+8] = np.concatenate(Xhat,axis=1) #XX
-            W0list[nextra+9] = np.zeros_like(W0list[nextra+8]) #XXp
-            W0list[nextra+10] = Eta0 #np.zeros(shapes[nextra+10]) #Eta
-            W0list[nextra+11] = np.zeros(shapes[nextra+11]) #Xi
+            nextraW = 4
+            nextraK = nextraW + 3
+            nextraT = nextraK + 3
+            W0list[nextraW+4] = np.ones(shapes[nextraW+4]) # s02
+            W0list[nextraW+5] = np.ones(shapes[nextraW+5]) # K
+            W0list[nextraW+6] = np.ones(shapes[nextraW+6]) # K
+            W0list[nextraW+7] = np.ones(shapes[nextraW+7]) # K
+            W0list[nextraW+8] = np.ones(shapes[nextraW+8]) # K
+            W0list[nextraK+6] = np.ones(shapes[nextraK+6]) # kappa
+            W0list[nextraK+7] = np.ones(shapes[nextraK+7]) # T
+            W0list[nextraK+8] = np.ones(shapes[nextraK+8]) # T
+            W0list[nextraK+9] = np.ones(shapes[nextraK+9]) # T
+            W0list[nextraK+10] = np.ones(shapes[nextraK+10]) # T
+            W0list[nextraT+8] = np.concatenate(Xhat,axis=1) #XX
+            W0list[nextraT+9] = np.zeros_like(W0list[nextraT+8]) #XXp
+            W0list[nextraT+10] = Eta0 #np.zeros(shapes[nextraT+10]) #Eta
+            W0list[nextraT+11] = np.zeros(shapes[nextraT+11]) #Xi
             #[Wmx,Wmy,Wsx,Wsy,s02,k,kappa,T,XX,XXp,Eta,Xi,h]
             if init_W_from_lsq:
                 W0list[0],W0list[1] = initialize_W(Xhat,Yhat,scale_by=scale_init_by)
@@ -376,8 +398,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 npyfile = np.load(init_file,allow_pickle=True)[()]
                 W0list = npyfile['as_list']
 
-                extra_vars = [np.zeros_like(W0list[ivar]) for ivar in range(2)]
-                W0list = W0list[:4] + extra_vars*2 + W0list[4:]
+                extra_Ws = [np.zeros_like(W0list[ivar]) for ivar in range(2)]
+                extra_ks = [np.zeros_like(W0list[5]) for ivar in range(3)]
+                extra_Ts = [np.zeros_like(W0list[7]) for ivar in range(3)]
+                W0list = W0list[:4] + extra_Ws*2 + W0list[4:6] + extra_ks + W0list[6:8] + extra_Ts + W0list[8:]
 
                 #W0list[7][0] = 0 # T
 
@@ -388,25 +412,25 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 #W0list[1][1,0] = W0list[1][1,0]
 
                 #[W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k,kappa,T,XX,XXp,Eta,Xi,h]
-                for ivar in [0,1,8,9]: # Wmx, Wmy, s02, k
+                for ivar in np.concatenate((np.arange(13),np.arange(14,18))): # Ws, s02, k
                     W0list[ivar] = W0list[ivar] + init_noise*np.random.randn(*W0list[ivar].shape)
                 #print([b.shape for b in bdlist])
                 #print(np.sum([b.size for b in bdlist]))
 
-            Wt[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_spatial_feature_opto_multiout.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W0list=W0list.copy(),bounds=bounds,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn)
+            Wt[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_spatial_feature_opto_multiout.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W0list=W0list.copy(),bounds=bounds,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv)
     
     def parse_W(W):
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k,kappa,T,XX,XXp,Eta,Xi,h = W
-        return W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k,kappa,T,XX,XXp,Eta,Xi,h
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k0,k1,k2,k3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h = W
+        return W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k0,k1,k2,k3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h
     
     itry = 0
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k,kappa,T,XX,XXp,Eta,Xi,h = parse_W(Wt[0][0])
+    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k0,k1,k2,k3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h = parse_W(Wt[0][0])
     
-    labels = ['W0x','W0y','W1x','W1y','W2x','W2y','W3x','W3y','s02','K','kappa','T','XX','XXp','Eta','Xi','h']
+    labels = ['W0x','W0y','W1x','W1y','W2x','W2y','W3x','W3y','s02','K0','K1','K2','K3','kappa','T0','T1','T2','T3','XX','XXp','Eta','Xi','h']
     Wstar_dict = {}
     for i,label in enumerate(labels):
         Wstar_dict[label] = Wt[0][0][i]
-    Wstar_dict['as_list'] = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k,kappa,T,XX,XXp,Eta,Xi,h]
+    Wstar_dict['as_list'] = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k0,k1,k2,k3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h]
     Wstar_dict['loss'] = loss[0][0]
     Wstar_dict['wt_dict'] = wt_dict
     np.save(weights_file,Wstar_dict,allow_pickle=True)

@@ -626,12 +626,12 @@ def add_to_array(starting,to_add):
     else:
         return to_add
 
-def imshow_in_rows(arr,rowlen=10,scale=0.5):
+def imshow_in_rows(arr,rowlen=10,scale=0.5,vmin=None,vmax=None):
     nrows = np.ceil(arr.shape[0]/rowlen)
     plt.figure(figsize=(scale*rowlen,scale*nrows))
     for k in range(arr.shape[0]):
         plt.subplot(nrows,rowlen,k+1)
-        plt.imshow(arr[k])
+        plt.imshow(arr[k],vmin=vmin,vmax=vmax)
         plt.axis('off')
 
 def plot_in_rows(arr,rowlen=10,scale=0.5):
@@ -1925,3 +1925,9 @@ def circ_align_to_pref(data,axis=1):
 def imshow_hot_cold(arr):
     mx = np.nanmax(np.abs(arr))
     plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx)
+
+def zero_origin(cmd='y'):
+    if 'y' in cmd:
+        plt.gca().set_ylim(bottom=0)
+    if 'x' in cmd:
+        plt.gca().set_xlim(left=0)

@@ -694,12 +694,14 @@ def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36,60)),uc
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')
 
-def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis):
+def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None):
     if len(y1.shape)==2:
         nsize,ncontrast = y1.shape
     z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
-    mn = np.minimum(np.nanmin(y1),np.nanmin(y2))
-    mx = np.maximum(np.nanmax(y1),np.nanmax(y2))
+    if mn is None:
+        mn = np.minimum(np.nanmin(y1),np.nanmin(y2))
+    if mx is None:
+        mx = np.maximum(np.nanmax(y1),np.nanmax(y2))
     colors = colormap(np.linspace(0,1,ncontrast))
     if equate_0:
         zero = [z[idim][:,0].mean() for idim in range(2)]
@@ -717,7 +719,7 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
         plt.xlim((mn-wiggle,mx+wiggle))
         plt.ylim((mn-wiggle,mx+wiggle))
 
-def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis):
+def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None):
     def compute_mean_sem(x):
         xmean = np.nanmean(x,0)
         n_non_nan = np.sum(~np.isnan(x),0)
@@ -736,7 +738,51 @@ def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=F
         xmean,xsem = compute_mean_sem(x)
         ymean,ysem = compute_mean_sem(y)
     plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1)
-    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap)
+    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx)
+
+def scatter_size_contrast_pct_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None):
+    def compute_mean_sem(x):
+        xmean = np.nanmean(x,0)
+        n_non_nan = np.sum(~np.isnan(x),0)
+        xsem = np.nanstd(x,0)#/np.sqrt(n_non_nan)
+        return xmean,xsem
+    def compute_mean_sem_zero_nonzero(x):
+        xmean,xsem = compute_mean_sem(x)
+        lkat = ~np.isnan(xsem[:,0])
+        xmean[lkat,0] = np.nanmean(xmean[lkat,0])
+        xsem[lkat,0] = np.sqrt(np.nansum(xsem[lkat,0]**2))/np.sum(lkat)
+        return xmean,xsem
+    if equate_0:
+        xmean,xsem = compute_mean_sem_zero_nonzero(x)
+        ymean,ysem = compute_mean_sem_zero_nonzero(y)
+    else:
+        xmean,xsem = compute_mean_sem(x)
+        ymean,ysem = compute_mean_sem(y)
+    plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1)
+    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx)
+
+def scatter_size_contrast_diff_errorbar(x1,x2,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None):
+    def compute_mean_sem(x):
+        xmean = np.nanmean(x,0)
+        n_non_nan = np.sum(~np.isnan(x),0)
+        xsem = np.nanstd(x,0)/np.sqrt(n_non_nan)
+        return xmean,xsem
+    def compute_mean_sem_zero_nonzero(x):
+        xmean,xsem = compute_mean_sem(x)
+        lkat = ~np.isnan(xsem[:,0])
+        xmean[lkat,0] = np.nanmean(xmean[lkat,0])
+        xsem[lkat,0] = np.sqrt(np.nansum(xsem[lkat,0]**2))/np.sum(lkat)
+        return xmean,xsem
+    if equate_0:
+        x1mean,x1sem = compute_mean_sem_zero_nonzero(x1)
+        x2mean,x2sem = compute_mean_sem_zero_nonzero(x2)
+        ymean,ysem = compute_mean_sem_zero_nonzero(y)
+    else:
+        x1mean,x1sem = compute_mean_sem(x1)
+        x2mean,x2sem = compute_mean_sem(x2)
+        ymean,ysem = compute_mean_sem(y)
+    plt.errorbar((x1mean-x2mean).flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=np.sqrt(x1sem**2+x2sem**2).flatten(),fmt='none',c='k',zorder=1)
+    scatter_size_contrast(x1mean-x2mean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx)
 
 def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False,training_set=None):
     na = len(alphas)

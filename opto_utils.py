@@ -91,9 +91,15 @@ def get_median_slope(slopescore):
     slope,score = slopescore
     return np.median(slope[score>0])
 
-def show_light_on_light_off(sc,usize=None):
-    mx = np.nanmax(sc)
-    mn = np.nanmin(sc)
+def show_light_on_light_off(sc,usize=None,vmin=None,vmax=None):
+    if vmax is None:
+        mx = np.nanmax(sc)
+    else:
+        mx = vmax
+    if vmin is None:
+        mn = np.nanmin(sc)
+    else:
+        mn = vmin
     for ilight in range(2):
         plt.subplot(1,2,ilight+1)
         if usize is None:

@@ -1,20 +1,9 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-# In[ ]:
-
-
 # in this notebook, I will try to fit a model relating the mean behavior of L4, L2/3, SST and VIP cells
 
-
-# In[ ]:
-
-
 # load the data
-
-
-# In[1]:
-
 
 import pyute as ut
 import autograd.numpy as np
@@ -40,9 +29,6 @@ import calnet.fitting_spatial_feature_opto
 import opto_utils
 import scipy.signal as ssi
 import scipy.optimize as sop
-
-
-# In[2]:
 
 def invert_f_mt(y):
     xstar = np.zeros_like(y)
@@ -74,22 +60,14 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_data_file='vip_halo_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,l2_penalty=0.01,init_noise=0.,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_data_file='vip_halo_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None):
     
     
     nsize,ncontrast = 6,6
     
-    
-    # In[3]:
-    
-    
     npfile = np.load(ca_data_file,allow_pickle=True)[()]#,{'rs':rs},allow_pickle=True) # ,'rs_denoise':rs_denoise
     rs = npfile['rs']
     #rs_denoise = npfile['rs_denoise']
-    
-    
-    # In[4]:
-    
     
     nsize,ncontrast,ndir = 6,6,8
     ori_dirs = [[0,1,2,3,4,5,6,7]] #[[0,4],[1,3,5,7],[2,6]]
@@ -138,18 +116,11 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #            Rso[iR][ialign][iori] = np.nanmean(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]],-1)
     #            Rso[iR][ialign][iori] = ssi.convolve(Rso[iR][ialign][iori],kernel,'same')
     #            Rso[iR][ialign][iori] = Rso[iR][ialign][iori].reshape(Rso[iR][ialign][iori].shape[0],-1)
-
-    # In[6]:
-    
     
     def set_bound(bd,code,val=0):
         # set bounds to 0 where 0s occur in 'code'
         for iitem in range(len(bd)):
             bd[iitem][code[iitem]] = val
-    
-    
-    # In[7]:
-    
     
     nN = 36
     nS = 2
@@ -231,9 +202,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     h_bounds = -2*np.ones((1,))
     
-    # In[8]:
-    
-    
     # shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nN,nS*nP),(nN,nS*nQ),(nN,nS*nQ),(nN,nS*nQ)]
     shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
     #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,   T,   XX,            XXp,          Eta,          Xi,   h
@@ -275,10 +243,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     lb = np.concatenate([a.flatten() for a in lb])
     ub = np.concatenate([b.flatten() for b in ub])
     bounds = [(a,b) for a,b in zip(lb,ub)]
-    
-    
-    # In[10]:
-    
     
     nS = 2
     ndims = 5
@@ -333,10 +297,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     nN,nP = Xhat[0][0].shape
     nQ = Yhat[0][0].shape[1]
     
-    
-    # In[11]:
-    
-    
     def compute_f_(Eta,Xi,s02):
         return sim_utils.f_miller_troyer(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))
     def compute_fprime_m_(Eta,Xi,s02):
@@ -349,30 +309,14 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         srtinds = np.argsort(drW)
         return drW[srtinds],prW[:,srtinds]
     
-    
-    # In[12]:
-    
-    
     #         0.Wmx,  1.Wmy,  2.Wsx,  3.Wsy,  4.s02,5.K,  6.kappa, 7.T, 8.XX,        9.XXp,        10.Eta,       11.Xi, 12.h
     
     shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
     
-    
-    # In[13]:
-    
-    
     import calnet.fitting_spatial_feature
     import sim_utils
     
-    
-    # In[14]:
-    
-    
     opto_dict = np.load(opto_data_file,allow_pickle=True)[()]
-    
-    
-    # In[15]:
-    
     
     Yhat_opto = opto_dict['Yhat_opto']
     Yhat_opto = np.nanmean(np.reshape(Yhat_opto,(nN,2,nS,2,nQ)),3).reshape((nN*2,-1))
@@ -384,10 +328,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         dYY[:,to_overwrite] = dYY[:,to_overwrite+4]
     for to_overwrite in [7]:
         dYY[:,to_overwrite] = dYY[:,to_overwrite-4]
-    
-    
-    # In[ ]:
-    
     
     from importlib import reload
     reload(calnet)
@@ -402,8 +342,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['Xi'] = 0.1
     wt_dict['stims'] = np.ones((nN,1)) #(np.arange(30)/30)[:,np.newaxis]**1 #
     wt_dict['barrier'] = 0. #30.0 #0.1
-    wt_dict['opto'] = 1e1#1e-1#1e1
+    wt_dict['opto'] = 3e1#1e-1#1e1
     wt_dict['isn'] = 0.1
+    wt_dict['tv'] = 1
     wt_dict['stimsOpto'] = 0.6*np.ones((nN,1))
     wt_dict['stimsOpto'][0::6] = 3
     wt_dict['celltypesOpto'] = 0.67*np.ones((1,nQ*nS*nT))
@@ -475,12 +416,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                     W0list[ivar] = W0list[ivar] + init_noise*np.random.randn(*W0list[ivar].shape)
 
 
-            Wt[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_spatial_feature_opto.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W0list=W0list.copy(),bounds=bounds,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn)
+            Wt[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_spatial_feature_opto.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W0list=W0list.copy(),bounds=bounds,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv)
     #         Wt[ihyper][itry] = [w[-1] for w in Wt_temp]
     #         loss[ihyper,itry] = loss_temp[-1]
     
-    
-    # In[285]:
     def parse_W(W):
         Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h = W
         return Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h
@@ -488,10 +427,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     itry = 0
     Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h = parse_W(Wt[0][0])
-    
-    
-    # In[286]:
-    
     
     labels = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','T','XX','XXp','Eta','Xi','h']
     Wstar_dict = {}

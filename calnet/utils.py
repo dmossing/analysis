@@ -187,7 +187,7 @@ def include_aligned(displacement,dcutoff,pval,pcutoff=0.05,less=True):
         criterion = lambda x: (x**2).sum(0) > dcutoff**2
     return np.logical_and(criterion(displacement),pval < pcutoff)
 
-def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.05,slices=None,datafield='decon',run_cutoff=10,running_pct_cutoff=0.4):
+def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.05,slices=None,datafield='decon',run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
     # from a list of HDF5 files, split up the data into an arbitrary number of spatial pixels based on RF center location
     if dsnames is None:
         dsnames = default_dsnames()
@@ -196,7 +196,7 @@ def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.
     if slices is None:
         condition_inds = default_condition_inds()
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,datafield=datafield,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,datafield=datafield,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -225,7 +225,7 @@ def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.
             rs[icelltype].append(raligned)
     return rs
 
-def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
+def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -236,7 +236,7 @@ def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,ru
     nbefore = 8
     nafter = 8
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -260,7 +260,7 @@ def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,ru
         rs.append([raligned,rmisaligned])
     return rs
 
-def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4):
+def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -271,7 +271,7 @@ def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,m
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -307,7 +307,7 @@ def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,m
         rs.append(this_rs)
     return rs
 
-def gen_rs_modal_uparam_expt(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4):
+def gen_rs_modal_uparam_expt(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -318,7 +318,7 @@ def gen_rs_modal_uparam_expt(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
     
     rs = []
     expt_ids = []
@@ -373,7 +373,7 @@ def gen_rs_modal_uparam_expt(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0
         roi_ids.append(this_roi_ids)
     return rs,expt_ids,roi_ids
 
-def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4):
+def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -384,7 +384,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,tunings_sem,uparams,displacements,pvals = compute_tunings_tavg_with_sem(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
+    tunings,tunings_sem,uparams,displacements,pvals = compute_tunings_tavg_with_sem(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
     
     rs = []
     rs_sem = []
@@ -929,3 +929,46 @@ def minus_sum_log_ceil(log_arg,big_val):
         ok = (log_arg>0)
         cost = -np.sum(np.log(log_arg[ok])) + big_val*np.sum(~ok)
     return cost
+
+def simulate_opto_effect(YYhat,YYhat_halo):
+    return fit_opto_transform(YYhat_halo).transform(YYhat)
+    #return fit_opto_transform(YYhat_halo)(YYhat)
+    #YYhat_halo_sim = np.zeros_like(YYhat_halo)
+    #for itype in range(YYhat_halo.shape[2]):
+    #    slope,intercept,_,_,_ = sst.linregress(YYhat_halo[:,0,itype],YYhat_halo[:,1,itype])
+    #    YYhat_halo_res = YYhat_halo[:,1,itype] - slope*YYhat_halo[:,0,itype] - intercept
+    #    def linear_transform(data):
+    #        return slope*data + intercept + 1*YYhat_halo_res[:,np.newaxis]
+    #    YYhat_halo_sim[:,:,itype] = np.concatenate((YYhat[:,np.newaxis,itype],linear_transform(YYhat[:,np.newaxis,itype])),axis=1)
+    #return YYhat_halo_sim
+
+class fit_opto_transform(object):
+    def __init__(self,YYhat_halo):
+        nN = YYhat_halo.shape[0]
+        ntypes = YYhat_halo.shape[2]
+        self.res = np.zeros((nN,ntypes))
+        self.slope = np.zeros((1,ntypes))
+        self.intercept = np.zeros((1,ntypes))
+        for itype in range(YYhat_halo.shape[2]):
+            if np.sum(np.isnan(YYhat_halo[:,:,itype]))==0:
+                self.slope[:,itype],self.intercept[:,itype],_,_,_ = sst.linregress(YYhat_halo[:,0,itype],YYhat_halo[:,1,itype])
+            else:
+                self.slope[:,itype] = np.nan
+                self.intercept[:,itype] = np.nan
+        self.res = YYhat_halo[:,1,:] - self.slope*YYhat_halo[:,0,:] - self.intercept
+    def transform(self,data):
+        return self.slope*data + self.intercept + self.res
+
+#def fit_opto_transform(YYhat_halo):
+#    nN = YYhat_halo.shape[0]
+#    ntypes = YYhat_halo.shape[2]
+#    YYhat_halo_res = np.zeros((nN,ntypes))
+#    slope = np.zeros((ntypes,))
+#    intercept = np.zeros((ntypes,))
+#    for itype in range(YYhat_halo.shape[2]):
+#        if np.sum(np.isnan(YYhat_halo[:,:,itype]))==0:
+#            slope[itype],intercept[itype],_,_,_ = sst.linregress(YYhat_halo[:,0,itype],YYhat_halo[:,1,itype])
+#    YYhat_halo_res = YYhat_halo[:,1,:] - slope[np.newaxis,:]*YYhat_halo[:,0,:] - intercept[np.newaxis,:]
+#    def opto_transform(data):
+#        return slope[np.newaxis,:]*data + intercept[np.newaxis,:] + YYhat_halo_res
+#    return opto_transform

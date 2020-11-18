@@ -46,7 +46,7 @@ def add_up_lists(lst):
         to_return.append(item)
     return to_return
 
-def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W0list=None,bounds=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,constrain_isn=False):
+def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W0list=None,bounds=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,constrain_isn=False,tv=False,topo_stims=np.arange(36),topo_shape=(6,6)):
     # X is (N,P), y is (N,Q). Finds wZx, wZy: (P,Q) + (Q,Q) weight matrices to explain Y as Y = f(Xwmx + Ywmy,Xwsx + Ywsy)
     # f is a static nonlinearity, given as a function
     
@@ -97,6 +97,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     add_key_val(wt_dict,'barrier',1)
     add_key_val(wt_dict,'opto',100.)
     add_key_val(wt_dict,'isn',0.01)
+    add_key_val(wt_dict,'tv',0.01)
     add_key_val(wt_dict,'celltypesOpto',np.ones((1,nT*nS*nQ)))
     add_key_val(wt_dict,'stimsOpto',np.ones((nN,1)))
     
@@ -110,6 +111,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     barrier_wt = wt_dict['barrier']
     wtOpto = wt_dict['opto']
     wtISN = wt_dict['isn']
+    wtTV = wt_dict['tv']
     wtCellOpto = wt_dict['celltypesOpto']
     wtStimOpto = wt_dict['stimsOpto']
     
@@ -155,47 +157,57 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         def compute_f_fprime_t_(W,perturbation,max_dist=1): # max dist added 10/14/20
             Wmx,Wmy,Wsx,Wsy,s02,k,kappa,T,XX,XXp,Eta,Xi,h = parse_W(W)
             fval = compute_f_(Eta,Xi,s02)
+            fprimeval = compute_fprime_(Eta,Xi,s02)
             resEta = Eta - u_fn(XX,fval,Wmx,Wmy,k,kappa,T)
             resXi  = Xi - u_fn(XX,fval,Wsx,Wsy,k,kappa)
             YY = fval + perturbation
+            YYp = fprimeval
             def dYYdt(YY,Eta1,Xi1):
                 return -YY + compute_f_(Eta1,Xi1,s02)
+            def dYYpdt(YYp,Eta1,Xi1):
+                return -YYp + compute_fprime_(Eta1,Xi1,s02)
             for t in range(niter):
                 if np.mean(np.abs(YY-fval)) < max_dist:
                     Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,k,kappa,T)
                     Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,k,kappa,T)
                     YY = YY + dt*dYYdt(YY,Eta1,Xi1)
+                    YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1)
                 elif np.remainder(t,500)==0:
                     print('unstable fixed point?')
                 
-            YYprime = compute_fprime_(Eta1,Xi1,s02)
+            #YYp = compute_fprime_(Eta1,Xi1,s02)
             
-            return YY,YYprime
+            return YY,YYp
         
         def compute_f_fprime_t_avg_(W,perturbation,burn_in=0.5,max_dist=1):
             Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h = parse_W(W)
             fval = compute_f_(Eta,Xi,s02)
+            fprimeval = compute_fprime_(Eta,Xi,s02)
             resEta = Eta - u_fn(XX,fval,Wmx,Wmy,K,kappa,T)
             resXi  = Xi - u_fn(XX,fval,Wsx,Wsy,K,kappa,T)
             YY = fval + perturbation
+            YYp = fprimeval
             YYmean = np.zeros_like(Eta)
             YYprimemean = np.zeros_like(Eta)
             def dYYdt(YY,Eta1,Xi1):
                 return -YY + compute_f_(Eta1,Xi1,s02)
+            def dYYpdt(YYp,Eta1,Xi1):
+                return -YYp + compute_fprime_(Eta1,Xi1,s02)
             for t in range(niter):
                 if np.mean(np.abs(YY-fval)) < max_dist:
                     Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
                     Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
                     YY = YY + dt*dYYdt(YY,Eta1,Xi1)
+                    YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1)
                 else:
                     print('unstable fixed point?')
                 #Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
                 #Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
                 #YY = YY + dt*dYYdt(YY,Eta1,Xi1)
                 if t>niter*burn_in:
-                    YYprime = compute_fprime_(Eta1,Xi1,s02)
+                    #YYp = compute_fprime_(Eta1,Xi1,s02)
                     YYmean = YYmean + 1/niter/burn_in*YY
-                    YYprimemean = YYprimemean + 1/niter/burn_in*YYprime
+                    YYprimemean = YYprimemean + 1/niter/burn_in*YYp
                 
             return YYmean,YYprimemean
 
@@ -268,6 +280,16 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
                 cost = utils.minus_sum_log_ceil(log_arg,big_val/nN)
                 #print('ISN cost: %f'%cost)
                 return cost
+
+            def compute_tv_error(W):
+                # sq l2 norm for tv error
+                Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h = parse_W(W)
+                topo_var_list = [arr.reshape(topo_shape+(-1,)) for arr in \
+                        [XX,XXp,Eta,Xi]]
+                sqdiffy = [np.sum(np.abs(np.diff(top,axis=0))**2) for top in topo_var_list]
+                sqdiffx = [np.sum(np.abs(np.diff(top,axis=1))**2) for top in topo_var_list]
+                cost = np.sum(sqdiffy+sqdiffx)
+                return cost
             
             Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h = parse_W(W)
 
@@ -292,6 +314,10 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             if constrain_isn:
                 ISNterm = compute_isn_error(W)
                 cost = cost + wtISN*ISNterm
+
+            if tv:
+                TVterm = compute_tv_error(W)
+                cost = cost + wtTV*TVterm
                 
             if isinstance(Xterm,float):
                 print('X:%f'%(wtX*Xterm))
@@ -301,6 +327,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
                 print('Opto:%f'%(wtOpto*Optoterm))
                 if constrain_isn:
                     print('ISN:%f'%(wtISN*ISNterm))
+                if tv:
+                    print('TV:%f'%(wtTV*TVterm))
 
             #lbls = ['Yterm']
             #vars = [Yterm]
