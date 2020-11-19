@@ -187,7 +187,7 @@ def include_aligned(displacement,dcutoff,pval,pcutoff=0.05,less=True):
         criterion = lambda x: (x**2).sum(0) > dcutoff**2
     return np.logical_and(criterion(displacement),pval < pcutoff)
 
-def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.05,slices=None,datafield='decon',run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
+def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.05,slices=None,datafield='decon',run_cutoff=10,running_pct_cutoff=0.4):
     # from a list of HDF5 files, split up the data into an arbitrary number of spatial pixels based on RF center location
     if dsnames is None:
         dsnames = default_dsnames()
@@ -196,7 +196,7 @@ def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.
     if slices is None:
         condition_inds = default_condition_inds()
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,datafield=datafield,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,datafield=datafield,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
     
     rs = []
     for icelltype in range(len(tunings)):
