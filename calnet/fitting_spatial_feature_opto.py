@@ -169,7 +169,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             for t in range(niter):
                 if np.mean(np.abs(YY-fval)) < max_dist:
                     Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,k,kappa,T)
-                    Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,k,kappa,T)
+                    Xi1 = resXi + u_fn(XX,YY,Wsx,Wsy,k,kappa,T)
                     YY = YY + dt*dYYdt(YY,Eta1,Xi1)
                     YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1)
                 elif np.remainder(t,500)==0:
@@ -196,13 +196,13 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             for t in range(niter):
                 if np.mean(np.abs(YY-fval)) < max_dist:
                     Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
-                    Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
+                    Xi1 = resXi + u_fn(XX,YY,Wsx,Wsy,K,kappa,T)
                     YY = YY + dt*dYYdt(YY,Eta1,Xi1)
                     YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1)
                 else:
                     print('unstable fixed point?')
                 #Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
-                #Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
+                #Xi1 = resXi + u_fn(XX,YY,Wsx,Wsy,K,kappa,T)
                 #YY = YY + dt*dYYdt(YY,Eta1,Xi1)
                 if t>niter*burn_in:
                     #YYp = compute_fprime_(Eta1,Xi1,s02)

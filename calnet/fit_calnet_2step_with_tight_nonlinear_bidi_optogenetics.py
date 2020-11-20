@@ -25,7 +25,7 @@ import sim_utils
 from importlib import reload
 reload(sim_utils)
 import calnet.utils
-import calnet.fitting_2step_spatial_feature_opto_nonlinear
+import calnet.fitting_2step_spatial_feature_opto_tight_nonlinear
 import opto_utils
 import scipy.signal as ssi
 import scipy.optimize as sop
@@ -79,7 +79,7 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False):
     
     nsize,ncontrast = 6,6
     
@@ -235,15 +235,15 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     # shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nN,nS*nP),(nN,nS*nQ),(nN,nS*nQ),(nN,nS*nQ)]
     shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(1,),(1,)]
-    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
+    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
     print('size of shapes1: '+str(np.sum([np.prod(shp) for shp in shapes1])))
     print('size of shapes2: '+str(np.sum([np.prod(shp) for shp in shapes2])))
     #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,T,   h1, h2
-    #XX,            XXp,          Eta,          Xi,     Eta1,   Eta2
+    #XX,            XXp,          Eta,          Xi
     
-    #bdlist = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h1_bounds,h2_bounds,Eta_bounds,Eta_bounds]
+    #bdlist = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h1_bounds,h2_bounds]
     bd1list = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,h1_bounds,h2_bounds]
-    bd2list = [X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,Eta_bounds,Eta_bounds]
+    bd2list = [X_bounds,Xp_bounds,Eta_bounds,Xi_bounds]
     
     lb1,ub1 = [[sgn*np.inf*np.ones(shp) for shp in shapes1] for sgn in [-1,1]]
     set_bounds_by_code(lb1,ub1,bd1list)
@@ -358,10 +358,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         srtinds = np.argsort(drW)
         return drW[srtinds],prW[:,srtinds]
     
-    #         0.Wmx,  1.Wmy,  2.Wsx,  3.Wsy,  4.s02,5.K,  6.kappa,7.T,8.XX,        9.XXp,        10.Eta,       11.Xi,   12.h1,  13.h2,  14.Eta1,    15.Eta2
+    #         0.Wmx,  1.Wmy,  2.Wsx,  3.Wsy,  4.s02,5.K,  6.kappa,7.T,8.XX,        9.XXp,        10.Eta,       11.Xi,   12.h1,  13.h2
     
     shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(1,),(1,)]
-    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
+    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
     print('size of shapes1: '+str(np.sum([np.prod(shp) for shp in shapes1])))
     print('size of shapes2: '+str(np.sum([np.prod(shp) for shp in shapes2])))
     
@@ -404,6 +404,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res \
                 = [overwrite_plus_n(x,to_overwrite,n) for x in \
                         [dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res]]
+
+    if ignore_halo_vip:
+        dYY1[:,2::nQ] = np.nan
+
     #for to_overwrite in [1,2]:
     #    dYY1[:,to_overwrite] = dYY1[:,to_overwrite+4]
     #for to_overwrite in [7]:
@@ -499,7 +503,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     from importlib import reload
     reload(calnet)
-    #reload(calnet.fitting_2step_spatial_feature_opto_nonlinear)
+    #reload(calnet.fitting_2step_spatial_feature_opto_tight_nonlinear)
     reload(sim_utils)
     # reload(calnet.fitting_spatial_feature)
     # W0list = [np.ones(shp) for shp in shapes]
@@ -515,22 +519,17 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['tv'] = 1
     wt_dict['stimsOpto'] = 0.6*np.ones((nN,1))
     wt_dict['stimsOpto'][0::6] = 3
-    wt_dict['celltypesOpto'] = 0.67*np.ones((1,nQ*nS*nT))
-    wt_dict['celltypesOpto'][0,0::nQ] = 2
-    wt_dict['dirOpto'] = np.array((1,1))
-    wt_dict['dYY'] = 10#1000
-    wt_dict['Eta12'] = 100
+    wt_dict['celltypesOpto'] = 0.25*4/3*np.ones((1,nQ*nS*nT))
+    wt_dict['celltypesOpto'][0,0::nQ] = 0.75*4
+    wt_dict['dirOpto'] = np.array((1,0))
+    wt_dict['dYY'] = 3
     wt_dict['coupling'] = 0.1
 
     np.save('XXYYhat.npy',{'YYhat':YYhat,'XXhat':XXhat,'rs':rs,'Rs':Rs,'Rso':Rso,'Ypc_list':Ypc_list,'Xpc_list':Xpc_list})
     Eta0 = invert_f_mt(YYhat)
-    Eta10 = invert_f_mt(YYhat + dYY[:nN])
-    Eta20 = invert_f_mt(YYhat + dYY[nN:])
-    print('mean Eta1 diff: '+str(np.mean(np.abs(Eta0-Eta10))))
-    print('mean Eta2 diff: '+str(np.mean(np.abs(Eta0-Eta20))))
 
     #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,T,   h1, h2
-    #XX,            XXp,          Eta,          Xi,     Eta1,   Eta2
+    #XX,            XXp,          Eta,          Xi
 
     ntries = 1
     nhyper = 1
@@ -569,8 +568,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             W20list[1] = np.zeros_like(W20list[1]) #XXp
             W20list[2] = Eta0.copy() #np.zeros(shapes[10]) #Eta
             W20list[3] = np.zeros(shapes2[3]) #Xi
-            W20list[4] = Eta10.copy() # Eta1
-            W20list[5] = Eta20.copy() # Eta2
             #[Wmx,Wmy,Wsx,Wsy,s02,k,kappa,T,XX,XXp,Eta,Xi]
             if init_W_from_lsq:
                 W10list[0],W10list[1] = initialize_W(Xhat,Yhat,scale_by=scale_init_by)
@@ -578,9 +575,13 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                     W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
             if constrain_isn:
                 W10list[1][0,0] = 3 
-                W10list[1][0,3] = 5 
-                W10list[1][3,0] = -5
-                W10list[1][3,3] = -5
+                if help_constrain_isn:
+                    W10list[1][0,3] = 5 
+                    W10list[1][3,0] = -5
+                    W10list[1][3,3] = -5
+                else:
+                    W10list[1][0,1:4] = 5
+                    W10list[1][1:4,0] = -5
 
             if init_W_from_file:
                 npyfile = np.load(init_file,allow_pickle=True)[()]
@@ -597,30 +598,15 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                     W20list[2] = Eta0.copy()
                 if len(W10list) < len(shapes1):
                     W10list = W10list + [np.array(1)] # add h2
-                if len(W20list) < len(shapes2):
-                    W20list = W20list + [Eta10.copy(),Eta20.copy()] # add Eta1,Eta2
                 if init_Eta_with_s02:
                     s02 = W10list[4].copy()
                     Eta0 = invert_f_mt_with_s02(YYhat,s02,nS=nS,nT=nT)
-                    Eta10 = invert_f_mt_with_s02(YYhat+dYY[:nN],s02,nS=nS,nT=nT)
-                    Eta20 = invert_f_mt_with_s02(YYhat+dYY[nN:],s02,nS=nS,nT=nT)
                     W20list[2] = Eta0.copy()
-                    W20list[4] = Eta10.copy()
-                    W20list[5] = Eta20.copy()
                 if init_Eta12_with_dYY:
                     Eta0 = W20list[2].copy().reshape((nN,nQ*nS*nT))
                     Xi0 = W20list[3].copy().reshape((nN,nQ*nS*nT))
                     s020 = W10list[4].copy()
                     YY0s = compute_f_(Eta0,Xi0,s020)
-                    this_YY1 = opto_transform1.transform(YY0s)
-                    this_YY2 = opto_transform2.transform(YY0s)
-                    Eta10 = invert_f_mt_with_s02(this_YY1,s020,nS=nS,nT=nT)
-                    Eta20 = invert_f_mt_with_s02(this_YY2,s020,nS=nS,nT=nT)
-                    W20list[4] = Eta10.copy()
-                    W20list[5] = Eta20.copy()
-
-                    YY10s = compute_f_(Eta10,Xi0,s020)
-                    YY20s = compute_f_(Eta20,Xi0,s020)
                     #titles = ['VIP silencing','VIP activation']
                     #for itype in [0,1,2,3]:
                     #    plt.figure(figsize=(5,2.5))
@@ -641,31 +627,31 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             print('size of bounds1: '+str(np.sum([np.size(x) for x in bd1list])))
             print('size of w10: '+str(np.sum([np.size(x) for x in W10list])))
             print('size of shapes1: '+str(np.sum([np.prod(shp) for shp in shapes1])))
-            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,opto_mask=opto_mask,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2)
+            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_tight_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,opto_mask=opto_mask,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2)
     
     
     #def parse_W(W):
-    #    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,Eta1,Eta2 = W
-    #    return Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,Eta1,Eta2
+    #    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = W
+    #    return Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2
     def parse_W1(W):
         Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2 = W
         return Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2
     def parse_W2(W):
-        XX,XXp,Eta,Xi,Eta1,Eta2 = W
-        return XX,XXp,Eta,Xi,Eta1,Eta2    
+        XX,XXp,Eta,Xi = W
+        return XX,XXp,Eta,Xi    
     
     itry = 0
     Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2 = parse_W1(W1t[0][0])
-    XX,XXp,Eta,Xi,Eta1,Eta2 = parse_W2(W2t[0][0])
+    XX,XXp,Eta,Xi = parse_W2(W2t[0][0])
     
     labels1 = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','T','h1','h2']
-    labels2 = ['XX','XXp','Eta','Xi','Eta1','Eta2']
+    labels2 = ['XX','XXp','Eta','Xi']
     Wstar_dict = {}
     for i,label in enumerate(labels1):
         Wstar_dict[label] = W1t[0][0][i]
     for i,label in enumerate(labels2):
         Wstar_dict[label] = W2t[0][0][i]
-    Wstar_dict['as_list'] = [Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,Eta1,Eta2]
+    Wstar_dict['as_list'] = [Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2]
     Wstar_dict['loss'] = loss[0][0]
     Wstar_dict['wt_dict'] = wt_dict
     np.save(weights_file,Wstar_dict,allow_pickle=True)

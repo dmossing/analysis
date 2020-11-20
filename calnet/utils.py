@@ -817,8 +817,8 @@ def u_fn_k_kappa(XX,YY,Wx,Wy,k,kappa):
     WWx,WWy = [gen_Weight_k_kappa(W,k,kappa) for W in [Wx,Wy]]
     return u_fn_WW(XX,YY,WWx,WWy)# XX @ WWx + YY @ WWy
 
-def u_fn_k_kappa_t(XX,YY,Wx,Wy,k,kappa,T):
-    WWx,WWy = [gen_Weight_k_kappa_t(W,k,kappa,T) for W in [Wx,Wy]]
+def u_fn_k_kappa_t(XX,YY,Wx,Wy,k,kappa,T,nS=2,nT=2):
+    WWx,WWy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wx,Wy]]
     return u_fn_WW(XX,YY,WWx,WWy)# XX @ WWx + YY @ WWy
 
 def u_fn_WW(XX,YY,WWx,WWy):
@@ -972,3 +972,57 @@ class fit_opto_transform(object):
 #    def opto_transform(data):
 #        return slope[np.newaxis,:]*data + intercept[np.newaxis,:] + YYhat_halo_res
 #    return opto_transform
+
+
+def compute_f_fprime_t_avg(Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1=0,h2=0,perturbation=0,burn_in=0.5,max_dist=1,opto=False,dt=1e-1,niter=100):
+    nQ = Wmy.shape[0]
+    nS = int(K.shape[0]/nQ+1)
+    nT = int(T.shape[0]/nQ+1)
+    dHH = np.zeros_like(Eta)
+    if opto:
+        dHH[:,np.arange(2,Eta.shape[1],nQ)] = 1
+        dHH = np.concatenate((dHH*h1,dHH*h2),axis=0)
+        XX12 = np.concatenate((XX,XX),axis=0)
+        XXp12 = np.concatenate((XXp,XXp),axis=0)
+        Eta12 = np.concatenate((Eta,Eta),axis=0)
+        Xi12 = np.concatenate((Xi,Xi),axis=0)
+    else:
+        XX12 = XX#np.concatenate((XX,XX),axis=0)
+        XXp12 = XXp#np.concatenate((XXp,XXp),axis=0)
+        Eta12 = Eta#np.concatenate((Eta,Eta),axis=0)
+        Xi12 = Xi#np.concatenate((Xi,Xi),axis=0)
+    fval = compute_f_(Eta12,Xi12,s02)
+    fprimeval = compute_fprime_(Eta12,Xi12,s02)
+    resEta12 = Eta12 - u_fn_k_kappa_t(XX12,fval,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT)
+    resXi12  = Xi12 - u_fn_k_kappa_t(XX12,fval,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+    YY = fval + perturbation
+    YYp = fprimeval
+    YYmean = np.zeros_like(Eta12)
+    YYprimemean = np.zeros_like(Eta12)
+    def dYYdt(YY,Eta121,Xi121):
+        return -YY + compute_f_(Eta121,Xi121,s02)
+    def dYYpdt(YYp,Eta121,Xi121):
+        return -YYp + compute_fprime_(Eta121,Xi121,s02)
+    for t in range(niter):
+        if np.mean(np.abs(YY-fval)) < max_dist:
+            Eta121 = resEta12 + u_fn_k_kappa_t(XX12,YY,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT) + dHH
+            Xi121 = resXi12 + u_fn_k_kappa_t(XX12,YY,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+            YY = YY + dt*dYYdt(YY,Eta121,Xi121)
+            YYp = YYp + dt*dYYpdt(YYp,Eta121,Xi121)
+        else:
+            print('unstable fixed point?')
+        if t>niter*burn_in:
+            YYmean = YYmean + 1/niter/burn_in*YY
+            YYprimemean = YYprimemean + 1/niter/burn_in*YYp
+        
+    return YYmean,YYprimemean
+
+def compute_var(Xi,s02,fudge=1e-4):
+    to_rep = int(Xi.shape[1]/s02.size)
+    return fudge+Xi**2+np.concatenate([s02 for ipixel in range(to_rep)],axis=0)
+
+def compute_fprime_(Eta,Xi,s02,fprime_m=fprime_miller_troyer):
+    return fprime_m(Eta,compute_var(Xi,s02))*Xi
+
+def compute_f_(Eta,Xi,s02,pop_rate_fn=f_miller_troyer):
+    return pop_rate_fn(Eta,compute_var(Xi,s02))

@@ -245,7 +245,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
                 return -YY + compute_f_(Eta1,Xi1,s02)
             for t in range(niter):
                 Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
-                Xi1 = resXi + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
+                Xi1 = resXi + u_fn(XX,YY,Wsx,Wsy,K,kappa,T)
                 YY = YY + dt*dYYdt(YY,Eta1,Xi1)
                 if t>niter*burn_in:
                     YYprime = compute_fprime_(Eta1,Xi1,s02)
