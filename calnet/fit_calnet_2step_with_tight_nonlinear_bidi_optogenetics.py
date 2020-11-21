@@ -315,7 +315,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             Ypc_list[iS][iT] = [None for icelltype in range(1,ncelltypes)]
             for icelltype in range(1,ncelltypes):
                 rss = Rso[icelltype][iS][iT].copy()#/mx[iS][icelltype] #.reshape(Rs[icelltype][ialign].shape[0],-1)
-                print('sum of isnan: '+str(np.isnan(rss).sum(1)))
+                #print('sum of isnan: '+str(np.isnan(rss).sum(1)))
                 #rss = Rso[icelltype][iS][iT].copy() #.reshape(Rs[icelltype][ialign].shape[0],-1)
                 rss = rss[np.isnan(rss).sum(1)==0]
         #         print(rss.max())
@@ -328,9 +328,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #                 print(np.min(np.sum(rs[icelltype][iS][iT],axis=1)))
                 except:
                     print('nope on Y')
-                    print('shape of rss: '+str(rss.shape))
-                    print('mean of rss: '+str(np.mean(np.isnan(rss))))
-                    print('min of this rs: '+str(np.min(np.sum(rs[icelltype][iS][iT],axis=1))))
+                    #print('shape of rss: '+str(rss.shape))
+                    #print('mean of rss: '+str(np.mean(np.isnan(rss))))
+                    #print('min of this rs: '+str(np.min(np.sum(rs[icelltype][iS][iT],axis=1))))
             Yhat[iS][iT] = np.concatenate(y,axis=1)
     #         x = sim_utils.columnize(Rso[0][iS][iT])[:,np.newaxis]
             icelltype = 0
