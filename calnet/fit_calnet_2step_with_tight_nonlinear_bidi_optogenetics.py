@@ -115,6 +115,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             #Rs[iR][ialign] = r[ialign][:,:nsize,:]
             #sm = np.nanmean(np.nansum(np.nansum(Rs[iR][ialign],1),1))
             #Rs[iR][ialign] = Rs[iR][ialign]/sm
+            print('frac isnan %d,%d: %f'%(iR,ialign,np.isnan(r[ialign]).mean()))
             Rs[iR][ialign] = sum_to_1(r[ialign][:,:nsize,:])
     #         Rs[iR][ialign] = von_mises_denoise(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir)))
     
