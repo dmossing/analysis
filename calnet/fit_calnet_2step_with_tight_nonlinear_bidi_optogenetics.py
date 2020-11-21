@@ -32,6 +32,7 @@ import scipy.optimize as sop
 import warnings
 
 warnings.filterwarnings('error',message='',category=RuntimeWarning,module='scipy.optimize')
+#warnings.filterwarnings('error',message='',category=RuntimeWarning,module='autograd')
 
 def invert_f_mt(y,s02=1,floor=-5):
     xstar = np.zeros_like(y)
@@ -123,6 +124,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     for iR,r in enumerate(rs):
         for ialign in range(nS):
             for iori in range(nT):
+                #print('this Rs shape: '+str(Rs[iR][ialign].shape))
+                #print('this Rs reshaped shape: '+str(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]].shape))
+                #print('this Rs max percent nan: '+str(np.isnan(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]]).mean(-1).max()))
                 Rso[iR][ialign][iori] = np.nanmean(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]],-1)
                 Rso[iR][ialign][iori][:,:,0] = np.nanmean(Rso[iR][ialign][iori][:,:,0],1)[:,np.newaxis] # average 0 contrast values
                 Rso[iR][ialign][iori][:,1:,1:] = ssi.convolve(Rso[iR][ialign][iori],kernel,'valid')
