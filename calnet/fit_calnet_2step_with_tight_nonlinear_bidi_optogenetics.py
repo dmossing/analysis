@@ -509,7 +509,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     opto_transform2.intercept[:,to_adjust] = -opto_transform1.intercept[:,to_adjust]/opto_transform1.slope[:,to_adjust]
     opto_transform2.res[:,to_adjust] = -opto_transform1.res[:,to_adjust]/opto_transform1.slope[:,to_adjust]
     
-    np.save('/Users/dan/Documents/notebooks/mossing-PC/shared_data/calnet_data/dYY.npy',dYY)
+    #np.save('/Users/dan/Documents/notebooks/mossing-PC/shared_data/calnet_data/dYY.npy',dYY)
     
     from importlib import reload
     reload(calnet)
