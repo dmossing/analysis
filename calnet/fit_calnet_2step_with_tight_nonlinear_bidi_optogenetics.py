@@ -318,9 +318,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #                 print('yep on Y')
     #                 print(np.min(np.sum(rs[icelltype][iS][iT],axis=1)))
                 except:
-    #                 print('nope on Y')
-                    print(np.mean(np.isnan(rss)))
-                    print(np.min(np.sum(rs[icelltype][iS][iT],axis=1)))
+                    print('nope on Y')
+                    print('mean of rss: '+str(np.mean(np.isnan(rss))))
+                    print('min of this rs: '+str(np.min(np.sum(rs[icelltype][iS][iT],axis=1))))
             Yhat[iS][iT] = np.concatenate(y,axis=1)
     #         x = sim_utils.columnize(Rso[0][iS][iT])[:,np.newaxis]
             icelltype = 0
