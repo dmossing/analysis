@@ -115,7 +115,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             #Rs[iR][ialign] = r[ialign][:,:nsize,:]
             #sm = np.nanmean(np.nansum(np.nansum(Rs[iR][ialign],1),1))
             #Rs[iR][ialign] = Rs[iR][ialign]/sm
-            print('frac isnan Rs %d,%d: %f'%(iR,ialign,np.isnan(r[ialign]).mean()))
+            #print('frac isnan Rs %d,%d: %f'%(iR,ialign,np.isnan(r[ialign]).mean()))
             Rs[iR][ialign] = sum_to_1(r[ialign][:,:nsize,:])
     #         Rs[iR][ialign] = von_mises_denoise(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir)))
     
@@ -130,9 +130,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 #print('this Rs max percent nan: '+str(np.isnan(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]]).mean(-1).max()))
                 Rso[iR][ialign][iori] = np.nanmean(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]],-1)
                 Rso[iR][ialign][iori][:,:,0] = np.nanmean(Rso[iR][ialign][iori][:,:,0],1)[:,np.newaxis] # average 0 contrast values
+                #print('frac isnan pre-conv Rso %d,%d,%d: %f'%(iR,ialign,iori,np.isnan(Rso[iR][ialign][iori]).mean()))
                 Rso[iR][ialign][iori][:,1:,1:] = ssi.convolve(Rso[iR][ialign][iori],kernel,'valid')
                 Rso[iR][ialign][iori] = Rso[iR][ialign][iori].reshape(Rso[iR][ialign][iori].shape[0],-1)
-                print('frac isnan Rso %d,%d,%d: %f'%(iR,ialign,iori,np.isnan(Rso[iR][ialign][iori]).mean()))
+                #print('frac isnan Rso %d,%d,%d: %f'%(iR,ialign,iori,np.isnan(Rso[iR][ialign][iori]).mean()))
                 #print('sum of Rso isnan: '+str(np.isnan(Rso[iR][ialign][iori]).sum(1)))
                 #Rso[iR][ialign][iori] = Rso[iR][ialign][iori]/np.nanmean(Rso[iR][ialign][iori],-1)[:,np.newaxis]
     
