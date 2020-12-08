@@ -930,6 +930,14 @@ def minus_sum_log_ceil(log_arg,big_val):
         cost = -np.sum(np.log(log_arg[ok])) + big_val*np.sum(~ok)
     return cost
 
+def minus_sum_log_slope(log_arg,big_val):
+    if np.all(log_arg>0):
+        cost = -np.sum(np.log(log_arg))
+    else:
+        ok = (log_arg>0)
+        cost = -np.sum(np.log(log_arg[ok])) + big_val*np.sum(~ok) - big_val*np.sum(log_arg[~ok])
+    return cost
+
 def simulate_opto_effect(YYhat,YYhat_halo):
     return fit_opto_transform(YYhat_halo).transform(YYhat)
     #return fit_opto_transform(YYhat_halo)(YYhat)
@@ -942,8 +950,29 @@ def simulate_opto_effect(YYhat,YYhat_halo):
     #    YYhat_halo_sim[:,:,itype] = np.concatenate((YYhat[:,np.newaxis,itype],linear_transform(YYhat[:,np.newaxis,itype])),axis=1)
     #return YYhat_halo_sim
 
+#class fit_opto_transform(object):
+#    def __init__(self,YYhat_halo):
+#        nN = YYhat_halo.shape[0]
+#        ntypes = YYhat_halo.shape[2]
+#        self.res = np.zeros((nN,ntypes))
+#        self.slope = np.zeros((1,ntypes))
+#        self.intercept = np.zeros((1,ntypes))
+#        for itype in range(YYhat_halo.shape[2]):
+#            if np.sum(np.isnan(YYhat_halo[:,:,itype]))==0:
+#                self.slope[:,itype],self.intercept[:,itype],_,_,_ = sst.linregress(YYhat_halo[:,0,itype],YYhat_halo[:,1,itype])
+#            else:
+#                self.slope[:,itype] = np.nan
+#                self.intercept[:,itype] = np.nan
+#        self.res = YYhat_halo[:,1,:] - self.slope*YYhat_halo[:,0,:] - self.intercept
+#    def transform(self,data):
+#        return self.slope*data + self.intercept + self.res
+
 class fit_opto_transform(object):
-    def __init__(self,YYhat_halo):
+    def __init__(self,YYh_h,norm01=False):
+        # input YYh_h a (nN,nlight,ntypes) array
+        self.norm01 = norm01
+        self.fudge = 1e-8
+        YYhat_halo = self.preprocess(YYh_h)
         nN = YYhat_halo.shape[0]
         ntypes = YYhat_halo.shape[2]
         self.res = np.zeros((nN,ntypes))
@@ -957,7 +986,47 @@ class fit_opto_transform(object):
                 self.intercept[:,itype] = np.nan
         self.res = YYhat_halo[:,1,:] - self.slope*YYhat_halo[:,0,:] - self.intercept
     def transform(self,data):
-        return self.slope*data + self.intercept + self.res
+        return self.slope*self.preprocess(data) + self.intercept + self.res
+    def preprocess(self,data):
+        if self.norm01:
+            #return self.norm01_fn(data)
+            return self.zscore_fn(data)
+        else:
+            return data
+    def norm01_fn(self,data):
+        if len(data.shape)==2:
+            this_data = data[:,np.newaxis,:]
+            expand_flag = True
+        else:
+            this_data = data
+            expand_flag = False
+        mx = np.max(this_data[:,0:1,:],axis=0)[np.newaxis,:,:]
+        mn = np.min(this_data[:,0:1,:],axis=0)[np.newaxis,:,:]
+        to_return = (this_data-mn)/(mx-mn + self.fudge) 
+        if expand_flag:
+            return to_return[:,0,:]
+        else:
+            return to_return
+    def zscore_fn(self,data):
+        if len(data.shape)==2:
+            this_data = data[:,np.newaxis,:]
+            expand_flag = True
+        else:
+            this_data = data
+            expand_flag = False
+        sd = np.std(this_data[:,0:1,:],axis=0)[np.newaxis,:,:]
+        mn = np.mean(this_data[:,0:1,:],axis=0)[np.newaxis,:,:]
+        to_return = (this_data-mn)/(sd + self.fudge) 
+        if expand_flag:
+            return to_return[:,0,:]
+        else:
+            return to_return
+#
+#class normalize(object):
+#    def __init__(self,data):
+#        self.mx = np.nanmax(data,axis=0)[np.newaxis]
+#        self.mn = np.nanmin(data,axis=0)[np.newaxis]
+
 
 #def fit_opto_transform(YYhat_halo):
 #    nN = YYhat_halo.shape[0]

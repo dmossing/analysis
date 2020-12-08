@@ -72,7 +72,7 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
         YY_ss = np.zeros((Nfix,Nstim,Niter+1,Model.YY.shape[1]))
     YY0 = Model.YY #compute_f_(Eta,Xi,s02)
     for istim,stim_val in enumerate(stim_vals): #range(nN):
-        print(istim)
+        #print(istim)
         if sim_type is 'fix':
             for iy,yval in enumerate(yvals):
                 for ifix in range(Nfix):
