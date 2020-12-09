@@ -394,12 +394,12 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         arr[:,to_overwrite] = arr[:,int(to_overwrite+n)]
         return arr
 
-    for to_overwrite in [1,2]:
+    for to_overwrite in [1,2]: # overwrite VIP and SST terms to be the surround, since there are more cells there
         n = 4
         dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res \
                 = [overwrite_plus_n(x,to_overwrite,n) for x in \
                         [dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res]]
-    for to_overwrite in [7]:
+    for to_overwrite in [7]: # overwrite PV surround term to be the center, since that is the condition Julia has data for
         n = -4
         dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res \
                 = [overwrite_plus_n(x,to_overwrite,n) for x in \

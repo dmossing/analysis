@@ -5,7 +5,7 @@ import numpy as np
 
 # dynamics fns
 
-def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=None,stim_vals=None,dt=1e-1,sim_type='fix',inj_mag=np.array((0,))):
+def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=None,stim_vals=None,dt=1e-1,sim_type='fix',inj_mag=np.array((0,)),residuals_on=True):
     desired = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','XX','XXp','Eta','Xi']
     Wmx,Wmy,Wsx,Wsy,s02,k,kappa,XX,XXp,Eta,Xi = [getattr(Model,key) for key in desired]
     
@@ -21,6 +21,11 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
             yvals = np.linspace(0,max_val,Ny)
         elif sim_type is 'inj':
             Nfix = len(inj_mag)
+
+    if residuals_on:
+        res_factor = 1.
+    else:
+        res_factor = 0.
     
     if stim_vals is None:
         stim_vals = np.arange(XX.shape[0])
@@ -29,7 +34,7 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
     yvals = np.linspace(0,max_val,Ny)
     
     def fY(XX,YY,stim_val,current_inj=None):
-        return Model.fXY(XX,YY,istim=stim_val,current_inj=current_inj)
+        return Model.fXY(XX,YY,istim=stim_val,current_inj=current_inj,res_factor=res_factor)
     
     def predict_YY_fix_dim(XX,YY0,stim_val,dt=dt,fix_dim=0,run_backward=False):
         def dYYdt(YY):

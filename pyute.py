@@ -1000,7 +1000,7 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
 
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
-    errors = np.concatenate((errorplus[np.newaxis],errorminus[np.newaxis]),axis=0)
+    errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
     #if ~isinstance(c,str):
     #    cc = c[np.newaxis]
     #else:
@@ -1860,7 +1860,7 @@ def compute_osi(arr,ori):
     sumterm = np.sum(arr,axis=-2)
     return np.sqrt(costerm**2+sinterm**2)/sumterm
 
-def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light on'],alpha=0.5,epsilon=0.1,errorstyle='sem',pct=(16,84)):
+def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light on'],alpha=0.5,epsilon=0.1,errorstyle='sem',pct=(16,84),plot_lines=True):
     nx = data.shape[1]
     for ilight in range(nx):
         plt.bar((ilight,),np.nanmean(data,0)[ilight],color=colors[ilight],alpha=0.5)
@@ -1879,7 +1879,8 @@ def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light o
             eps_vec = np.array((epsilon,0,-epsilon))
         else:
             eps_vec = np.zeros((nx,))
-        plt.plot(np.arange(nx)+eps_vec,data.T,c='k',alpha=alpha)
+        if plot_lines:
+            plt.plot(np.arange(nx)+eps_vec,data.T,c='k',alpha=alpha)
         plt.xticks(np.arange(nx),xticklabels)
 
 def align_to_entry(data,entry,axis=1):
@@ -1922,8 +1923,9 @@ def circ_align_to_pref(data,axis=1):
     data_aligned = circ_align_to_entry(data,pref,axis=axis)
     return data_aligned
 
-def imshow_hot_cold(arr):
-    mx = np.nanmax(np.abs(arr))
+def imshow_hot_cold(arr,mx=None):
+    if mx is None:
+        mx = np.nanmax(np.abs(arr))
     plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx)
 
 def zero_origin(cmd='y'):
@@ -1931,3 +1933,17 @@ def zero_origin(cmd='y'):
         plt.gca().set_ylim(bottom=0)
     if 'x' in cmd:
         plt.gca().set_xlim(left=0)
+
+def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05):
+    if colors is None:
+        colors = ['k' for d in data]
+    if tick_labels is None:
+        tick_labels = ['' for d in data]
+    for itype in range(len(data)):
+        mn = np.nanmean(data[itype],0)
+        plt.bar((itype,),mn,color=colors[itype],alpha=0.5,edgecolor='k')
+        lb,ub = bootstrap(data[itype][~np.isnan(data[itype])],pct=pct,axis=0,fn=np.mean)
+        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k')
+        plt.scatter(itype*np.ones_like(data[itype])+epsilon*np.random.randn(data[itype].shape[0]),data[itype],\
+                    facecolor=colors[itype],linewidth=1,edgecolor='k')
+    plt.xticks(np.arange(len(data)),tick_labels)
