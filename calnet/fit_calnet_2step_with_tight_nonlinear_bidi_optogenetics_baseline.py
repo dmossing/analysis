@@ -218,8 +218,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     k_bounds = 1.5*np.ones((nQ*(nS-1),))
 
-    k_bounds[1] = 0 # temporary: spatial kernel constrained to 0 for SST
-    k_bounds[2] = 0 # temporary: spatial kernel constrained to 0 for VIP
+    #k_bounds[1] = 0 # temporary: spatial kernel constrained to 0 for SST
+    #k_bounds[2] = 0 # temporary: spatial kernel constrained to 0 for VIP
     
     kappa_bounds = np.ones((1,))
     # kappa_bounds = 2*np.ones((1,))
@@ -570,6 +570,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['isn'] = 0.1
     wt_dict['tv'] = 0.1
     wt_dict['X'] = 3
+    wt_dict['Eta'] = 300 # 1 # 
 
     ## temporary opto from no_opto
     #wt_dict['opto'] = 0.01
