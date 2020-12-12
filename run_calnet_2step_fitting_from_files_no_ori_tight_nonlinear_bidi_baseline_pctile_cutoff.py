@@ -67,7 +67,8 @@ verbose = True
 free_amplitude = False
 
 zero_extra_weights = [np.zeros((2,4),dtype='bool'),np.zeros((4,4),dtype='bool')]
-zero_extra_weights[1][2,1] = True # temporarily constraining VIP->SST weight to be 0
+#zero_extra_weights[1][2,1] = True # temporarily constraining VIP->SST weight to be 0
+zero_extra_weights[1][1,2] = True # temporarily constraining SST->VIP weight to be 0
 
 def run_fitting(init_file,target_name,seed=None):
     print('running %s -> %s'%(init_file,target_name))

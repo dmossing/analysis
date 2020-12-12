@@ -80,7 +80,7 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False,verbose=True,free_amplitude=False,norm_opto_transforms=False,zero_extra_weights=None):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False,verbose=True,free_amplitude=False,norm_opto_transforms=False,zero_extra_weights=None,no_halo_res=False):
     
     nsize,ncontrast = 6,6
     
@@ -407,13 +407,25 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #print(Yhat_opto.shape)
     h_opto = opto_dict['h_opto']
     #dYY1 = Yhat_opto[1::2]-Yhat_opto[0::2]
+
+    Xhat_opto = opto_dict['Xhat_opto']
+    Xhat_opto = np.nanmean(np.reshape(Xhat_opto,(nN,2,nS,2,nP)),3).reshape((nN*2,-1))
+    Xhat_opto[0::12] = np.nanmean(Xhat_opto[0::12],axis=0)[np.newaxis]
+    Xhat_opto[1::12] = np.nanmean(Xhat_opto[1::12],axis=0)[np.newaxis]
+    Xhat_opto = Xhat_opto/np.nanmax(Xhat_opto[0::2],0)[np.newaxis,:]
         
     YYhat_halo = Yhat_opto.reshape((nN,2,-1))
     opto_transform1 = calnet.utils.fit_opto_transform(YYhat_halo,norm01=norm_opto_transforms)
 
-    opto_transform1.res[:,[0,2,3,4,6,7]] = 0
+    Xhat_halo = Xhat_opto.reshape((nN,2,-1))
+    opto_transform1x = calnet.utils.fit_opto_transform(Xhat_halo,norm01=norm_opto_transforms)
+
+    if no_halo_res:
+        opto_transform1.res[:,[0,2,3,4,6,7]] = 0
+        opto_transform1x.res[:,:] = 0
 
     dYY1 = opto_transform1.transform(YYhat) - opto_transform1.preprocess(YYhat)
+    dXX1 = opto_transform1x.transform(XXhat) - opto_transform1x.preprocess(XXhat)
     #YYhat_halo_sim = calnet.utils.simulate_opto_effect(YYhat,YYhat_halo)
     #dYY1 = YYhat_halo_sim[:,1,:] - YYhat_halo_sim[:,0,:]
 
@@ -431,6 +443,11 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res \
                 = [overwrite_plus_n(x,to_overwrite,n) for x in \
                         [dYY1,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res]]
+    for to_overwrite in [2]:
+        n = -2
+        dXX1,opto_transform1x.slope,opto_transform1x.intercept,opto_transform1x.res \
+                = [overwrite_plus_n(x,to_overwrite,n) for x in \
+                        [dXX1,opto_transform1x.slope,opto_transform1x.intercept,opto_transform1x.res]]
 
     if ignore_halo_vip:
         dYY1[:,2::nQ] = np.nan
@@ -470,7 +487,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
 
     YYhat_chrimson = Yhat_opto.reshape((nN,2,-1))
     opto_transform2 = calnet.utils.fit_opto_transform(YYhat_chrimson,norm01=norm_opto_transforms)
+    opto_transform2x = copy.deepcopy(opto_transform1x) # copy halo X transform; this should be ignored due to opto_maskX
     dYY2 = opto_transform2.transform(YYhat) - opto_transform2.preprocess(YYhat)
+    dXX2 = np.nan*np.ones_like(dXX1)
+    dXX2[:,[1,3]] = 1
     #YYhat_chrimson_sim = calnet.utils.simulate_opto_effect(YYhat,YYhat_chrimson)
     #dYY2 = YYhat_chrimson_sim[:,1,:] - YYhat_chrimson_sim[:,0,:]
 
@@ -490,6 +510,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #print('dYY2 mean: %03f'%np.nanmean(np.abs(dYY2)))
 
     dYY = np.concatenate((dYY1,dYY2),axis=0)
+    dXX = np.concatenate((dXX1,dXX2),axis=0)
     
     #titles = ['VIP silencing','VIP activation']
     #for itype in [0,1,2,3]:
@@ -507,6 +528,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #    plt.savefig('figures/scatter_light_on_light_off_target_celltype_%d.eps'%itype)
     
     opto_mask = ~np.isnan(dYY)
+    opto_maskX = ~np.isnan(dXX)
     #dYY[nN:][~opto_mask[nN:]] = -dYY[:nN][~opto_mask[nN:]]
 
     #print('mean of opto_mask: '+str(opto_mask.mean()))
@@ -521,7 +543,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #                [dYY,opto_transform1.slope,opto_transform1.intercept,opto_transform1.res,\
     #                opto_transform2.slope,opto_transform2.intercept,opto_transform2.res]]
     dYY = zero_nans(dYY)
+    dXX = zero_nans(dXX)
 
+    # for cell types that were not measured with chrimson, fill with values inferred from halo data (this shouldn't matter, as these entries are masked by opto_mask)
     to_adjust = np.logical_or(np.isnan(opto_transform2.slope[0]),np.isnan(opto_transform2.intercept[0]))
 
     opto_transform2.slope[:,to_adjust] = 1/opto_transform1.slope[:,to_adjust]
@@ -554,15 +578,16 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['celltypesOpto'][0,0::nQ] = pc_frac*4
     wt_dict['dirOpto'] = np.array((1,0.3))
     wt_dict['dYY'] = 10 #10
+    wt_dict['dXX'] = 10 #10
     wt_dict['coupling'] = 1e-3
     wt_dict['smi'] = 0.1
     wt_dict['smi_halo'] = 30
     wt_dict['smi_chrimson'] = 0.1
     
     ##temporary no_opto
-    wt_dict['opto'] = 0
+    wt_dict['opto'] = 0.01 #0
     wt_dict['dirOpto'] = np.array((1,1))
-    #wt_dict['stimsOpto'] = np.ones((nN,1))
+    wt_dict['stimsOpto'] = np.ones((nN,1))
     wt_dict['celltypesOpto'] = np.ones((1,nQ*nS*nT))
     wt_dict['smi'] = 0#0.01 # 0
     wt_dict['smi_halo'] = 0#1 # 0
@@ -581,7 +606,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     Eta0 = invert_f_mt(YYhat)
 
     #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,T,   h1, h2
-    #XX,            XXp,          Eta,          Xi
+    #XX,            XXp,          Eta,          Xi,     XX1,    XX2
 
     ntries = 1
     nhyper = 1
@@ -620,6 +645,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             W20list[1] = np.zeros_like(W20list[1]) #XXp
             W20list[2] = Eta0.copy() #np.zeros(shapes[10]) #Eta
             W20list[3] = np.zeros(shapes2[3]) #Xi
+            W20list[4] = np.concatenate(Xhat,axis=1) #XX
+            W20list[5] = np.concatenate(Xhat,axis=1) #XX
             #[Wmx,Wmy,Wsx,Wsy,s02,k,kappa,T,XX,XXp,Eta,Xi]
             if init_W_from_lsq:
                 W10list[0],W10list[1] = initialize_W(Xhat,Yhat,scale_by=scale_init_by)
@@ -639,10 +666,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 npyfile = np.load(init_file,allow_pickle=True)[()]
 
                 #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2,bl,amp = parse_W1(W1)
-                #XX,XXp,Eta,Xi = parse_W2(W2)
-                #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = parse_W1(W1)
-                W10list = [npyfile['as_list'][ivar] for ivar in [0,1,2,3,4,5,6,7,12,13,14,15]]
-                W20list = [npyfile['as_list'][ivar] for ivar in [8,9,10,11]]
+                #XX,XXp,Eta,Xi,XX1,XX2 = parse_W2(W2)
+                #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,XX1,XX2,h1,h2,bl,amp = parse_W1(W1)
+                W10list = [npyfile['as_list'][ivar] for ivar in [0,1,2,3,4,5,6,7,14,15,16,17]]
+                W20list = [npyfile['as_list'][ivar] for ivar in [8,9,10,11,12,13]]
                 if W20list[0].size == nN*nS*2*nP:
                     #assert(True==False)
                     W10list[7] = np.array(())
@@ -651,6 +678,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                     W20list[1] = np.nanmean(W20list[1].reshape((nN,nS,2,nP)),2).flatten() #XXp
                     W20list[2] = np.nanmean(W20list[2].reshape((nN,nS,2,nQ)),2).flatten() #Eta
                     W20list[3] = np.nanmean(W20list[3].reshape((nN,nS,2,nQ)),2).flatten() #Xi
+                    W20list[4] = np.nanmean(W20list[0].reshape((nN,nS,2,nP)),2).flatten() #XX1
+                    W20list[5] = np.nanmean(W20list[0].reshape((nN,nS,2,nP)),2).flatten() #XX2
                 if correct_Eta:
                     #assert(True==False)
                     W20list[2] = Eta0.copy()
@@ -688,7 +717,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             #print('size of bounds1: '+str(np.sum([np.size(x) for x in bd1list])))
             #print('size of w10: '+str(np.sum([np.size(x) for x in W10list])))
             #print('size of shapes1: '+str(np.sum([np.prod(shp) for shp in shapes1])))
-            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_tight_nonlinear_baseline.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,opto_mask=opto_mask,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2,verbose=verbose)
+            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_tight_nonlinear_baseline.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,dXX=dXX,constrain_isn=constrain_isn,tv=tv,opto_mask=opto_mask,opto_maskX=opto_maskX,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform1x=opto_transform1x,opto_transform2=opto_transform2,opto_transform2x=opto_transform2x,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2,verbose=verbose)
     
     
     #def parse_W(W):
@@ -698,21 +727,21 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2,bl,amp = W
         return Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2,bl,amp
     def parse_W2(W):
-        XX,XXp,Eta,Xi = W
-        return XX,XXp,Eta,Xi    
+        XX,XXp,Eta,Xi,XX1,XX2 = W
+        return XX,XXp,Eta,Xi,XX1,XX2
     
     itry = 0
     Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2,bl,amp = parse_W1(W1t[0][0])
-    XX,XXp,Eta,Xi = parse_W2(W2t[0][0])
+    XX,XXp,Eta,Xi,XX1,XX2 = parse_W2(W2t[0][0])
     
     labels1 = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','T','h1','h2','bl','amp']
-    labels2 = ['XX','XXp','Eta','Xi']
+    labels2 = ['XX','XXp','Eta','Xi','XX1','XX2']
     Wstar_dict = {}
     for i,label in enumerate(labels1):
         Wstar_dict[label] = W1t[0][0][i]
     for i,label in enumerate(labels2):
         Wstar_dict[label] = W2t[0][0][i]
-    Wstar_dict['as_list'] = [Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp]
+    Wstar_dict['as_list'] = [Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,XX1,XX2,h1,h2,bl,amp]
     Wstar_dict['loss'] = loss[0][0]
     Wstar_dict['wt_dict'] = wt_dict
     np.save(weights_file,Wstar_dict,allow_pickle=True)
