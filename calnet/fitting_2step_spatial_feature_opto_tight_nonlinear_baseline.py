@@ -537,26 +537,34 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     
     def optimize2(W10,W20,compute_hessian=False,simulate=False,verbose=True): 
         to_zero = np.array([(b[0]==0)&(b[1]==0) for b in bounds2])
+        to_one = np.array([(b[0]==1)&(b[1]==1) for b in bounds2])
+        relevant = ~to_zero  & ~to_one
+
+        W21 = W20.copy()#np.zeros_like(W20)
+        W21[to_zero] = 0
+        W21[to_one] = 1
 
         def f(w):
             W = np.zeros_like(W20)
-            W[~to_zero] = w
+            W[to_one] = 1
+            W[relevant] = w
             return minusLW(W10,W,simulate=simulate,verbose=verbose)
 
         def fprime(w):
             W = np.zeros_like(W20)
-            W[~to_zero] = w
-            return minusdLdW2(W10,W,simulate=simulate,verbose=verbose)[~to_zero]
+            W[to_one] = 1
+            W[relevant] = w
+            return minusdLdW2(W10,W,simulate=simulate,verbose=verbose)[relevant]
 
-        w20 = W20[~to_zero]
+        w20 = W20[relevant]
         #w21,loss,result = sop.fmin_cg(f,w20,fprime=fprime)
         options = {}
         options['gtol'] = 1e-1
         result = sop.minimize(f,w20,jac=fprime,options=options,method='CG')
         w21 = result.x
         loss = result.fun
-        W21 = np.zeros_like(W20)
-        W21[~to_zero] = w21
+
+        W21[relevant] = w21
 
         if compute_hessian:
             gr = grad(lambda W2: minusLW(W1,W2,simulate=simulate,verbose=verbose))(W2)
@@ -569,15 +577,18 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
 
     def optimize2_stimwise(W10,W20,compute_hessian=False,simulate=False,verbose=True): 
         to_zero = np.array([(b[0]==0)&(b[1]==0) for b in bounds2])
+        to_one = np.array([(b[0]==1)&(b[1]==1) for b in bounds2])
 
         W21 = W20.copy()#np.zeros_like(W20)
+        W21[to_zero] = 0
+        W21[to_one] = 1
         for istim in range(nN):
             print('on stimulus #%d'%istim)
             in_this_stim_list = [np.zeros(shp,dtype='bool') for shp in shapes2]
             for ivar in range(len(shapes2)):
                 in_this_stim_list[ivar][istim] = True
             in_this_stim = unparse_W(*in_this_stim_list)
-            relevant = ~to_zero & in_this_stim
+            relevant = ~to_zero  & ~to_one & in_this_stim
 
             def f(w):
                 W = np.zeros_like(W20)

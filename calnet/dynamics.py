@@ -16,10 +16,12 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
         Ny = 1
         max_val = 0
     else:
-        if sim_type is 'fix':
+        if sim_type=='fix':
             Nfix = len(fix_dim)
             yvals = np.linspace(0,max_val,Ny)
-        elif sim_type is 'inj':
+        elif sim_type=='inj':
+            Nfix = len(inj_mag)
+        elif sim_type=='layer4':
             Nfix = len(inj_mag)
 
     if residuals_on:
@@ -71,29 +73,40 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
             iiter = iiter+1
         return YY
     
-    if sim_type is 'fix':
+    if sim_type=='fix':
         YY_ss = np.zeros((Nfix,Nstim,Ny,Niter+1,Model.YY.shape[1]))
-    elif sim_type is 'inj':
+    elif sim_type=='inj':
+        YY_ss = np.zeros((Nfix,Nstim,Niter+1,Model.YY.shape[1]))
+    elif sim_type=='layer4':
         YY_ss = np.zeros((Nfix,Nstim,Niter+1,Model.YY.shape[1]))
     YY0 = Model.YY #compute_f_(Eta,Xi,s02)
     for istim,stim_val in enumerate(stim_vals): #range(nN):
         #print(istim)
-        if sim_type is 'fix':
+        if sim_type=='fix':
             for iy,yval in enumerate(yvals):
                 for ifix in range(Nfix):
                     yy0 = YY0[stim_val] #+np.random.randn(yy0.shape)
                     yy0[fix_dim[ifix]] = yval
                     YY_ss[ifix,istim,iy] = predict_YY_fix_dim(XX[stim_val],yy0,stim_val,fix_dim=fix_dim[ifix],dt=dt)
-        elif sim_type is 'inj':
+        elif sim_type=='inj':
             for ifix in range(Nfix):
                 yy0 = YY0[stim_val] #+np.random.randn(yy0.shape)
                 YY_ss[ifix,istim] = predict_YY_current_injection(XX[stim_val],yy0,stim_val,inj_dim=fix_dim,dt=dt,inj_mag=inj_mag[ifix])
+        elif sim_type=='layer4':
+            for ifix in range(Nfix):
+                yy0 = YY0[stim_val] #+np.random.randn(yy0.shape)
+                xx = np.ones((XX.shape[1]))
+                xx[0::2] = inj_mag[ifix]
+                YY_ss[ifix,istim] = predict_YY_current_injection(xx,yy0,stim_val,dt=dt,inj_dim=None)
 
-    if sim_type is 'fix':
+    if sim_type=='fix':
         if fix_dim[0] is None:
             YY_ss = YY_ss[0,:,0,:,:]
-    elif sim_type is 'inj':
+    elif sim_type=='inj':
         if fix_dim is None:
             YY_ss = YY_ss[0,:,:,:]
+
+    print('sim type: %s'%sim_type)
+    print(sim_type == 'layer4')
 
     return YY_ss

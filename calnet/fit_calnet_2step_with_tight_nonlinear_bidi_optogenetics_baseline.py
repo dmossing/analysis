@@ -570,7 +570,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['isn'] = 0.1
     wt_dict['tv'] = 0.1
     wt_dict['X'] = 3
-    #wt_dict['Eta'] = 300 # 1 # 
+    #wt_dict['Eta'] = 30 # 1 # 
 
     ## temporary opto from no_opto
     #wt_dict['opto'] = 0.01
