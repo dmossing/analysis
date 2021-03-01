@@ -213,6 +213,51 @@ def naka_rushton_two_n(c,params,ncells):
     aux = (c[np.newaxis]/c50[:,np.newaxis])
     return (a[:,np.newaxis]*aux**n_top + b)/(1+aux**n_bottom)
 
+def fit_opt_params_weibull(c,R,Rsem=None):
+    nsizes = R.shape[0]
+    a0_0 = R.max(1)
+    a1_0 = np.zeros(nsizes)
+    lam_0 = c.max()/2*np.ones(nsizes)
+    k_0 = np.ones(nsizes)
+    bds_a0 = [(0,np.inf) for _ in a0_0]
+    bds_a1 = [(0,np.inf) for _ in a1_0]
+    bds_lam = [(0,2*np.max(c)) for _ in lam_0]
+    bds_k = [(0,10) for _ in k_0]
+    bds = zip_pairs(bds_a0 + bds_a1 + bds_lam + bds_k)
+    params_0 = np.concatenate((a0_0,a1_0,lam_0,k_0))
+    if Rsem is None:
+        Rsem = np.ones_like(R)
+    else:
+        Rsem[Rsem==0] = np.min(Rsem[Rsem>0])
+
+    #def compute_this_cost(params):
+    #    return (R-weibull(c,params,nsizes))/Rsem
+    #params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
+    #try:
+    #    cov = np.linalg.inv(params_opt['jac'].T @ params_opt['jac']) 
+    #except:
+    #    cov = np.nan*np.ones((params_opt['jac'].shape[1],params_opt['jac'].shape[1]))
+    #return params_opt['x'],cov
+
+    nvar = 4
+    popt = np.zeros((nvar*nsizes,))
+    pcov = np.zeros((nvar*nsizes,nvar*nsizes))
+    for isize in range(nsizes):
+        slc = slice(isize,nsizes*nvar,nsizes)
+        popt[slc],pcov[slc][:,slc] = sop.curve_fit(weibull_one_size,c,R[isize],p0=params_0[slc],bounds=[b[slc] for b in bds])
+    return popt,pcov
+
+def weibull(c,params,ncells):
+    a0 = params[:ncells][:,np.newaxis]
+    a1 = params[ncells:2*ncells][:,np.newaxis]
+    lam = params[2*ncells:3*ncells][:,np.newaxis]
+    k = params[3*ncells:4*ncells][:,np.newaxis]
+    aux = (c[np.newaxis,:]/lam)
+    return a0 + (1-a0-a1)*(1-np.exp(-aux**k))
+
+def weibull_one_size(c,*params):
+    return weibull(c,np.array(params),1)[0]
+
 def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen=10):
 	ncells = mn.shape[0]
 	nsizes = mn.shape[1]

@@ -21,6 +21,7 @@ import pdb
 import sklearn
 from autograd import elementwise_grad as egrad
 import naka_rushton_analysis as nra
+import sim_utils
 
 blcutoff = 1
 ds = 10
@@ -704,7 +705,7 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
         mx = np.maximum(np.nanmax(y1),np.nanmax(y2))
     colors = colormap(np.linspace(0,1,ncontrast))
     if equate_0:
-        zero = [z[idim][:,0].mean() for idim in range(2)]
+        zero = [np.nanmean(z[idim][:,0]) for idim in range(2)]
         zero_color = colors[0:1]
         z = [z[idim][:,1:] for idim in range(2)]
         colors = colors[1:]
@@ -784,7 +785,8 @@ def scatter_size_contrast_diff_errorbar(x1,x2,y,equality_line=True,square=True,e
     plt.errorbar((x1mean-x2mean).flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=np.sqrt(x1sem**2+x2sem**2).flatten(),fmt='none',c='k',zorder=1)
     scatter_size_contrast(x1mean-x2mean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx)
 
-def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False,training_set=None):
+def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),running_trials=False,training_set=None,equate_ori=False):
+    # compute encoding axes based on training set trials
     na = len(alphas)
     with ut.hdf5read(dsname) as ds:
         keylist = list(ds.keys())
@@ -822,6 +824,8 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
             size = sc0['stimulus_id'][()][0]
             contrast = sc0['stimulus_id'][()][1]
             angle = sc0['stimulus_id'][()][-1]
+            if equate_ori:
+                angle = np.remainder(angle,4).astype('int')
 
             proc[k]['u'] = u
             proc[k]['sigma'] = sigma
@@ -840,6 +844,8 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
             uangle,usize,ucontrast = [sc0[key][()] for key in ['stimulus_direction_deg','stimulus_size_deg','stimulus_contrast']]
 
             proc[k]['uangle'],proc[k]['usize'],proc[k]['ucontrast'] = uangle,usize,ucontrast
+            if equate_ori:
+                proc[k]['uangle'] = proc[k]['uangle'][:int(len(proc[k]['uangle'])/2)]
 
             if np.logical_and(ontarget_ret_lax.sum()>100,running.mean()>0.5):
                 uangle,usize,ucontrast = [np.unique(arr) for arr in [angle,size,contrast]]
@@ -871,6 +877,18 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
     return reg,proc,top_score
 
 def compute_encoding_axis_auroc(reg,proc):
+    return compute_encoding_axis_fn(reg,proc,ut.compute_auroc)
+
+def hit_from_fa(y0,y1,fa):
+    return np.nanmean(y1 > np.nanpercentile(y0,100*(1-fa)))
+
+def compute_encoding_axis_hit_from_fa(reg,proc,fa=0.1):
+    return compute_encoding_axis_fn(reg,proc,lambda x,y: hit_from_fa(x,y,fa))
+
+def compute_encoding_axis_fn(reg,proc,fn):
+
+    # compute auroc based on test set trials: take population activity vectors for 0 and target contrast, use regression
+    # trained on training set to predict contrast for both sets of population activity vectors, compute AUROC of predicted contrasts for both
 
     auroc = [None for k in range(len(proc))]
     uangle,usize,ucontrast = [[None for k in range(len(proc))] for iparam in range(3)]
@@ -896,9 +914,42 @@ def compute_encoding_axis_auroc(reg,proc):
                             # this_model = reg[iexpt][icutoff][isize][iangle].copy()
                             y0 = reg[iexpt][icutoff][isize][iangle].predict(X0)
                             y1 = reg[iexpt][icutoff][isize][iangle].predict(X1)
-                            auroc[iexpt][isize,icontrast,iangle] = ut.compute_auroc(y0,y1)
+                            auroc[iexpt][isize,icontrast,iangle] = fn(y0,y1)
                         else:
                             auroc[iexpt][isize,icontrast,iangle] = np.nan
+    return auroc
+
+def compute_encoding_axis_projections(reg,proc):
+
+    # compute auroc based on test set trials: take population activity vectors for 0 and target contrast, use regression
+    # trained on training set to predict contrast for both sets of population activity vectors, compute AUROC of predicted contrasts for both
+
+    auroc = {}#[None for k in range(len(proc))]
+    uangle,usize,ucontrast = [[None for k in range(len(proc))] for iparam in range(3)]
+    icutoff = 0
+    
+    for iexpt in range(len(proc)):
+        if not reg[iexpt][icutoff] is None:
+            cutoff = proc[iexpt]['cutoffs'][icutoff]
+            desired_outputs = ['angle','size','contrast','running','sigma','v','uangle','usize','ucontrast','train']
+            angle,size,contrast,running,sigma,v,uangle[iexpt],usize[iexpt],ucontrast[iexpt],train = [proc[iexpt][output].copy() for output in desired_outputs]
+            zero_contrast = ut.k_and(contrast==0,running) #,eye_dist < np.nanpercentile(eye_dist,50))
+            nsize = len(usize[iexpt])
+            ncontrast = len(ucontrast[iexpt])
+            nangle = len(uangle[iexpt])
+            for isize in range(nsize):
+                for icontrast in range(ncontrast):
+                    for iangle in range(nangle):
+                        if ucontrast[iexpt][icontrast]==0:
+                            this_contrast = zero_contrast.copy()
+                        else:
+                            this_contrast = ut.k_and(angle==iangle,size==isize,contrast==icontrast,running,~train) #,eye_dist < np.nanpercentile(eye_dist,50))
+                        if this_contrast.sum():
+                            X1 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[this_contrast]
+                            y1 = reg[iexpt][icutoff][isize][iangle].predict(X1)
+                            auroc[(iexpt,isize,icontrast,iangle)] = y1
+                        else:
+                            auroc[(iexpt,isize,icontrast,iangle)] = np.array(())
     return auroc
 
 def show_auroc(auroc,usize=None,ucontrast=None,label='Population decoder detection AUROC'):
@@ -951,3 +1002,10 @@ def compute_size_contrast_deriv(arr,popt=None,cvals=np.array([0,6,12,25,50,100])
     nr_size_deriv[1:-1] = 0.5*(nr_size_slope[1:]+nr_size_slope[:-1])
 
     return popt,nr_contrast_deriv,nr_size_deriv
+
+def plot_bootstrapped_size_tuning(data,icontrasts=np.arange(6),colors=None,usize=np.array((5,8,13,22,36,60))):
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,len(icontrasts)))
+    size_tuning = sim_utils.gen_size_tuning(data)    
+    usize0 = np.concatenate(((0,),usize))
+    ut.plot_bootstrapped_errorbars_hillel(usize0,size_tuning[:,:,icontrasts].transpose((0,2,1)),pct=(16,84),colors=colors)

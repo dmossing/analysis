@@ -115,6 +115,7 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     # load running and pupil data
     dxdt = ut.loadmat(datafiles[0],'dxdt').flatten()
     try:
+        # first entry of pupil_ctr is x, second entry is y
         pupil_ctr,pupil_area,pupil_frac_ctr,pupil_frac_area = ut.loadmat(datafiles[0],['pupil_ctr','pupil_area','pupil_frac_ctr','pupil_frac_area'])
         pupil_area = pupil_area.flatten()
         pupil_frac_area = pupil_frac_area.flatten()

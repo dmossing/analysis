@@ -801,6 +801,15 @@ def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2):
     WW = circulate(WT,KK,nS,Mu=MuK)
     return WW
 
+def deriv_WW_to_W(WW,K,kappa,T,nS=2,nT=2):
+    # given derivative with respect to elements of WW, return derivative with 
+    # respect to elements of W
+    MuT = np.array((1,1))
+    MuK = np.array((1,kappa))
+    WT = decirculate(WW,T,nT,Mu=MuT)
+    W = decirculate(WT,K,nS,Mu=MuK)
+    return W
+
 def circulate(V,M,nZ,Mu=None):
     if not M.size:
         return V
@@ -812,6 +821,15 @@ def circulate(V,M,nZ,Mu=None):
     #VV = np.concatenate(VVlist,axis=0)
     VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
     return VV
+
+def decirculate(VV,M,nZ,Mu=None):
+    if not M.size:
+        return VV
+    if Mu is None:
+        Mu = np.ones((nZ,))
+    nY = int(VV.shape[1]/nZ)
+    mult = circulate(np.ones((nY,nY)),M,nZ)
+    return np.nansum(np.nansum((VV*mult).reshape((nZ,nY,nZ,nY)),axis=2),axis=0)
 
 def u_fn_k_kappa(XX,YY,Wx,Wy,k,kappa):
     WWx,WWy = [gen_Weight_k_kappa(W,k,kappa) for W in [Wx,Wy]]
@@ -1043,27 +1061,33 @@ class fit_opto_transform(object):
 #    return opto_transform
 
 
-def compute_f_fprime_t_avg(Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1=0,h2=0,perturbation=0,burn_in=0.5,max_dist=1,opto=False,dt=1e-1,niter=100):
+def compute_f_fprime_t_avg(Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1=0,h2=0,perturbation=0,burn_in=0.5,max_dist=1,opto=False,dt=1e-1,niter=100,XX1=None,XX2=None):
     nQ = Wmy.shape[0]
     nS = int(K.shape[0]/nQ+1)
     nT = int(T.shape[0]/nQ+1)
     dHH = np.zeros_like(Eta)
     if opto:
+        if XX1 is None:
+            XX1 = XX
+        if XX2 is None:
+            XX2 = XX
         dHH[:,np.arange(2,Eta.shape[1],nQ)] = 1
         dHH = np.concatenate((dHH*h1,dHH*h2),axis=0)
-        XX12 = np.concatenate((XX,XX),axis=0)
+        XX12 = np.concatenate((XX1,XX2),axis=0)
+        XX12_no_opto = np.concatenate((XX,XX),axis=0)
         XXp12 = np.concatenate((XXp,XXp),axis=0)
         Eta12 = np.concatenate((Eta,Eta),axis=0)
         Xi12 = np.concatenate((Xi,Xi),axis=0)
     else:
         XX12 = XX#np.concatenate((XX,XX),axis=0)
+        XX12_no_opto = XX#np.concatenate((XX,XX),axis=0)
         XXp12 = XXp#np.concatenate((XXp,XXp),axis=0)
         Eta12 = Eta#np.concatenate((Eta,Eta),axis=0)
         Xi12 = Xi#np.concatenate((Xi,Xi),axis=0)
     fval = compute_f_(Eta12,Xi12,s02)
     fprimeval = compute_fprime_(Eta12,Xi12,s02)
-    resEta12 = Eta12 - u_fn_k_kappa_t(XX12,fval,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT)
-    resXi12  = Xi12 - u_fn_k_kappa_t(XX12,fval,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+    resEta12 = Eta12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT)
+    resXi12  = Xi12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
     YY = fval + perturbation
     YYp = fprimeval
     YYmean = np.zeros_like(Eta12)
@@ -1095,3 +1119,71 @@ def compute_fprime_(Eta,Xi,s02,fprime_m=fprime_miller_troyer):
 
 def compute_f_(Eta,Xi,s02,pop_rate_fn=f_miller_troyer):
     return pop_rate_fn(Eta,compute_var(Xi,s02))
+
+def merge_by_neuron(r1,r2,expt_ids1,expt_ids2):
+    # merge r1 and r2 into a single array with one row per neuron
+    # find unique expt_ids of each
+    u1 = np.unique(expt_ids1)
+    u2 = np.unique(expt_ids2)
+    uall = np.unique(np.concatenate((expt_ids1,expt_ids2)))
+    
+    # build a logical array of which neurons are present in which of r1, r2
+    Nneurons = 0
+    in_each = np.zeros((Nneurons,2),dtype='bool')
+    for u in uall:
+        if u in u1:
+            this_Nneurons = np.sum(expt_ids1==u)
+            Nneurons = Nneurons + this_Nneurons
+        else:
+            this_Nneurons = np.sum(expt_ids2==u)
+            Nneurons = Nneurons + this_Nneurons
+        this_in_each = np.zeros((this_Nneurons,2),dtype='bool')
+        this_in_each[:,0] = (u in u1)
+        this_in_each[:,1] = (u in u2)
+        in_each = np.concatenate((in_each,this_in_each),axis=0)
+        
+    # use this to construct an array of merged expt_ids (1 and 2), and new neuron_ids
+    neuron_ids = np.arange(Nneurons)
+    expt_ids = np.zeros_like(neuron_ids)
+    expt_ids[in_each[:,0]] = expt_ids1
+    expt_ids[in_each[:,1]] = expt_ids2
+    
+    # use this to construct an array of merged rs (1 and 2)
+    rmerged = np.nan*np.ones((Nneurons,2)+r1.shape[1:])
+    rmerged[in_each[:,0],0] = r1
+    rmerged[in_each[:,1],1] = r2
+    
+    return rmerged,expt_ids,neuron_ids
+
+def compute_couplings(YY_opto,mdls):
+    nfiles,nopto,nN,ntypes = YY_opto.shape
+    couplings = np.zeros((nfiles,nopto,6,6,ntypes,ntypes))
+    phis = np.zeros((nfiles,nopto,6,6,ntypes))
+    for iwt,mdl in enumerate(mdls):
+        try:
+            Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
+            amp = np.ones((ntypes,))
+        except:
+            Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
+        #nN = Eta.shape[0]
+        nQ = Wmy.shape[1]
+        if len(K)==nQ:
+            nS = 2
+        elif len(K)==0:
+            nS = 1
+        if len(T)==nQ:
+            nT = 2
+        elif len(T)==0:
+            nT = 1
+        WWmy = gen_Weight_k_kappa_t(Wmy,K,kappa,T,nS=nS,nT=nT)
+        WWmx = gen_Weight_k_kappa_t(Wmx,K,kappa,T,nS=nS,nT=nT)
+        tiled_s02 = np.tile(s02,nS*nT)
+        bltile = np.tile(bl,nS*nT)
+        for ilight in range(YY_opto.shape[1]):
+            this_YY = 1/amp[np.newaxis,:]*(YY_opto[iwt,ilight].reshape((nN,ntypes)) - bltile[np.newaxis,:])
+            phis = mdls[iwt].fprimeXY(mdls[iwt].XX,this_YY).reshape((6,6,ntypes))
+            for istim in range(nN):
+                iistim,jjstim = np.unravel_index(istim,(6,6))
+                Phi = np.diag(phis[iistim,jjstim])
+                couplings[iwt,ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
+    return couplings

@@ -88,7 +88,10 @@ def get_ret_info(dsfile,expttype='size_contrast_0'):
                     pval = sc0['rf_mapping_pval'][:]
                     sqerror = session['retinotopy_0']['rf_sq_error'][:]
                     sigma = session['retinotopy_0']['rf_sigma'][:]
-                    amplitude = session['retinotopy_0']['rf_amplitude'][:]
+                    try:
+                        amplitude = session['retinotopy_0']['rf_amplitude'][:]
+                    except:
+                        amplitude = np.nan*np.ones_like(sigma)
                     cell_center = session['cell_center'][:]
                     rf_center = sc0['rf_displacement_deg'][:].T
                     X = cell_center
