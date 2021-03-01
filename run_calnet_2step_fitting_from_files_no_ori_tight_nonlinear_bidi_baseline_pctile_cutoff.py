@@ -52,7 +52,7 @@ weights_files = weights_files + [weights_base+fit+'.npy' for fit in good_fits]
 init_files = weights_files
 ntries = len(init_files)
 
-init_noise = 0#0.1
+init_noise = 0.1
 tv = True
 correct_Eta = False
 init_Eta_with_s02 = False
@@ -68,7 +68,7 @@ free_amplitude = False
 
 zero_extra_weights = [np.zeros((2,4),dtype='bool'),np.zeros((4,4),dtype='bool')]
 #zero_extra_weights[1][2,1] = True # temporarily constraining VIP->SST weight to be 0
-zero_extra_weights[1][1,2] = True # temporarily constraining SST->VIP weight to be 0
+#zero_extra_weights[1][1,2] = True # temporarily constraining SST->VIP weight to be 0
 
 def run_fitting(init_file,target_name,seed=None):
     print('running %s -> %s'%(init_file,target_name))

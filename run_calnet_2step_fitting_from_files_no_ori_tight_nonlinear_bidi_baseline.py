@@ -68,6 +68,7 @@ free_amplitude = False
 zero_extra_weights = [np.zeros((2,4),dtype='bool'),np.zeros((4,4),dtype='bool')]
 #zero_extra_weights[1][2,1] = True
 
+
 def run_fitting(init_file,target_name,seed=None):
     print('running %s -> %s'%(init_file,target_name))
     if not seed is None:

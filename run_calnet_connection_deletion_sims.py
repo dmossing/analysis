@@ -9,7 +9,8 @@ import multiprocessing as mp
 
 calnet_base = '/home/dan/calnet_data/'
 Niter = int(2e3)
-opto_levels = 1*np.linspace(-1,1,21)
+opto_levels = np.array((0,))
+#opto_levels = 1*np.linspace(-1,1,21)
 #opto_levels = 1*np.linspace(0,1.5,16)
 #opto_levels = 1*np.linspace(-0.15,0.15,31)
 dt = 1e-1
@@ -32,16 +33,41 @@ def build_models(weights_files):
     mdls_no_pcpc = [None for iwt in range(nwt)]
     for iwt in range(nwt):
         wtdict = np.load(weights_files[iwt],allow_pickle=True)[()]
-        wtdict['Wmy'][0,0] = 0
         mdls_no_pcpc[iwt] = cc.ModelOri(wtdict,nT=1)
+        mdls_no_pcpc[iwt].Wmy[0,0] = 0
+        mdls_no_pcpc[iwt].set_WW()
 
     mdls_no_pcpv = [None for iwt in range(nwt)]
     for iwt in range(nwt):
         wtdict = np.load(weights_files[iwt],allow_pickle=True)[()]
-        wtdict['Wmy'][[0,0,3,3],[0,3,0,3]] = 0
         mdls_no_pcpv[iwt] = cc.ModelOri(wtdict,nT=1)
+        mdls_no_pcpv[iwt].Wmy[[0,0,3,3],[0,3,0,3]] = 0
+        mdls_no_pcpv[iwt].set_WW()
+
+    mdls_no_vipbias = [None for iwt in range(nwt)]
+    for iwt in range(nwt):
+        wtdict = np.load(weights_files[iwt],allow_pickle=True)[()]
+        mdls_no_vipbias[iwt] = cc.ModelOri(wtdict,nT=1)
+        mdls_no_vipbias[iwt].Wmx[1,2] = mdls_no_vipbias[iwt].Wmx[1,2] - 1
+        mdls_no_vipbias[iwt].set_WW()
+
+    mdls_no_pcvip = [None for iwt in range(nwt)]
+    for iwt in range(nwt):
+        wtdict = np.load(weights_files[iwt],allow_pickle=True)[()]
+        mdls_no_pcvip[iwt] = cc.ModelOri(wtdict,nT=1)
+        mdls_no_pcvip[iwt].Wmx[0,2] = 0
+        mdls_no_pcvip[iwt].Wmy[0,2] = 0
+        mdls_no_pcvip[iwt].set_WW()
+
+    mdls_no_pcsst = [None for iwt in range(nwt)]
+    for iwt in range(nwt):
+        wtdict = np.load(weights_files[iwt],allow_pickle=True)[()]
+        mdls_no_pcsst[iwt] = cc.ModelOri(wtdict,nT=1)
+        mdls_no_pcsst[iwt].Wmx[0,1] = 0
+        mdls_no_pcsst[iwt].Wmy[0,1] = 0
+        mdls_no_pcsst[iwt].set_WW()
         
-    return mdls,mdls_no_pcpc,mdls_no_pcpv
+    return mdls,mdls_no_pcpc,mdls_no_pcpv,mdls_no_pcvip,mdls_no_pcsst,mdls_no_vipbias
 
 def run_on_mdl(mdl,sim_options):
     Niter,opto_levels,dt,fix_dim,avg_last_factor,sim_type = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor','sim_type']]
@@ -68,11 +94,11 @@ def simulate_opto_effects(mdls,sim_options=sim_options,pool_size=1):
     return YY_opto_tavg
 
 def build_models_and_simulate_opto_effects(weights_files,target_file,sim_options=sim_options,pool_size=1):
-    mdls,mdls_no_pcpc,mdls_no_pcpv = build_models(weights_files)
+    #mdls,mdls_no_pcpc,mdls_no_pcpv,mdls_no_pcvip,mdls_no_pcsst,mdls_no_vipbias = build_models(weights_files)
+    all_mdls = build_models(weights_files)
+    YYs = [simulate_opto_effects(mdls,sim_options=sim_options,pool_size=pool_size) for mdls in all_mdls]
+    mdls = all_mdls[0]
     nwt = len(mdls)
-    YY_opto_tavg = simulate_opto_effects(mdls,sim_options=sim_options,pool_size=pool_size)
-    YY_opto_tavg_no_pcpc = simulate_opto_effects(mdls_no_pcpc,sim_options=sim_options,pool_size=pool_size)
-    YY_opto_tavg_no_pcpv = simulate_opto_effects(mdls_no_pcpv,sim_options=sim_options,pool_size=pool_size)
     iwt = 0
     nQ,nS,nT = mdls[iwt].nQ,mdls[iwt].nS,mdls[iwt].nT
     bltiles = np.zeros((nwt,nQ*nS*nT))
@@ -88,17 +114,17 @@ def build_models_and_simulate_opto_effects(weights_files,target_file,sim_options
     def transform(YY_opto_tavg):
         YY_opto_tavg = amps[:,np.newaxis,np.newaxis,:]*YY_opto_tavg + bltiles[:,np.newaxis,np.newaxis,:]
         return YY_opto_tavg
-    YY_opto_tavg = transform(YY_opto_tavg)
-    YY_opto_tavg_no_pcpc = transform(YY_opto_tavg_no_pcpc)
-    YY_opto_tavg_no_pcpv = transform(YY_opto_tavg_no_pcpv)
-    np.save(target_file,{'YY_opto':YY_opto_tavg,'YY_opto_no_pcpc':YY_opto_tavg_no_pcpc,'YY_opto_no_pcpv':YY_opto_tavg_no_pcpv})
+    YYs = [transform(YY) for YY in YYs]
+    keys = ['YY_opto','YY_opto_no_pcpc','YY_opto_no_pcpv','YY_opto_tavg_no_pcvip','YY_opto_tavg_no_pcsst','YY_opto_tavg_no_vipbias']
+    to_save = dict(zip(keys,YYs))
+    np.save(target_file,to_save)
 
 def run(fit_lbl,calnet_base=calnet_base,sim_options=sim_options,pool_size=1):
     weights_fold = calnet_base + 'weights/weights_%s/'%fit_lbl
     weights_files = glob.glob(weights_fold+'*.npy')
     weights_files.sort()
     #weights_files = weights_files[:1]
-    target_file = calnet_base + 'dynamics/l4_opto_tavg_%s.npy'%fit_lbl
+    target_file = calnet_base + 'dynamics/connection_deletion_opto_tavg_%s.npy'%fit_lbl
     build_models_and_simulate_opto_effects(weights_files,target_file,sim_options=sim_options,pool_size=pool_size)
 
 if __name__=='__main__':
