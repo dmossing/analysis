@@ -5,7 +5,7 @@ import sys
 import pyute as ut
 import numpy as np
 
-calnet_data_fold = '/Users/dan/Documents/notebooks/mossing-PC/shared_data/calnet_data/'
+calnet_data_fold = '/home/dan/calnet_data/'
 
 #ca_data_file = calnet_data_fold+'rs_vm_denoise_200605.npy'
 ca_data_file = calnet_data_fold+'rs_200828.npy'
@@ -49,7 +49,7 @@ good_fits = ['002','003','005','010','015','034','042','070','072','073',\
             '185','192','193','199']
 weights_files = weights_files + [weights_base+fit+'.npy' for fit in good_fits]
 
-weights_files = np.load('/Users/dan/Documents/notebooks/mossing-PC/simulation/weights_files_list.npy',allow_pickle=True)[()]
+#weights_files = np.load('/Users/dan/Documents/notebooks/mossing-PC/simulation/weights_files_list.npy',allow_pickle=True)[()]
 
 init_files = weights_files
 ntries = len(init_files)

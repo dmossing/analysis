@@ -265,7 +265,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #XX,            XXp,          Eta,          Xi
     
     #bdlist = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h1_bounds,h2_bounds]
-    bd1list = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,h1_bounds,h2_bounds,bl_bounds,amp_bounds,]
+    bd1list = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,h1_bounds,h2_bounds,bl_bounds,amp_bounds]
     bd2list = [X_bounds,Xp_bounds,Eta_bounds,Xi_bounds]
     
     lb1,ub1 = [[sgn*np.inf*np.ones(shp) for shp in shapes1] for sgn in [-1,1]]
@@ -570,7 +570,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['isn'] = 0.1
     wt_dict['tv'] = 0.1
     wt_dict['X'] = 3
-    #wt_dict['Eta'] = 30 # 1 # 
+    wt_dict['Eta'] = 3 # 1 # 
 
     ## temporary opto from no_opto
     #wt_dict['opto'] = 0.01

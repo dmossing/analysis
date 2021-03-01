@@ -9,11 +9,11 @@ import multiprocessing as mp
 
 calnet_base = '/home/dan/calnet_data/'
 Niter = int(2e3)
-opto_levels = 1*np.linspace(-1,1,21)
-#opto_levels = 1*np.linspace(0,1.5,16)
+#opto_levels = [1*np.linspace(-1.5,1.5,31),-1]
+opto_levels = [np.array((-0.3,0,0.3)),-1]
 #opto_levels = 1*np.linspace(-0.15,0.15,31)
 dt = 1e-1
-fix_dim = 0
+fix_dim = [None,3]
 avg_last_factor = 0.5
 sim_type = 'layer4'
 sim_options = {}
@@ -47,14 +47,14 @@ def run_on_mdl(mdl,sim_options):
     Niter,opto_levels,dt,fix_dim,avg_last_factor,sim_type = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor','sim_type']]
     average_last = int(np.floor(Niter*avg_last_factor)) #/5
     #print('sim type: %s'%sim_type)
-    this_YY_opto = dyn.compute_steady_state_Model(mdl,Niter=Niter,fix_dim=fix_dim,inj_mag=opto_levels,sim_type=sim_type,dt=dt)
+    this_YY_opto = dyn.compute_steady_state_Model_multi_inj(mdl,Niter=Niter,fix_dim=fix_dim,inj_mag=opto_levels,sim_type=sim_type,dt=dt)
     to_return = np.nanmean(this_YY_opto[:,:,-average_last:],2)
     return to_return
 
 def simulate_opto_effects(mdls,sim_options=sim_options,pool_size=1):
     nwt = len(mdls)
     Niter,opto_levels,dt,fix_dim,avg_last_factor,sim_type = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor','sim_type']]
-    nopto = sim_options['opto_levels'].size
+    nopto = sim_options['opto_levels'][0].size
     if pool_size==1:
         YY_opto_tavg = np.zeros((nwt,nopto)+mdls[0].Eta.shape)
         for iwt in range(nwt):
@@ -97,8 +97,8 @@ def run(fit_lbl,calnet_base=calnet_base,sim_options=sim_options,pool_size=1):
     weights_fold = calnet_base + 'weights/weights_%s/'%fit_lbl
     weights_files = glob.glob(weights_fold+'*.npy')
     weights_files.sort()
-    #weights_files = weights_files[:1]
-    target_file = calnet_base + 'dynamics/l4_opto_tavg_%s.npy'%fit_lbl
+    #target_file = calnet_base + 'dynamics/pc_opto_tavg_%s.npy'%fit_lbl
+    target_file = calnet_base + 'dynamics/l4_opto_tavg_vip_silencing_%s.npy'%fit_lbl
     build_models_and_simulate_opto_effects(weights_files,target_file,sim_options=sim_options,pool_size=pool_size)
 
 if __name__=='__main__':

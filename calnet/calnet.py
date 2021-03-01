@@ -114,16 +114,24 @@ class ModelOri(Model):
         if self.K is None:
             self.K = self.k
         
+        self.YY = self.compute_f_(self.Eta,self.Xi,self.s02)
+        
+        self.set_WW()
+        
+        self.set_res()
+
+    def set_WW(self):
         wws = ['WWmx','WWmy','WWsx','WWsy']
         ws = ['Wmx','Wmy','Wsx','Wsy']
         for w,ww in zip(ws,wws):
             W = getattr(self,w)
             WW = calnet.utils.gen_Weight_k_kappa_t(W,self.K,self.kappa,self.T,nS=self.nS,nT=self.nT)
             setattr(self,ww,WW)
-        
-        self.YY = self.compute_f_(self.Eta,self.Xi,self.s02)
+
+    def set_res(self):
         self.resEta = self.Eta - self.u_fn_m(self.XX,self.YY)
         self.resXi = self.Xi - self.u_fn_s(self.XX,self.YY)
+
         
 class Dataset(object):
     def __init__(self,dsfiles=[],modal_uparams=[]):

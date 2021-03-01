@@ -81,7 +81,7 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False,verbose=True,free_amplitude=False,norm_opto_transforms=False,zero_extra_weights=None,no_halo_res=False):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False,verbose=True,free_amplitude=False,norm_opto_transforms=False,zero_extra_weights=None,no_halo_res=False,l23_as_l4=False):
     
     nsize,ncontrast = 6,6
     
@@ -266,7 +266,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #XX,            XXp,          Eta,          Xi
     
     #bdlist = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h1_bounds,h2_bounds]
-    bd1list = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,h1_bounds,h2_bounds,bl_bounds,amp_bounds,]
+    bd1list = [Wmx_bounds,Wmy_bounds,Wsx_bounds,Wsy_bounds,s02_bounds,k_bounds,kappa_bounds,T_bounds,h1_bounds,h2_bounds,bl_bounds,amp_bounds]
     bd2list = [X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,X_bounds,X_bounds]
     
     lb1,ub1 = [[sgn*np.inf*np.ones(shp) for shp in shapes1] for sgn in [-1,1]]
@@ -418,6 +418,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     YYhat_halo = Yhat_opto.reshape((nN,2,-1))
     opto_transform1 = calnet.utils.fit_opto_transform(YYhat_halo,norm01=norm_opto_transforms)
 
+    if l23_as_l4:
+        Xhat_opto[:,0::2] = Yhat_opto[:,0::4]
     Xhat_halo = Xhat_opto.reshape((nN,2,-1))
     opto_transform1x = calnet.utils.fit_opto_transform(Xhat_halo,norm01=norm_opto_transforms)
 
@@ -489,10 +491,18 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
 
     YYhat_chrimson = Yhat_opto.reshape((nN,2,-1))
     opto_transform2 = calnet.utils.fit_opto_transform(YYhat_chrimson,norm01=norm_opto_transforms)
-    opto_transform2x = copy.deepcopy(opto_transform1x) # copy halo X transform; this should be ignored due to opto_maskX
+
+    Xhat_opto = np.nan*np.ones((Yhat_opto.shape[0],nP*nS*nT))
+    Xhat_opto[:,1::2] = 1
+    if l23_as_l4:
+        Xhat_opto[:,0::2] = Yhat_opto[:,0::4]
+
+    Xhat_chrimson = Xhat_opto.reshape((nN,2,-1))
+    opto_transform2x = calnet.utils.fit_opto_transform(Xhat_chrimson,norm01=norm_opto_transforms)
+
     dYY2 = opto_transform2.transform(YYhat) - opto_transform2.preprocess(YYhat)
-    dXX2 = np.nan*np.ones_like(dXX1)
-    dXX2[:,[1,3]] = 1
+    dXX2 = opto_transform2x.transform(XXhat) - opto_transform2x.preprocess(XXhat)
+
     #YYhat_chrimson_sim = calnet.utils.simulate_opto_effect(YYhat,YYhat_chrimson)
     #dYY2 = YYhat_chrimson_sim[:,1,:] - YYhat_chrimson_sim[:,0,:]
 

@@ -14,6 +14,7 @@ import autograd.scipy.special as ssp
 from autograd import jacobian
 import size_contrast_analysis as sca
 import scipy.stats as sst
+import multiprocessing as mp
 
 def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
     # take in an HDF5 data struct, and convert to an n-dimensional matrix
@@ -896,41 +897,76 @@ def parse_thing(V,shapes):
         outputs.append(new_element)
         sofar = sofar + size
     return outputs
+
+def fold_T_(stim_deriv,nS=2,nT=2,nQ=None):
+    if nQ is None:
+        nQ = int(stim_deriv.shape[1]/nS/nT)
+    this_nN = stim_deriv.shape[0]
+    this_stim_deriv = np.concatenate([stim_deriv.reshape((this_nN,nS,nT,nQ))[:,:,iT,:].reshape((this_nN,-1)) for iT in range(nT)],axis=0)
+    return this_stim_deriv
     
-def compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nS=2,nT=2):
+def compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nQ=None,nS=2,nT=2,foldT=False):
+    # if foldT: stack responses from all orientations as different stims, for the same population of neurons
     tot = 0
-    this_ncelltypes = len(pc_list[0][0])
-    for iel in range(stim_deriv.shape[1]):
-        iS,iT,icelltype = np.unravel_index(iel,(nS,nT,this_ncelltypes))
-        sigma2 = np.sum(stim_deriv[:,iel]**2)
-        #print_labeled('sigma2',sigma2)
-        if sigma2>0 and not pc_list[iS][iT][icelltype] is None:
-            inner_prod = np.sum([pc[0]**2*np.sqrt(sigma2)*inner_product_(stim_deriv[:,iel],pc[1]) for pc in pc_list[iS][iT][icelltype]])
-        else:
-            inner_prod = 0 
-        tot = tot - 1/noise/(noise + sigma2)*inner_prod #.sum()
+    if not foldT:
+        # pc_list: list of nS x lists of nT x lists of ncelltype x lists of k (eigenvalue,eigenvector) pairs
+        this_ncelltypes = len(pc_list[0][0])
+        this_stim_deriv = stim_deriv
+        for iel in range(this_stim_deriv.shape[1]):
+            iS,iT,icelltype = np.unravel_index(iel,(nS,nT,this_ncelltypes))
+            sigma2 = np.sum(this_stim_deriv[:,iel]**2)
+            #print_labeled('sigma2',sigma2)
+            if sigma2>0 and not pc_list[iS][iT][icelltype] is None:
+                inner_prod = np.sum([pc[0]**2*np.sqrt(sigma2)*inner_product_(this_stim_deriv[:,iel],pc[1]) for pc in pc_list[iS][iT][icelltype]])
+            else:
+                inner_prod = 0 
+            tot = tot - 1/noise/(noise + sigma2)*inner_prod #.sum()
+    else:
+        # pc_list: list of nS x lists of ncelltype x lists of k (eigenvalue,eigenvector) pairs
+        this_ncelltypes = len(pc_list[0])
+        this_stim_deriv = fold_T_(stim_deriv,nQ=this_ncelltypes,nS=nS,nT=nT)
+        for iel in range(stim_deriv.shape[1]):
+            iS,icelltype = np.unravel_index(iel,(nS,this_ncelltypes))
+            sigma2 = np.sum(this_stim_deriv[:,iel]**2)
+            #print_labeled('sigma2',sigma2)
+            if sigma2>0 and not pc_list[iS][icelltype] is None:
+                inner_prod = np.sum([pc[0]**2*np.sqrt(sigma2)*inner_product_(this_stim_deriv[:,iel],pc[1]) for pc in pc_list[iS][icelltype]])
+            else:
+                inner_prod = 0 
+            tot = tot - 1/noise/(noise + sigma2)*inner_prod #.sum()
+
     return tot
 
-def compute_log_det_sig2(stim_deriv,noise):
-        sigma2 = inner_product_(stim_deriv,stim_deriv) #np.sum(stim_deriv**2,0)
-        return np.sum([np.log(s2+noise) for s2 in sigma2])
+def compute_log_det_sig2(stim_deriv,noise,foldT=False,nQ=None,nS=2,nT=2):
+    if foldT:
+        this_stim_deriv = fold_T_(stim_deriv,nQ=nQ,nS=nS,nT=nT)
+    else:
+        this_stim_deriv = stim_deriv
+    sigma2 = inner_product_(this_stim_deriv,this_stim_deriv) #np.sum(stim_deriv**2,0)
+    return np.sum([np.log(s2+noise) for s2 in sigma2])
 
-def compute_mahalanobis_dist(stim_deriv,noise,mu_data,mu_model):
+def compute_mahalanobis_dist(stim_deriv,noise,mu_data,mu_model,foldT=False,nQ=None,nS=2,nT=2):
         # in the case where stim_deriv = 0 (no variability model) only the noise (sqerror) term contributes
     mu_dist = mu_model-mu_data
-    inner_prod = inner_product_(stim_deriv,mu_dist) #np.einsum(stim_deriv,mu_dist,'ik,jk->ij')
-    sigma2 = inner_product_(stim_deriv,stim_deriv) #np.sum(stim_deriv**2,0)
-    noise_term = 1/noise*np.sum(inner_product_(mu_dist,mu_dist)) #np.inner(mu_dist,mu_dist)
+    if foldT:
+        this_stim_deriv = fold_T_(stim_deriv,nQ=nQ,nS=nS,nT=nT)
+        this_mu_dist = fold_T_(mu_dist,nQ=nQ,nS=nS,nT=nT)
+    else:
+        this_stim_deriv = stim_deriv
+        this_mu_dist = mu_dist
+    inner_prod = inner_product_(this_stim_deriv,this_mu_dist) #np.einsum(this_stim_deriv,this_mu_dist,'ik,jk->ij')
+    sigma2 = inner_product_(this_stim_deriv,this_stim_deriv) #np.sum(this_stim_deriv**2,0)
+    noise_term = 1/noise*np.sum(inner_product_(this_mu_dist,this_mu_dist)) #np.inner(this_mu_dist,this_mu_dist)
     cov_term = np.sum([-1/noise/(noise+s2)*np.sum(ip**2) for s2,ip in zip(sigma2,inner_prod)])
     return noise_term + cov_term
     
-def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nS=2,nT=2):
+def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=None,nS=2,nT=2,foldT=False):
         # omitting a few terms: - d - log(sig1) # where d is the dimensionality
         # in the case where stim_deriv = 0 (no variability model) only the noise (sqerror) 
         # term in mahalanobis_dist contributes
-    log_det = compute_log_det_sig2(stim_deriv,noise)
-    tr_sig_quotient = compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nS=nS,nT=nT)
-    maha_dist = compute_mahalanobis_dist(stim_deriv,noise,mu_data,mu_model)
+    log_det = compute_log_det_sig2(stim_deriv,noise,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
+    tr_sig_quotient = compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
+    maha_dist = compute_mahalanobis_dist(stim_deriv,noise,mu_data,mu_model,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
     lbls = ['log_det','tr_sig_quotient','maha_dist']
     vars = [log_det,tr_sig_quotient,maha_dist]
     #for lbl,var in zip(lbls,vars):
@@ -1187,3 +1223,59 @@ def compute_couplings(YY_opto,mdls):
                 Phi = np.diag(phis[iistim,jjstim])
                 couplings[iwt,ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
     return couplings
+
+def set_bounds_by_code(lb,ub,bdlist):
+    set_bound(lb,[bd==0 for bd in bdlist],val=0)
+    set_bound(ub,[bd==0 for bd in bdlist],val=0)
+    
+    set_bound(lb,[bd==2 for bd in bdlist],val=0)
+    
+    set_bound(ub,[bd==-2 for bd in bdlist],val=0)
+    
+    set_bound(lb,[bd==1 for bd in bdlist],val=1)
+    set_bound(ub,[bd==1 for bd in bdlist],val=1)
+    
+    set_bound(lb,[bd==1.5 for bd in bdlist],val=0)
+    set_bound(ub,[bd==1.5 for bd in bdlist],val=1)
+    
+    set_bound(lb,[bd==-1 for bd in bdlist],val=-1)
+    set_bound(ub,[bd==-1 for bd in bdlist],val=-1)
+    return lb,ub
+
+def set_bound(bd,code,val=0):
+    # set bounds to 0 where 0s occur in 'code'
+    for iitem in range(len(bd)):
+        bd[iitem][code[iitem]] = val
+
+def run_fitting(fws_fn,init_file,target_name,seed=None,**kwargs):
+    print('running %s -> %s'%(init_file,target_name))
+    if not seed is None:
+        np.random.seed(seed=seed)
+    fws_fn(target_name,init_file=init_file,**kwargs)
+
+def run_fitting_one_arg(inp):
+    fws_fn,init_file,target_name,seed,fit_options = inp
+    run_fitting(fws_fn,init_file,target_name,seed=seed,**fit_options)
+
+def run_all_fitting(fws_fn=None,init_files=None,calnet_data_fold=None,weight_base=None,offset=None,nreps=None,fit_options=None,parallel=False,nprocesses=1):
+    ut.mkdir(calnet_data_fold+'weights/'+weight_base)
+
+    ntries = len(init_files)
+
+    weights_files = []
+    for irep in range(nreps):
+        weights_files = weights_files + [calnet_data_fold+'weights/'+weight_base+'/%03d.npy'%itry for itry in range(offset+ntries*irep,offset+ntries*(irep+1))]
+
+    fws_fns_ = [fws_fn for _ in range(ntries*nreps)]
+    init_files_ = [a for _ in range(nreps) for a in init_files]
+    target_names_ = weights_files
+    seeds_ = offset + np.arange(ntries*nreps)
+    fit_options_ = [fit_options for _ in range(ntries*nreps)]
+    inp = zip(fws_fns_,init_files_,target_names_,seeds_,fit_options_)
+
+    if parallel:
+        with mp.Pool(processes=nprocesses) as p:
+            p.map(run_fitting_one_arg,inp)
+    else:
+        for this_inp in inp:
+            run_fitting_one_arg(this_inp)
