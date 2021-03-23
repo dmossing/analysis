@@ -12,9 +12,11 @@ from mpl_toolkits.mplot3d import Axes3D
 import sklearn.discriminant_analysis as skd
 import autograd.scipy.special as ssp
 from autograd import jacobian
+from autograd import grad
 import size_contrast_analysis as sca
 import scipy.stats as sst
 import multiprocessing as mp
+import copy
 
 def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
     # take in an HDF5 data struct, and convert to an n-dimensional matrix
@@ -1120,10 +1122,14 @@ def compute_f_fprime_t_avg(Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1=0,h2=0
         XXp12 = XXp#np.concatenate((XXp,XXp),axis=0)
         Eta12 = Eta#np.concatenate((Eta,Eta),axis=0)
         Xi12 = Xi#np.concatenate((Xi,Xi),axis=0)
+    WWmx,WWmy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wmx,Wmy]]
+    WWsx,WWsy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wsx,Wsy]]
     fval = compute_f_(Eta12,Xi12,s02)
     fprimeval = compute_fprime_(Eta12,Xi12,s02)
-    resEta12 = Eta12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT)
-    resXi12  = Xi12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+    #resEta12 = Eta12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT)
+    #resXi12  = Xi12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+    resEta12 = Eta12 - u_fn_WW(XX12_no_opto,fval,WWmx,WWmy)
+    resXi12 = Xi12 - u_fn_WW(XX12_no_opto,fval,WWsx,WWsy)
     YY = fval + perturbation
     YYp = fprimeval
     YYmean = np.zeros_like(Eta12)
@@ -1134,8 +1140,65 @@ def compute_f_fprime_t_avg(Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1=0,h2=0
         return -YYp + compute_fprime_(Eta121,Xi121,s02)
     for t in range(niter):
         if np.mean(np.abs(YY-fval)) < max_dist:
-            Eta121 = resEta12 + u_fn_k_kappa_t(XX12,YY,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT) + dHH
-            Xi121 = resXi12 + u_fn_k_kappa_t(XX12,YY,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+            #Eta121 = resEta12 + u_fn_k_kappa_t(XX12,YY,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT) + dHH
+            #Xi121 = resXi12 + u_fn_k_kappa_t(XX12,YY,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+            Eta121 = resEta12 + u_fn_WW(XX12_no_opto,fval,WWmx,WWmy) + dHH
+            Xi121 = resXi12 + u_fn_WW(XX12_no_opto,fval,WWsx,WWsy)
+            YY = YY + dt*dYYdt(YY,Eta121,Xi121)
+            YYp = YYp + dt*dYYpdt(YYp,Eta121,Xi121)
+        else:
+            print('unstable fixed point?')
+        if t>niter*burn_in:
+            YYmean = YYmean + 1/niter/burn_in*YY
+            YYprimemean = YYprimemean + 1/niter/burn_in*YYp
+        
+    return YYmean,YYprimemean
+
+def compute_f_fprime_t_avg_mdl(mdl,perturbation=0,burn_in=0.5,max_dist=1,dt=1e-1,niter=100,istim=None):
+    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
+    WWmx = mdl.WWmx
+    WWmy = mdl.WWmy
+    WWsx = mdl.WWsx
+    WWsy = mdl.WWsy
+    nQ = Wmy.shape[0]
+    nS = int(K.shape[0]/nQ+1)
+    nT = int(T.shape[0]/nQ+1)
+    if istim is None:
+        XX12 = XX#np.concatenate((XX,XX),axis=0)
+        XXp12 = XXp#np.concatenate((XXp,XXp),axis=0)
+        Eta12 = Eta#np.concatenate((Eta,Eta),axis=0)
+        Xi12 = Xi#np.concatenate((Xi,Xi),axis=0)
+        resEta12 = mdl.resEta
+        resXi12 = mdl.resXi
+        #WWmx,WWmy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wmx,Wmy]]
+        #WWsx,WWsy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wsx,Wsy]]
+    else:
+        XX12 = XX[istim:istim+1]#np.concatenate((XX,XX),axis=0)
+        XXp12 = XXp[istim:istim+1]#np.concatenate((XXp,XXp),axis=0)
+        Eta12 = Eta[istim:istim+1]#np.concatenate((Eta,Eta),axis=0)
+        Xi12 = Xi[istim:istim+1]#np.concatenate((Xi,Xi),axis=0)
+        resEta12 = mdl.resEta[istim:istim+1]
+        resXi12 = mdl.resXi[istim:istim+1]
+        #WWmx,WWmy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wmx,Wmy]]
+        #WWsx,WWsy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wsx,Wsy]]
+    fval = compute_f_(Eta12,Xi12,s02)
+    fprimeval = compute_fprime_(Eta12,Xi12,s02)
+    #resEta12 = Eta12 - u_fn_WW(XX12,fval,WWmx,WWmy)
+    #resXi12 = Xi12 - u_fn_WW(XX12,fval,WWsx,WWsy)
+    YY = fval + perturbation
+    YYp = fprimeval
+    YYmean = np.zeros_like(Eta12)
+    YYprimemean = np.zeros_like(Eta12)
+    def dYYdt(YY,Eta121,Xi121):
+        return -YY + compute_f_(Eta121,Xi121,s02)
+    def dYYpdt(YYp,Eta121,Xi121):
+        return -YYp + compute_fprime_(Eta121,Xi121,s02)
+    for t in range(niter):
+        if np.mean(np.abs(YY-fval)) < max_dist:
+            #Eta121 = resEta12 + u_fn_k_kappa_t(XX12,YY,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT) + dHH
+            #Xi121 = resXi12 + u_fn_k_kappa_t(XX12,YY,Wsx,Wsy,K,kappa,T,nS=nS,nT=nT)
+            Eta121 = resEta12 + u_fn_WW(XX12,fval,WWmx,WWmy)
+            Xi121 = resXi12 + u_fn_WW(XX12,fval,WWsx,WWsy)
             YY = YY + dt*dYYdt(YY,Eta121,Xi121)
             YYp = YYp + dt*dYYpdt(YYp,Eta121,Xi121)
         else:
@@ -1194,35 +1257,173 @@ def merge_by_neuron(r1,r2,expt_ids1,expt_ids2):
 def compute_couplings(YY_opto,mdls):
     nfiles,nopto,nN,ntypes = YY_opto.shape
     couplings = np.zeros((nfiles,nopto,6,6,ntypes,ntypes))
-    phis = np.zeros((nfiles,nopto,6,6,ntypes))
+    #phis = np.zeros((nfiles,nopto,6,6,ntypes))
     for iwt,mdl in enumerate(mdls):
-        try:
-            Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
-            amp = np.ones((ntypes,))
-        except:
-            Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
-        #nN = Eta.shape[0]
-        nQ = Wmy.shape[1]
-        if len(K)==nQ:
-            nS = 2
-        elif len(K)==0:
-            nS = 1
-        if len(T)==nQ:
-            nT = 2
-        elif len(T)==0:
-            nT = 1
+        couplings[iwt] = compute_coupling(YY_opto[iwt],mdl)
+        #try:
+        #    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
+        #    amp = np.ones((ntypes,))
+        #except:
+        #    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
+        ##nN = Eta.shape[0]
+        #nQ = Wmy.shape[1]
+        #if len(K)==nQ:
+        #    nS = 2
+        #elif len(K)==0:
+        #    nS = 1
+        #if len(T)==nQ:
+        #    nT = 2
+        #elif len(T)==0:
+        #    nT = 1
+        #WWmy = gen_Weight_k_kappa_t(Wmy,K,kappa,T,nS=nS,nT=nT)
+        #WWmx = gen_Weight_k_kappa_t(Wmx,K,kappa,T,nS=nS,nT=nT)
+        #tiled_s02 = np.tile(s02,nS*nT)
+        #bltile = np.tile(bl,nS*nT)
+        #for ilight in range(YY_opto.shape[1]):
+        #    this_YY = 1/amp[np.newaxis,:]*(YY_opto[iwt,ilight].reshape((nN,ntypes)) - bltile[np.newaxis,:])
+        #    phis = mdls[iwt].fprimeXY(mdls[iwt].XX,this_YY).reshape((6,6,ntypes))
+        #    for istim in range(nN):
+        #        iistim,jjstim = np.unravel_index(istim,(6,6))
+        #        Phi = np.diag(phis[iistim,jjstim])
+        #        couplings[iwt,ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
+    return couplings
+
+def compute_coupling(YY_opto,mdl):
+    nopto,nN,ntypes = YY_opto.shape
+    coupling = np.zeros((nopto,6,6,ntypes,ntypes))
+    try:
+        Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
+        amp = np.ones((ntypes,))
+    except:
+        Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
+    nQ = Wmy.shape[1]
+    if len(K)==nQ:
+        nS = 2
+    elif len(K)==0:
+        nS = 1
+    if len(T)==nQ:
+        nT = 2
+    elif len(T)==0:
+        nT = 1
+    try:
+        WWmy = mdl.WWmy
+        WWmx = mdl.WWmx
+    except:
         WWmy = gen_Weight_k_kappa_t(Wmy,K,kappa,T,nS=nS,nT=nT)
         WWmx = gen_Weight_k_kappa_t(Wmx,K,kappa,T,nS=nS,nT=nT)
-        tiled_s02 = np.tile(s02,nS*nT)
-        bltile = np.tile(bl,nS*nT)
-        for ilight in range(YY_opto.shape[1]):
-            this_YY = 1/amp[np.newaxis,:]*(YY_opto[iwt,ilight].reshape((nN,ntypes)) - bltile[np.newaxis,:])
-            phis = mdls[iwt].fprimeXY(mdls[iwt].XX,this_YY).reshape((6,6,ntypes))
-            for istim in range(nN):
-                iistim,jjstim = np.unravel_index(istim,(6,6))
-                Phi = np.diag(phis[iistim,jjstim])
-                couplings[iwt,ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
-    return couplings
+    tiled_s02 = np.tile(s02,nS*nT)
+    bltile = np.tile(bl,nS*nT)
+    for ilight in range(nopto):
+        this_YY = 1/amp[np.newaxis,:]*(YY_opto[ilight].reshape((nN,ntypes)) - bltile[np.newaxis,:])
+        phis = mdl.fprimeXY(mdl.XX,this_YY).reshape((6,6,ntypes))
+        for istim in range(nN):
+            iistim,jjstim = np.unravel_index(istim,(6,6))
+            Phi = np.diag(phis[iistim,jjstim])
+            coupling[ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
+    return coupling
+
+def compute_coupling_ij(YY_opto,mdl,iistim,jjstim):
+    nopto,nN,ntypes = YY_opto.shape
+    nsize,ncontrast = 6,6
+    istim = np.ravel_multi_index((iistim,jjstim),(nsize,ncontrast))
+    if nN>1:
+        istimy = istim
+        istimx = istim
+    else:
+        istimy = 0
+        istimx = istim
+    coupling = np.zeros((nopto,ntypes,ntypes))
+    try:
+        Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
+        amp = np.ones((ntypes,))
+    except:
+        Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
+    nQ = Wmy.shape[1]
+    if len(K)==nQ:
+        nS = 2
+    elif len(K)==0:
+        nS = 1
+    if len(T)==nQ:
+        nT = 2
+    elif len(T)==0:
+        nT = 1
+    try:
+        WWmy = mdl.WWmy
+        WWmx = mdl.WWmx
+    except:
+        WWmy = gen_Weight_k_kappa_t(Wmy,K,kappa,T,nS=nS,nT=nT)
+        WWmx = gen_Weight_k_kappa_t(Wmx,K,kappa,T,nS=nS,nT=nT)
+    tiled_s02 = np.tile(s02,nS*nT)
+    bltile = np.tile(bl,nS*nT)
+    for ilight in range(nopto):
+        this_YY = 1/amp[np.newaxis,:]*(YY_opto[ilight].reshape((nN,ntypes)) - bltile[np.newaxis,:])
+        phis = mdl.fprimeXY(mdl.XX[istimx:istimx+1],this_YY[istimy:istimy+1],istim=istim).reshape((ntypes,))
+        Phi = np.diag(phis)
+        coupling[ilight] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
+    return coupling
+    
+def compute_coupling_perturb_WW(mdl,i,j,dw):
+    tmp_mdl = copy.deepcopy(mdl)
+    tmp_mdl.WWmy[i,j] = tmp_mdl.WWmy[i,j] + dw
+    coupling = compute_coupling_mdl(tmp_mdl)
+    #YY_opto,_ = compute_f_fprime_t_avg_mdl(tmp_mdl)
+    #coupling = compute_coupling(YY_opto[np.newaxis],tmp_mdl)
+    return coupling[0,:,:,i,j]
+
+def compute_coupling_perturb_WW_ij(mdl,iistim,jjstim,i,j,dw):
+    tmp_mdl = copy.deepcopy(mdl)
+    tmp_mdl.WWmy[i,j] = tmp_mdl.WWmy[i,j] + dw
+    coupling = compute_coupling_mdl_ij(tmp_mdl,iistim,jjstim)
+    return coupling[0,i,j]
+
+def zero_coupling_optimize_dWW(mdl,istim,jstim,i,j,tgt=0):
+    #print(tgt)
+    def compute_cost(dw):
+        #cpl = (compute_coupling_perturb_WW(mdl,i,j,dw)[istim,jstim])
+        cpl = (compute_coupling_perturb_WW_ij(mdl,istim,jstim,i,j,dw))
+        return (cpl-tgt)**2
+    cpl = compute_coupling_perturb_WW_ij(mdl,istim,jstim,i,j,0)
+    #dWW0 = tgt-cpl
+    dWW0 = 0
+    res = sop.minimize(compute_cost,dWW0)
+    dWW = res['x']
+    #dWW,_,_ = sop.fmin_l_bfgs_b(compute_cost,dWW0,fprime=grad(compute_cost))
+    cpl = compute_coupling_perturb_WW_ij(mdl,istim,jstim,i,j,dWW)
+    return dWW,cpl
+
+def compute_coupling_zero_K(mdl):
+    tmp_mdl = copy.deepcopy(mdl)
+    tmp_mdl.K = np.zeros_like(tmp_mdl.K)
+    tmp_mdl.set_WW()
+    #print(tmp_mdl.WWmy[:4,4:])
+    coupling = compute_coupling_mdl(tmp_mdl)
+    #YY_opto,_ = compute_f_fprime_t_avg_mdl(tmp_mdl)
+    #coupling = compute_coupling(YY_opto[np.newaxis],tmp_mdl)
+    return coupling[0]
+
+def compute_coupling_mdl(mdl):
+    YY_opto,_ = compute_f_fprime_t_avg_mdl(mdl)
+    coupling = compute_coupling(YY_opto[np.newaxis],mdl)
+    return coupling
+
+def compute_YY_dw_mdl(mdl,i,j,dw):
+    nN = len(dw)
+    nQ = mdl.Wmy.shape[0]
+    nS = int(mdl.K.shape[0]/nQ+1)
+    nT = int(mdl.T.shape[0]/nQ+1)
+    YY_opto = np.zeros((nN,nQ*nS*nT))
+    for istim in range(nN):
+        tmp_mdl = copy.deepcopy(mdl)
+        tmp_mdl.WWmy[i,j] = tmp_mdl.WWmy[i,j] + dw[istim]
+        YY_opto[istim:istim+1],_ = compute_f_fprime_t_avg_mdl(tmp_mdl,istim=istim)
+    return YY_opto
+
+def compute_coupling_mdl_ij(mdl,iistim,jjstim):
+    nsize,ncontrast = 6,6
+    istim = np.ravel_multi_index((iistim,jjstim),(nsize,ncontrast))
+    YY_opto,_ = compute_f_fprime_t_avg_mdl(mdl,istim=istim)
+    coupling = compute_coupling_ij(YY_opto[np.newaxis],mdl,iistim,jjstim)
+    return coupling
 
 def set_bounds_by_code(lb,ub,bdlist):
     set_bound(lb,[bd==0 for bd in bdlist],val=0)

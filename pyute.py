@@ -894,7 +894,7 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
@@ -906,15 +906,11 @@ def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidt
         mn_tgt = mn_tgt - baseline
         lb_tgt = lb_tgt - baseline
         ub_tgt = ub_tgt - baseline
-        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize)
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
     else:
-        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize)
-    #if colors is None:
-    #    colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
-    #for i in range(mn_tgt.shape[0]):
-    #    plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
 
-def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,norm_to_max=False):
+def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
@@ -926,16 +922,12 @@ def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,n
         mn_tgt = mn_tgt - baseline
         lb_tgt = lb_tgt - baseline
         ub_tgt = ub_tgt - baseline
-        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize)
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
     else:
-        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize)
-    #if colors is None:
-    #    colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))
-    #for i in range(mn_tgt.shape[0]):
-    #    plot_errorbar_hillel(x,mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i])
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
     return mn_tgt,std_tgt
 
-def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,delta=0):
+def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,delta=0,alpha=1):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanpercentile(arr,50,axis=0)
@@ -946,22 +938,22 @@ def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,ma
         mn_tgt = mn_tgt - baseline
         lb_tgt = lb_tgt - baseline
         ub_tgt = ub_tgt - baseline
-        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize)
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
     else:
-        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,delta=delta)
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,delta=delta,alpha=alpha)
 
-def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,markersize=None,delta=0):
+def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,markersize=None,delta=0,alpha=1):
     nlines = mn_tgt.shape[0]
     deltas = np.linspace(-delta*nlines/2,delta*nlines/2,nlines)
     if colors is None:
         colors = plt.cm.viridis(np.linspace(0,1,nlines))
     for i in range(nlines):
-        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize)
+        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize,alpha=alpha)
 
-def plot_sem_errorbars_hillel(x,mn_tgt,sem_tgt,colors=None,linewidth=None,markersize=None,delta=0):
+def plot_sem_errorbars_hillel(x,mn_tgt,sem_tgt,colors=None,linewidth=None,markersize=None,delta=0,alpha=1):
     lb_tgt = mn_tgt - sem_tgt
     ub_tgt = mn_tgt + sem_tgt
-    plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,delta=delta)
+    plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,delta=delta,alpha=alpha)
 
 def plot_errorbars_in_rows(x,mn_tgt,lb_tgt,ub_tgt,rowlen=10,scale=0.5):
     nrows = np.ceil(mn_tgt.shape[0]/rowlen)
@@ -993,8 +985,8 @@ def parse_options(opt,opt_keys,*args):
 
     return opt
 
-def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None,markersize=None):
-    opt_keys = ['c','linestyle','linewidth','markersize']
+def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None,markersize=None,alpha=1):
+    opt_keys = ['c','linestyle','linewidth','markersize','alpha']
     if not plot_options is None:
         opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
         c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
@@ -1007,9 +999,9 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
     #else:
     #    cc = c
     cc = c.copy()
-    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle) #,fmt=None)
-    plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth)
-    plt.scatter(x,mn_tgt,c=cc,s=markersize)
+    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
+    plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
+    plt.scatter(x,mn_tgt,c=cc,s=markersize,alpha=alpha)
 
 def get_dict_ind(opt,i):
     opt_temp = {}
@@ -1949,18 +1941,20 @@ def zero_origin(cmd='y'):
     if 'x' in cmd:
         plt.gca().set_xlim(left=0)
 
-def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05):
+def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1):
+    if not isinstance(s,list):
+        s = [s for d in data]
     if colors is None:
         colors = ['k' for d in data]
     if tick_labels is None:
         tick_labels = ['' for d in data]
     for itype in range(len(data)):
         mn = np.nanmean(data[itype],0)
-        plt.bar((itype,),mn,color=colors[itype],alpha=0.5,edgecolor='k')
+        plt.bar((itype,),mn,color=colors[itype],alpha=0.5*alpha,edgecolor='k')
         lb,ub = bootstrap(data[itype][~np.isnan(data[itype])],pct=pct,axis=0,fn=np.mean)
-        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k')
+        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k',alpha=alpha)
         plt.scatter(itype*np.ones_like(data[itype])+epsilon*np.random.randn(data[itype].shape[0]),data[itype],\
-                    facecolor=colors[itype],linewidth=1,edgecolor='k')
+                    facecolor=colors[itype],linewidth=1,edgecolor='k',s=s[itype],alpha=alpha)
     plt.xticks(np.arange(len(data)),tick_labels)
 
 def mult_apply(arr,fn,dims,keepdims=False):

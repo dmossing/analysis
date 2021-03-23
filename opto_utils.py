@@ -367,7 +367,7 @@ def compute_intercept_(animal_data,axis=0):
     y = np.reshape(y,(y.shape[0]*y.shape[1],-1))
     return compute_intercept(x,y,axis=axis)
 
-def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',equality_line=True,square=True,xlabel=None,ylabel=None):
+def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1):
     if xlabel is None:
         xlabel = 'PC event rate, light off'
     if ylabel is None:
@@ -390,14 +390,14 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     lb_YY = np.nanpercentile(YY,16,axis=1)
     ub_YY = np.nanpercentile(YY,84,axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
-    plt.fill_between(xx[:,0],lb_YY,ub_YY,alpha=0.5,facecolor=opto_color)
-    plt.plot(xx[:,0],mn_YY,c=opto_color)
-    plt.errorbar(mn[:,:,0].flatten(),mn[:,:,1].flatten(),xerr=xerr,yerr=yerr,fmt='none',zorder=1,c='k',alpha=0.5)
-    sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square)
+    plt.fill_between(xx[:,0],lb_YY,ub_YY,alpha=0.5*alpha,facecolor=opto_color)
+    plt.plot(xx[:,0],mn_YY,c=opto_color,alpha=alpha)
+    plt.errorbar(mn[:,:,0].flatten(),mn[:,:,1].flatten(),xerr=xerr,yerr=yerr,fmt='none',zorder=1,c='k',alpha=0.5*alpha)
+    sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     
-def scatter_size_contrast_x_dx_errorbar(animal_data,pct=(16,84),opto_color='b',xlabel=None,ylabel=None,mn_plot=None,mx_plot=None):
+def scatter_size_contrast_x_dx_errorbar(animal_data,pct=(16,84),opto_color='b',xlabel=None,ylabel=None,mn_plot=None,mx_plot=None,alpha=1):
     # axis 0: roi, axis 1: size, axis 2: contrast, axis 3: light
     if xlabel is None:
         xlabel = 'PC event rate/mean, \n light off'
@@ -409,5 +409,5 @@ def scatter_size_contrast_x_dx_errorbar(animal_data,pct=(16,84),opto_color='b',x
         mx_plot = np.nanmax(animal_data[:,:,:,0])
     diff_data = animal_data.copy()
     diff_data[:,:,:,1] = diff_data[:,:,:,1] - diff_data[:,:,:,0]
-    scatter_size_contrast_errorbar(diff_data,pct=(16,84),mn_plot=mn_plot,mx_plot=mx_plot,opto_color=opto_color,equality_line=False,square=False,xlabel=xlabel,ylabel=ylabel)
+    scatter_size_contrast_errorbar(diff_data,pct=(16,84),mn_plot=mn_plot,mx_plot=mx_plot,opto_color=opto_color,equality_line=False,square=False,xlabel=xlabel,ylabel=ylabel,alpha=alpha)
     plt.axhline(0,c='k',linestyle='dashed')
