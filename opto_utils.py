@@ -344,6 +344,10 @@ def compute_slope_w_intercept(x,y,axis=0):
     astar = ((xy_-x_*y_)/(x2_-x_**2))
     return astar[np.newaxis]
 
+def compute_slope_w_intercept_cols(xy,axis=0):
+    x,y = xy[:,0],xy[:,1]
+    return compute_slope_w_intercept(x,y,axis=axis)
+
 def compute_slope_w_intercept_(animal_data,axis=0):
     x = np.nanmean(animal_data[:,:,:,0],0)
     x = np.reshape(x,(x.shape[0]*x.shape[1],-1))
@@ -359,6 +363,10 @@ def compute_intercept(x,y,axis=0):
     astar = ((xy_-x_*y_)/(x2_-x_**2))
     bstar = y_ - astar*x_
     return bstar[np.newaxis]
+
+def compute_intercept_cols(xy,axis=0):
+    x,y = xy[:,0],xy[:,1]
+    return compute_intercept(x,y,axis=axis)
 
 def compute_intercept_(animal_data,axis=0):
     x = np.nanmean(animal_data[:,:,:,0],0)
@@ -396,6 +404,17 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
+
+def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000):
+    xx = np.linspace(animal_data[:,0].min(),animal_data[:,0].max(),101)
+    stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
+    YY = xx[:,np.newaxis]*stats[0]+stats[1]
+    lb_YY = np.nanpercentile(YY,16,axis=1)
+    ub_YY = np.nanpercentile(YY,84,axis=1)
+    mn_YY = np.nanpercentile(YY,50,axis=1)
+    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
+    plt.plot(xx,mn_YY,c=c,alpha=alpha)
+    return stats
     
 def scatter_size_contrast_x_dx_errorbar(animal_data,pct=(16,84),opto_color='b',xlabel=None,ylabel=None,mn_plot=None,mx_plot=None,alpha=1):
     # axis 0: roi, axis 1: size, axis 2: contrast, axis 3: light

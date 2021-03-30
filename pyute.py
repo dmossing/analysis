@@ -157,6 +157,33 @@ def bootstat(arr,fns,axis=0,nreps=1000,pct=(2.5,97.5)):
     #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
     return stat
 
+def bootstat_equal_cond(arr,fns,nreps=1000,pct=(2.5,97.5),axis_equal_cond=0):
+    np.random.seed(0)
+    # given arr kD of size (N,k), resample nreps sets of N of its rows with replacement. Compute fn on each of the samples
+    # and report percentiles pct
+    N,k = arr.shape
+    axis = 0
+    uvals = np.unique(arr[:,axis_equal_cond])
+    print(uvals)
+    nvals = len(uvals)
+    Nthese = np.zeros((nvals,),dtype='int')
+    for ival in range(nvals):
+        Nthese[ival] = np.sum(arr[:,axis_equal_cond]==uvals[ival])
+    Nmin = np.min(Nthese)
+    c = np.zeros((0,nreps),dtype='int')
+    for val in uvals:
+        these_inds = np.where(arr[:,axis_equal_cond]==val)[0]
+        c = np.concatenate((c,np.random.choice(these_inds,size=(Nmin,nreps))),axis=0)
+    print(c)
+    L = len(arr.shape)
+    resamp = np.rollaxis(arr,axis,0)
+    resamp = resamp[c] # now (Nmin,nreps,k)
+    print(resamp.shape)
+    resamp = np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
+    resamp = np.rollaxis(resamp,0,L+1)
+    stat = [fn(resamp,axis=axis) for fn in fns]
+    return stat
+
 def bootstrap_df(arr,fn,axis=0,nreps=1000,pct=(2.5,97.5)):
     np.random.seed(0)
     # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
