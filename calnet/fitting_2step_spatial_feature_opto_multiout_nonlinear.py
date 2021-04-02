@@ -112,8 +112,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     def gen_Weight(W,K,kappa,T):
         return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT) 
         
-    def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list):
-        return utils.compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
+    def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nPQ=nQ):
+        return utils.compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=nPQ,nS=nS,nT=nT,foldT=foldT)
 
     def compute_var(Xi,s02):
         return fudge+Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)],axis=0)
@@ -309,9 +309,9 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         def compute_sq_error(a,b,wt):
             return np.sum(wt*(a-b)**2)
         
-        def compute_kl_error(mu_data,pc_list,mu_model,fprimeval,wt):
+        def compute_kl_error(mu_data,pc_list,mu_model,fprimeval,wt,nPQ=nQ):
             # how to model variability in X?
-            kl = compute_kl_divergence(fprimeval,noise,mu_data,mu_model,pc_list)#,foldT=foldT,nQ=nQ,nS=nS,nT=nT)
+            kl = compute_kl_divergence(fprimeval,noise,mu_data,mu_model,pc_list,nPQ=nPQ)#,foldT=foldT,nQ=nQ,nS=nS,nT=nT)
             return kl #wt*kl
             # principled way would be to use 1/wt for noise term. Should add later.
 
@@ -351,7 +351,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             # -1 for negative or +1 for positive
             coupling = compute_coupling(W1,W2)
             log_arg = sgn*coupling[:,i,j]
-            cost = utils.minus_sum_log_ceil(log_arg,big_val/nN)
+            cost = utils.minus_sum_log_slope(log_arg,big_val/nN)
             return cost
 
         #def compute_eta_tv(this_Eta):
@@ -369,7 +369,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             #print('WEE: %f'%Wmy[0,0])
             #print('min phiE*WEE: %f'%np.min(Phi[:,0]*Wmy[0,0]))
             log_arg = Phi[:,0]*W0y[0,0]-1
-            cost = utils.minus_sum_log_ceil(log_arg,big_val/nN)
+            cost = utils.minus_sum_log_slope(log_arg,big_val/nN)
             #print('ISN cost: %f'%cost)
             return cost
         
@@ -395,7 +395,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
                 return dsmi
             dsmis = [compute_dsmi(f) for f in [fval,fval12[:nN],fval12[nN:]]]
             smi_halo_error = halo_frac*(dsmis[0] - dsmis[1])**2
-            smi_chrimson_error = (1-halo_frac)*utils.minus_sum_log_ceil(dsmis[2] - dsmis[1],big_val)
+            smi_chrimson_error = (1-halo_frac)*utils.minus_sum_log_slope(dsmis[2] - dsmis[1],big_val)
             return smi_halo_error,smi_chrimson_error
 
         #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
@@ -419,8 +419,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
 
         bltile = np.tile(bl,nS*nT)[np.newaxis,:]
         
-        Xterm = compute_kl_error(XXhat,Xpc_list,XX,XXp,wtStim*wtInp) # XX the modeled input layer (L4)
-        Yterm = compute_kl_error(YYhat,Ypc_list,amp*fval+bltile,amp*fprimeval,wtStim*wtCell) # fval the modeled output layer (L2/3)
+        Xterm = compute_kl_error(XXhat,Xpc_list,XX,XXp,wtStim*wtInp,nPQ=nP) # XX the modeled input layer (L4)
+        Yterm = compute_kl_error(YYhat,Ypc_list,amp*fval+bltile,amp*fprimeval,wtStim*wtCell,nPQ=nQ) # fval the modeled output layer (L2/3)
 
         u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval)
 

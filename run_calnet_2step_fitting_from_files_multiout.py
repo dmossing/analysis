@@ -5,6 +5,7 @@ import sys
 import pyute as ut
 import numpy as np
 import calnet.utils
+import glob
 
 calnet_data_fold = '/home/dan/calnet_data/'
 
@@ -12,12 +13,6 @@ calnet_data_fold = '/home/dan/calnet_data/'
 ca_data_file = calnet_data_fold+'rs_200828.npy'
 opto_silencing_data_file = calnet_data_fold+'vip_halo_data_for_sim_vip_full_info.npy'
 opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
-
-#weights_base = calnet_data_fold + 'weights/weights_'
-#good_fits = ['200714c/005','200714c/008','200714d/021','200715a/022','200715a/024',\
-#            '200716a/034','200716a/035','200716a/048','200716b/006','200716b/042','200716b/061','200716b/087','200716b/091',\
-#            '200717a/010','200717a/031','200717a/066','200717a/073','200717a/075','200717a/087','200717a/096',\
-#            '200717b/028','200717b/052','200717b/059','200717b/060','200717b/068','200717b/079','200717b/084']
 
 weights_base = calnet_data_fold + 'weights/weights_200721e/'
 good_fits = ['006','010','012','014','018','019','020','021','023','025','030',\
@@ -58,8 +53,8 @@ ntries = len(init_files)
 
 init_noise = 0.1
 allow_var = True
-multiout = True
-multiout2 = True
+multiout = False #True
+multiout2 = False #True
 tv = True
 correct_Eta = False
 init_Eta_with_s02 = False
@@ -74,6 +69,7 @@ verbose = True
 free_amplitude = False
 no_halo_res = False
 ignore_halo_vip=False
+foldT = True
 
 parallel = True
 
@@ -96,7 +92,8 @@ fit_options = {'ca_data_file':ca_data_file,\
 'no_halo_res':no_halo_res,\
 'ignore_halo_vip':ignore_halo_vip,\
 'use_opto_transforms':use_opto_transforms,\
-'norm_opto_transforms':norm_opto_transforms}
+'norm_opto_transforms':norm_opto_transforms,\
+'foldT':foldT}
 
 if __name__=="__main__":
     weight_base = sys.argv[1]
@@ -111,65 +108,21 @@ if __name__=="__main__":
     else:
         nprocesses = 3
 
+    if len(sys.argv)>4:
+        init_base = sys.argv[4]
+    else:
+        init_base = None
+        
+    if not init_base is None:
+        init_files = glob.glob(calnet_data_fold + 'weights/' + init_base + '/*.npy')
+        init_files.sort()
+        #print(calnet_data_fold + 'weights/' + init_base + '/*.npy')
+        #print(init_files)
+
     offset = 0
 
     fws_fn = fcowo.fit_weights_and_save
 
-    #def run_all_fitting(fws_fn=None,init_files=None,calnet_data_fold=None,weight_base=None,offset=None,nreps=None,fit_options=None,parallel=False,nprocesses=1):
-    #    ut.mkdir(calnet_data_fold+'weights/'+weight_base)
-
-    #    weights_files = []
-    #    for irep in range(nreps):
-    #        weights_files = weights_files + [calnet_data_fold+'weights/'+weight_base+'/%03d.npy'%itry for itry in range(offset+ntries*irep,offset+ntries*(irep+1))]
-
-    #    fws_fns_ = [fws_fn for _ in range(ntries*nreps)]
-    #    init_files_ = [a for _ in range(nreps) for a in init_files]
-    #    target_names_ = weights_files
-    #    seeds_ = offset + np.arange(ntries*nreps)
-    #    fit_options_ = [fit_options for _ in range(ntries*nreps)]
-    #    inp = zip(fws_fns_,init_files_,target_names_,seeds_,fit_options_)
-
-    #    if parallel:
-    #        with mp.Pool(processes=nprocesses) as p:
-    #            p.map(run_fitting_one_arg,inp)
-    #    else:
-    #        for this_inp in inp:
-    #            run_fitting_one_arg(this_inp)
-
     calnet.utils.run_all_fitting(fws_fn=fws_fn,init_files=init_files,calnet_data_fold=calnet_data_fold,\
             weight_base=weight_base,offset=offset,nreps=nreps,fit_options=fit_options,parallel=parallel,nprocesses=nprocesses)
 
-    #ut.mkdir(calnet_data_fold+'weights/'+weight_base)
-
-    #weights_files = []
-    #for irep in range(nreps):
-    #    weights_files = weights_files + [calnet_data_fold+'weights/'+weight_base+'/%03d.npy'%itry for itry in range(offset+ntries*irep,offset+ntries*(irep+1))]
-
-    #fws_fns_ = [fws_fn for _ in range(ntries*nreps)]
-    #init_files_ = [a for _ in range(nreps) for a in init_files]
-    #target_names_ = weights_files
-    #seeds_ = offset + np.arange(ntries*nreps)
-    #fit_options_ = [fit_options for _ in range(ntries*nreps)]
-    #inp = zip(fws_fns_,init_files_,target_names_,seeds_,fit_options_)
-
-    #if parallel:
-    #    with mp.Pool(processes=nprocesses) as p:
-    #        p.map(run_fitting_one_arg,inp)
-    #else:
-    #    for this_inp in inp:
-    #        run_fitting_one_arg(this_inp)
-
-
-    ##for this_inp in inp:
-    ##    run_fitting_one_arg(this_inp)
-    #with mp.Pool(processes=nprocesses) as p:
-    #    p.map(run_fitting_one_arg,inp)
-
-    #for irep in range(nreps):
-    #    for itry in range(ntries):
-    #        #fcowo.fit_weights_and_save(weights_files[irep*ntries+itry],ca_data_file=ca_data_file,opto_silencing_data_file=opto_silencing_data_file,opto_activation_data_file=opto_activation_data_file,allow_var=allow_var,multiout=multiout,multiout2=multiout2,fit_s02=True,constrain_isn=True,tv=tv,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=True,scale_init_by=1,init_W_from_file=True,init_file=init_files[itry],correct_Eta=correct_Eta,init_Eta_with_s02=init_Eta_with_s02,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=use_opto_transforms,norm_opto_transforms=norm_opto_transforms)
-    #        
-    #        init_file = init_files[itry]
-    #        target_name = weights_files[irep*ntries+itry]
-    #        seed = irep*ntries+itry
-    #        calnet.utils.run_fitting(fws_fn,init_file,target_name,seed=seed,**fit_options)

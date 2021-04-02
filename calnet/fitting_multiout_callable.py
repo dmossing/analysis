@@ -65,6 +65,16 @@ def compute_us(W1,W2,fval,fprimeval,opt):
     u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt)
     return u0,u1,u2,u3
 
+def compute_res(W1,W2,opt):
+    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
+    XX,XXp,Eta,Xi = parse_W2(W2,opt)
+    fval = compute_f_(Eta,Xi,s02,opt)
+    fprimeval = compute_fprime_(Eta,Xi,s02,opt)
+    u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval,opt)
+    resEta = Eta - u0 - u2
+    resXi  = Xi - u1 - u3
+    return resEta,resXi
+
 def compute_f_fprime_(W1,W2,opt):
     W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
     XX,XXp,Eta,Xi = parse_W2(W2,opt)

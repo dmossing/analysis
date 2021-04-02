@@ -906,6 +906,15 @@ def fold_T_(stim_deriv,nS=2,nT=2,nQ=None):
     this_nN = stim_deriv.shape[0]
     this_stim_deriv = np.concatenate([stim_deriv.reshape((this_nN,nS,nT,nQ))[:,:,iT,:].reshape((this_nN,-1)) for iT in range(nT)],axis=0)
     return this_stim_deriv
+
+def unfold_T_(folded,nS=2,nT=2,nPQ=None):
+    if nPQ is None:
+        nPQ = int(folded.shape[1]/nS)
+    this_nN = int(folded.shape[0]/nT)
+    unfolded = folded.reshape((nT,this_nN,nS,nPQ)) # iT changes slowest
+    unfolded = unfolded.transpose((1,2,0,3)) # iN,iS,iT,iQ
+    unfolded = unfolded.reshape((this_nN,nS*nT*nPQ))
+    return unfolded
     
 def compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nQ=None,nS=2,nT=2,foldT=False):
     # if foldT: stack responses from all orientations as different stims, for the same population of neurons
@@ -927,7 +936,7 @@ def compute_tr_siginv2_sig1(stim_deriv,noise,pc_list,nQ=None,nS=2,nT=2,foldT=Fal
         # pc_list: list of nS x lists of ncelltype x lists of k (eigenvalue,eigenvector) pairs
         this_ncelltypes = len(pc_list[0])
         this_stim_deriv = fold_T_(stim_deriv,nQ=this_ncelltypes,nS=nS,nT=nT)
-        for iel in range(stim_deriv.shape[1]):
+        for iel in range(this_stim_deriv.shape[1]):
             iS,icelltype = np.unravel_index(iel,(nS,this_ncelltypes))
             sigma2 = np.sum(this_stim_deriv[:,iel]**2)
             #print_labeled('sigma2',sigma2)
@@ -1458,7 +1467,7 @@ def run_fitting_one_arg(inp):
     fws_fn,init_file,target_name,seed,fit_options = inp
     run_fitting(fws_fn,init_file,target_name,seed=seed,**fit_options)
 
-def run_all_fitting(fws_fn=None,init_files=None,calnet_data_fold=None,weight_base=None,offset=None,nreps=None,fit_options=None,parallel=False,nprocesses=1):
+def run_all_fitting(fws_fn=None,init_files=[None],calnet_data_fold=None,weight_base=None,offset=None,nreps=None,fit_options=None,parallel=False,nprocesses=1):
     ut.mkdir(calnet_data_fold+'weights/'+weight_base)
 
     ntries = len(init_files)

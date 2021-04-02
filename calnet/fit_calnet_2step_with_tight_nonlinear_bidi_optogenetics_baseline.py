@@ -71,10 +71,11 @@ def initialize_W(Xhat,Yhat,scale_by=0.2):
     #Ymatrix_pred = np.zeros((nN,nQ))
     Ymatrix = np.zeros((nN,nQ))
     for itype in range(nQ):
-        Ymatrix[:,itype] = invert_f_mt(YYhat[:,itype])
-        others = np.setdiff1d(np.arange(nQ),itype)
-        Xmatrix = np.concatenate((XXhat[:,:nP],YYhat[:,others]),axis=1)
-        Bmatrix = np.linalg.pinv(Xmatrix) @ Ymatrix[:,itype]
+        Ymatrix[:,itype] = invert_f_mt(YYhat[:,itype]) # nN
+        others = np.setdiff1d(np.arange(nQ),itype) # nQ
+        Xmatrix = np.concatenate((XXhat[:,:nP],YYhat[:,others]),axis=1) # nN,nP+(nQ-1)
+        Bmatrix = np.linalg.pinv(Xmatrix) @ Ymatrix[:,itype] # B = X^+Y, where X is (X,Y), Y is Eta, and B is W
+        # solution to Y = XB
         Wmx0[:,itype] = Bmatrix[:nP]
         Wmy0[others,itype] = Bmatrix[nP:]
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
