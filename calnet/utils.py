@@ -188,7 +188,10 @@ def include_aligned(displacement,dcutoff,pval,pcutoff=0.05,less=True):
         criterion = lambda x: (x**2).sum(0) < dcutoff**2
     else:
         criterion = lambda x: (x**2).sum(0) > dcutoff**2
-    return np.logical_and(criterion(displacement),pval < pcutoff)
+    if not displacement is None:
+        return np.logical_and(criterion(displacement),pval < pcutoff)
+    else:
+        return None
 
 def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.05,slices=None,datafield='decon',run_cutoff=10,running_pct_cutoff=0.4):
     # from a list of HDF5 files, split up the data into an arbitrary number of spatial pixels based on RF center location
@@ -404,14 +407,17 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
             sel = selection[icelltype]
         else:
             sel = np.arange(len(these_tunings))
-        these_uparams = [these_uparams[i] for i in sel if not these_tunings[i] is None]
-        these_displacements = [these_displacements[i].T for i in sel if not these_tunings[i] is None]
-        these_pvals = [these_pvals[i] for i in sel if not these_tunings[i] is None]
-        these_tunings_sem = [these_tunings_sem[i] for i in sel if not these_tunings[i] is None]
-        these_expt_ids = [i for i in sel if not these_tunings[i] is None]
-        these_tunings = [these_tunings[i] for i in sel if not these_tunings[i] is None]
+        #these_uparams = [these_uparams[i] for i in sel if not these_tunings[i] is None]
+        #these_displacements = [these_displacements[i].T for i in sel if not these_tunings[i] is None]
+        #these_pvals = [these_pvals[i] for i in sel if not these_tunings[i] is None]
+        #these_tunings_sem = [these_tunings_sem[i] for i in sel if not these_tunings[i] is None]
+        #these_expt_ids = [i for i in sel if not these_tunings[i] is None]
+        #these_tunings = [these_tunings[i] for i in sel if not these_tunings[i] is None]
+        these_displacements = [transpose_(td) for td in these_displacements]
+        these_expt_ids = np.arange(nexpt)
         nexpt = len(these_tunings)
-        if nexpt>0:
+        nexpt_not_none = len([these_tunings[i] for i in sel if not these_tunings[i] is None])
+        if nexpt_not_none>0:
             aligned = [include_aligned(d,dcutoff,p,pval_cutoff,less=True) for d,p in zip(these_displacements,these_pvals)]
             misaligned = [include_aligned(d,dcutoff,p,pval_cutoff,less=False) for d,p in zip(these_displacements,these_pvals)]
             this_rs = []
@@ -419,16 +425,19 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
             this_expt_ids = []
             this_roi_ids = []
             for icriterion,criterion in enumerate([aligned,misaligned]):
-                nrois = [get_nroi(tt[cc]) for tt,cc in zip(these_tunings,criterion)]
+                #nrois = [get_nroi(tt[cc]) for tt,cc in zip(these_tunings,criterion)]
+                nrois = [get_nroi_(tt,cc,iexpt in sel) for iexpt,(tt,cc) in enumerate(zip(these_tunings,criterion))]
                 ra = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
                 ra_sem = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
                 expt_ida = [np.ones((nroi,))*these_expt_ids[iexpt] for iexpt,nroi in enumerate(nrois)]
-                roi_ida = [np.where(cc)[0] for cc in criterion]
+                #roi_ida = [np.where(cc)[0] for cc in criterion]
+                roi_ida = [np.where(cc)[0] for cc in criterion if not cc is None]
                 for iexpt in range(nexpt):
-                    assign_from_uparam(ra[iexpt],modal_uparam,these_tunings[iexpt][criterion[iexpt]],these_uparams[iexpt])
-                    assign_from_uparam(ra_sem[iexpt],modal_uparam,these_tunings_sem[iexpt][criterion[iexpt]],these_uparams[iexpt])
-                    #ra[iexpt] = average_up(ra[iexpt],average_ori=average_ori)
-                    #ra_sem[iexpt] = np.sqrt(average_up(ra_sem[iexpt]**2,average_ori=average_ori))
+                    if not these_tunings[iexpt] is None and iexpt in sel:
+                        assign_from_uparam(ra[iexpt],modal_uparam,these_tunings[iexpt][criterion[iexpt]],these_uparams[iexpt])
+                        assign_from_uparam(ra_sem[iexpt],modal_uparam,these_tunings_sem[iexpt][criterion[iexpt]],these_uparams[iexpt])
+                        #ra[iexpt] = average_up(ra[iexpt],average_ori=average_ori)
+                        #ra_sem[iexpt] = np.sqrt(average_up(ra_sem[iexpt]**2,average_ori=average_ori))
                 #ra = np.concatenate([np.nanmean(rra,0)[np.newaxis] for rra in ra],axis=0)
                 ra = np.concatenate(ra,axis=0)
                 ra_sem = np.concatenate(ra_sem,axis=0)
@@ -448,6 +457,12 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
         expt_ids.append(this_expt_ids)
         roi_ids.append(this_roi_ids)
     return rs,rs_sem,expt_ids,roi_ids
+
+def transpose_(arr):
+    if arr is None:
+        return None
+    else:
+        return arr.T
 
 #    # same specifically for case of two spatial pixels
 #    if dsnames is None:
@@ -496,7 +511,16 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
 #    return rs
 
 def get_nroi(tt):
-    return get_shape_dim(tt,0)
+    if tt is None:
+        return 0
+    else:
+        return get_shape_dim(tt,0)
+
+def get_nroi_(tt,cc,to_include):
+    if tt is None or not to_include:
+        return 0
+    else:
+        return get_shape_dim(tt[cc],0)
                                    
 def get_nframes(tt):
     return get_shape_dim(tt,-1)

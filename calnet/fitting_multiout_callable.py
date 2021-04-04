@@ -52,6 +52,12 @@ def compute_f_(Eta,Xi,s02,opt):
     pop_rate_fn = opt['pop_rate_fn']
     return pop_rate_fn(Eta,compute_var(Xi,s02,opt))
 
+def W1_W2_from_list(Wlist):
+    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h1,h2,bl,amp = Wlist
+    W1 = unparse_W(W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp)
+    W2 = unparse_W(XX,XXp,Eta,Xi)
+    return W1,W2
+
 def compute_us(W1,W2,fval,fprimeval,opt):
     W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
     XX,XXp,Eta,Xi = parse_W2(W2,opt)
