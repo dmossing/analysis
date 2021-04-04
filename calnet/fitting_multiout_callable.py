@@ -19,8 +19,8 @@ def parse_W2(W,opt):
     Ws = utils.parse_thing(W,shapes2)
     return Ws
 
-def u_fn(XX,YY,Wx,Wy,K,kappa,T,opt):
-    WWx,WWy = [gen_Weight(W,K,kappa,T,opt) for W in [Wx,Wy]]
+def u_fn(XX,YY,Wx,Wy,K,kappa,T,opt,power=True):
+    WWx,WWy = [gen_Weight(W,K,kappa,T,opt,power=power) for W in [Wx,Wy]]
     return XX @ WWx + YY @ WWy
 
 def unparse_W(*Ws):
@@ -32,9 +32,9 @@ def normalize(arr,opt):
     arrnorm = well_behaved*arr/arrsum[:,np.newaxis] + (~well_behaved)*np.ones_like(arr)/arr.shape[1]
     return arrnorm
 
-def gen_Weight(W,K,kappa,T,opt):
+def gen_Weight(W,K,kappa,T,opt,power=True):
     nS,nT = opt['nS'],opt['nT']
-    return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT) 
+    return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT,power=power) 
     
 def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,opt):
     nQ,nS,nT,foldT = opt['nQ'],opt['nS'],opt['nT'],opt['foldT']
@@ -59,10 +59,16 @@ def compute_us(W1,W2,fval,fprimeval,opt):
     if fval.shape[0]==2*nN:
         XX = np.concatenate((XX,XX),axis=0)
         XXp = np.concatenate((XXp,XXp),axis=0)
-    u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt)
-    u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt)
-    u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt)
-    u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt)
+    #u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt)
+    #u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt)
+    #u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt)
+    #u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt)
+    power0 = True
+    power1 = False
+    u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt,power=power0)
+    u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt,power=power1)
+    u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt,power=power1)
+    u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt,power=power1)
     return u0,u1,u2,u3
 
 def compute_res(W1,W2,opt):
@@ -337,8 +343,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         arrnorm = well_behaved*arr/arrsum[:,np.newaxis] + (~well_behaved)*np.ones_like(arr)/arr.shape[1]
         return arrnorm
     
-    def gen_Weight(W,K,kappa,T):
-        return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT) 
+    def gen_Weight(W,K,kappa,T,power=True):
+        return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT,power=power)
         
     def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list):
         return utils.compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
@@ -358,10 +364,12 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         if fval.shape[0]==2*nN:
             XX = np.concatenate((XX,XX),axis=0)
             XXp = np.concatenate((XXp,XXp),axis=0)
-        u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0)
-        u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1)
-        u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2)
-        u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3)
+        power0 = True
+        power1 = False
+        u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,power=power0)
+        u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,power=power1)
+        u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,power=power1)
+        u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,power=power1)
         return u0,u1,u2,u3
 
     def compute_f_fprime_(W1,W2):
@@ -528,8 +536,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         
         return YYmean,YYprimemean
 
-    def u_fn(XX,YY,Wx,Wy,K,kappa,T):
-        WWx,WWy = [gen_Weight(W,K,kappa,T) for W in [Wx,Wy]]
+    def u_fn(XX,YY,Wx,Wy,K,kappa,T,power=True):
+        WWx,WWy = [gen_Weight(W,K,kappa,T,power=power) for W in [Wx,Wy]]
         return XX @ WWx + YY @ WWy
                     
     def minusLW(W1,W2,simulate=True,verbose=True):
@@ -567,7 +575,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
             W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
             XX,XXp,Eta,Xi = parse_W2(W2)
-            WWy = gen_Weight(W0y,K0,kappa,T0)
+            WWy = gen_Weight(W0y,K0,kappa,T0,power=True)
             Phi = fprime_m(Eta,compute_var(Xi,s02))
             Phi = np.concatenate((Phi,Phi),axis=0)
             Phi1 = np.array([np.diag(phi) for phi in Phi])
@@ -737,7 +745,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     def compute_eig_penalty_(W0y,K0,kappa,T0):
         # still need to finish! Hopefully won't need
         # need to fix this to reflect addition of kappa argument
-        Wsquig = gen_Weight(W0y,K0,kappa,T0)
+        Wsquig = gen_Weight(W0y,K0,kappa,T0,power=True)
         drW,prW = sorted_r_eigs(Wsquig - np.eye(nQ*nS*nT))
         plW = np.linalg.inv(prW)
         eig_outer_all = [np.real(np.outer(plW[:,k],prW[k,:])) for k in range(nS*nQ*nT)]

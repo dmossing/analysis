@@ -795,13 +795,19 @@ def gen_Weight_k_kappa(W,K,kappa):
     WW = np.concatenate((WW0,WW1),axis=0)
     return WW
 
-def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2):
+def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2,power=True):
     MuT = np.array((1,1))
     MuK = np.array((1,kappa))
-    WT = circulate(W,T,nT,Mu=MuT)
+    if power:
+        WT = circulate(W,T,nT,Mu=MuT)
+    else:
+        WT = circulate_mult(W,T,nT,Mu=MuT)
     KKlist = [K for iT in range(nT)]
     KK = np.concatenate(KKlist,axis=0)
-    WW = circulate(WT,KK,nS,Mu=MuK)
+    if power:
+        WW = circulate(WT,KK,nS,Mu=MuK)
+    else:
+        WW = circulate_mult(WT,KK,nS,Mu=MuK)
     return WW
 
 def deriv_WW_to_W(WW,K,kappa,T,nS=2,nT=2):
@@ -825,6 +831,18 @@ def circulate(V,M,nZ,Mu=None):
     VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
     return VV
 
+def circulate_mult(V,M,nZ,Mu=None):
+    if not M.size:
+        return V
+    Vpartlist = [V*(M[np.newaxis,:]*np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    if Mu is None:
+        Mu = np.ones((nZ,))
+    #VVlist = [np.concatenate([m*v for m,v in zip(Mu,Vpartlist[nZ-iZ-1:2*nZ-iZ-1])],axis=1) for iZ in range(nZ)]
+    VVlist = [np.concatenate(Vpartlist[nZ-iZ-1:2*nZ-iZ-1],axis=1) for iZ in range(nZ)]
+    #VV = np.concatenate(VVlist,axis=0)
+    VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
+    return VV
+
 def decirculate(VV,M,nZ,Mu=None):
     if not M.size:
         return VV
@@ -838,8 +856,8 @@ def u_fn_k_kappa(XX,YY,Wx,Wy,k,kappa):
     WWx,WWy = [gen_Weight_k_kappa(W,k,kappa) for W in [Wx,Wy]]
     return u_fn_WW(XX,YY,WWx,WWy)# XX @ WWx + YY @ WWy
 
-def u_fn_k_kappa_t(XX,YY,Wx,Wy,k,kappa,T,nS=2,nT=2):
-    WWx,WWy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wx,Wy]]
+def u_fn_k_kappa_t(XX,YY,Wx,Wy,k,kappa,T,nS=2,nT=2,power=True):
+    WWx,WWy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT,power=power) for W in [Wx,Wy]]
     return u_fn_WW(XX,YY,WWx,WWy)# XX @ WWx + YY @ WWy
 
 def u_fn_WW(XX,YY,WWx,WWy):

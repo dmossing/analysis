@@ -93,6 +93,7 @@ def compute_W_lsq(EtaXi,XXhat,YYhat,nP=2,nQ=4,freeze_vals=None,lam=0):
         resEtaXi = EtaXi - 0
     else:
         zeroed = [np.isnan(fv) for fv in freeze_vals]
+        #print(zeroed)
         freeze_vals[0][zeroed[0]] = 0
         freeze_vals[1][zeroed[1]] = 0
         resEtaXi = EtaXi - XXhat @ freeze_vals[0] - YYhat @ freeze_vals[1]
@@ -116,6 +117,7 @@ def compute_W_lsq(EtaXi,XXhat,YYhat,nP=2,nQ=4,freeze_vals=None,lam=0):
             Wx[xothers,itype] = Bmatrix[:this_nP]
             Wy[others,itype] = Bmatrix[this_nP:]
             Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
+    #print((Wx,Wy))
     resEtaXi = resEtaXi - Ymatrix_pred
     return Wx,Wy,resEtaXi
 
@@ -214,6 +216,7 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
     
     Wlist = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,K0,K1,T0,T1]
     Wlist = [scale_by*w for w in Wlist]
+    #print(Wlist)
 
     return Wlist
 
@@ -639,7 +642,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             W10list[nextraK+8] = np.ones(shapes1[nextraK+8]) # T
             W10list[nextraK+9] = np.zeros(shapes1[nextraK+9]) # T
             W10list[nextraK+10] = np.zeros(shapes1[nextraK+10]) # T
-            W20list[0] = np.concatenate(Xhat,axis=1) #XX
+            W20list[0] = XXhat #np.concatenate(Xhat,axis=1) #XX
             W20list[1] = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=0) #XXp
             W20list[2] = Eta0 #np.zeros(shapes[nextraT+10]) #Eta
             W20list[3] = Xi0 #Xi
@@ -674,7 +677,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                     #W10list[1][0,3] = 5 
                     #W10list[1][3,0] = -5
                     #W10list[1][3,3] = -5
-            np.save('/home/dan/calnet_data/W0list.npy',{'W10list':W10list,'W20list':W20list},allow_pickle=True)
+            np.save('/home/dan/calnet_data/W0list.npy',{'W10list':W10list,'W20list':W20list,'bd1list':bd1list,'bd2list':bd2list,'freeze_vals':freeze_vals,'bounds1':bounds1,'bounds2':bounds2},allow_pickle=True)
 
             if init_W_from_file:
                 npyfile = np.load(init_file,allow_pickle=True)[()]

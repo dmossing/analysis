@@ -7,6 +7,7 @@ from autograd import jacobian
 from autograd import hessian
 import matplotlib.pyplot as plt
 from calnet import utils
+import calnet.fitting_multiout_callable as fmc
 
 def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W10list=None,W20list=None,bounds1=None,bounds2=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,constrain_isn=False,opto_mask=None,nsize=6,ncontrast=6,coupling_constraints=[(1,0,-1)],tv=False,topo_stims=np.arange(36),topo_shape=(6,6),use_opto_transforms=False,opto_transform1=None,opto_transform2=None,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,verbose=True,foldT=True):
     # coupling constraints: (i,j,sgn) --> coupling term i->j is constrained to be > 0 (sgn=1) or < 0 (sgn=-1)
@@ -27,6 +28,9 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     nN,nP = Xhat[0][0].shape
     nQ = Yhat[0][0].shape[1]
     assert(nN==Yhat[0][0].shape[0])
+
+    opt = fmc.gen_opt(nN=nN,nP=nP,nQ=nQ,nS=nS,nT=nT,foldT=foldT,pop_rate_fn=pop_rate_fn,pop_deriv_fn=pop_deriv_fn,fudge=fudge,dt=dt,niter=niter)
+
     
     def add_key_val(d,key,val):
         if not key in d:
@@ -125,16 +129,17 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         return pop_rate_fn(Eta,compute_var(Xi,s02))
 
     def compute_us(W1,W2,fval,fprimeval):
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
-        XX,XXp,Eta,Xi = parse_W2(W2)
-        if fval.shape[0]==2*nN:
-            XX = np.concatenate((XX,XX),axis=0)
-            XXp = np.concatenate((XXp,XXp),axis=0)
-        u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0)
-        u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1)
-        u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2)
-        u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3)
-        return u0,u1,u2,u3
+        return fmc.compute_us(W1,W2,fval,fprimeval,opt)
+        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #XX,XXp,Eta,Xi = parse_W2(W2)
+        #if fval.shape[0]==2*nN:
+        #    XX = np.concatenate((XX,XX),axis=0)
+        #    XXp = np.concatenate((XXp,XXp),axis=0)
+        #u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0)
+        #u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1)
+        #u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2)
+        #u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3)
+        #return u0,u1,u2,u3
 
     def compute_f_fprime_(W1,W2):
         #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
