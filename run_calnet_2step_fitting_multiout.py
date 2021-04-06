@@ -17,7 +17,7 @@ opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
 init_noise = 0.1
 allow_var = True
 multiout = True
-multiout2 = False #True
+multiout2 = True
 tv = True
 correct_Eta = False
 init_Eta_with_s02 = False
@@ -33,6 +33,7 @@ free_amplitude = False
 no_halo_res = False
 ignore_halo_vip=False
 foldT = True
+nondim = True
 
 parallel = True
 
@@ -56,7 +57,8 @@ fit_options = {'ca_data_file':ca_data_file,\
 'ignore_halo_vip':ignore_halo_vip,\
 'use_opto_transforms':use_opto_transforms,\
 'norm_opto_transforms':norm_opto_transforms,\
-'foldT':foldT}
+'foldT':foldT,\
+'nondim':nondim}
 
 if __name__=="__main__":
     weight_base = sys.argv[1]

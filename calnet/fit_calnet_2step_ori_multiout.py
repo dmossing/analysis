@@ -146,7 +146,6 @@ def compute_KT_lsq(EtaXi,XXhat,YYhat,Wx,Wy,nP=2,nQ=4,lam=0):
             Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     resEtaXi = EtaXi - Ymatrix_pred
     return KT,resEtaXi
-    
 
 def pixelwise_flatten(XY,nN=36,nPQ=2,nS=2,nT=2,sameS=True,sameT=True):
     XYr = XY.reshape((nN,nS,nT,nPQ))
@@ -157,7 +156,12 @@ def pixelwise_flatten(XY,nN=36,nPQ=2,nS=2,nT=2,sameS=True,sameT=True):
     XYr = XYr.transpose((1,2,0,3)).reshape((nS*nT*nN,nPQ))
     return XYr
 
-def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _ in range(4)],lams=np.zeros((8,))):
+def norm_to_W0(W1,W0):
+    to_norm = (W0 != 0)
+    W1[to_norm] = W1[to_norm]/W0[to_norm]
+    return W1
+
+def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _ in range(4)],lams=np.zeros((8,)),nondim=False):
     nP = Xhat[0][0].shape[1]
     nQ = Yhat[0][0].shape[1]
     nN = Yhat[0][0].shape[0]
@@ -213,6 +217,8 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
     idata1,idata2 = 2,3 # Xp,Yp
     idiff1,idiff2 = 0,0 # same,same
     W3x,W3y,resXi0 = compute_W_lsq(resXi0,XYs[idata1][idiff1],XYs[idata2][idiff2],nP=nP,nQ=nQ,freeze_vals=freeze_vals[3],lam=lams[3])
+
+    W1x,W1y,K1,T1,W2x,W2y,W3x,W3y = [norm_to_W0(x,y) for x,y in zip([W1x,W1y,K1,T1,W2x,W2y,W3x,W3y],[W0x,W0y,K0,T0,W0x,W0y,W0x,W0y])]
     
     Wlist = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,K0,K1,T0,T1]
     Wlist = [scale_by*w for w in Wlist]
@@ -220,7 +226,7 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
 
     return Wlist
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False):
     
     
     nsize,ncontrast = 6,6
@@ -278,6 +284,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     # code for bounds: 0 , constrained to 0
     # +/-1 , constrained to +/-1
     # 1.5, constrained to [0,1]
+    # -1.5, constrained to [-1,1]
     # 2 , constrained to [0,inf)
     # -2 , constrained to (-inf,0]
     # 3 , unconstrained
@@ -325,13 +332,18 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #T0_bounds[1:4] = 1 # SST,VIP, and PV are constrained to have flat ori tuning
 
     if allow_var:
-        W1y_bounds = 3*np.ones(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+        if nondim:
+            W1y_bounds = -1.5*np.ones(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+            k1_bounds = -1.5*np.ones(k0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+            T1_bounds = -1.5*np.ones(T0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+        else:
+            W1y_bounds = 3*np.ones(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+            k1_bounds = 3*np.ones(k0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
+            T1_bounds = 3*np.ones(T0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
         W1y_bounds[1,1] = 0
         #W1y_bounds[3,1] = 0 
         W1y_bounds[2,0] = 0
         W1y_bounds[2,2] = 0 # newly added: no VIP-VIP inhibition
-        k1_bounds = 3*np.ones(k0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
-        T1_bounds = 3*np.ones(T0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
     else:
         W1y_bounds = np.zeros(W0y_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
         k1_bounds = 0*np.ones(k0_bounds.shape) #W0y_bounds.copy()*0 #np.zeros_like(W0y_bounds)
@@ -503,17 +515,6 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
         drW,prW = np.linalg.eig(w)
         srtinds = np.argsort(drW)
         return drW[srtinds],prW[:,srtinds]
-
-    def optimize_W2xy(W1list,W2list,opt):
-        W0x,W0y,_,_,_,_,_,_,_,k0,_,_,_,kappa,T0,_,_,_,_,_,_,_ = parse_W1(W1list)
-        XX0,XXp0,Eta0,Xi0 = parse_W2(W2list)
-        W1 = unparse_W(W1list)
-        W2 = unparse_W(W2list)
-        YY,YYp = fmc.compute_f_fprime_t_avg_(W1,W2,0,opt)
-        resEta,resXi = fmc.compute_res(W1,W2,opt)
-        MK0 = gen_MK(k0)
-        MT0 = gen_MT(T0)
-        Eta_same = gen_YYsame(resEta)
     
     #0.W0x,1.W0y,2.W1x,3.W1y,4.W2x,5.W2y,6.W3x,7.W3y,8.s02,9.K0,10.K1,11.K2,12.K3,13.kappa,14.T0,15.T1,16.T2,17.T3,18.h1,19.h2,20.bl,21.amp
     #0.XX,1.XXp,2.Eta,3.Xi
@@ -720,7 +721,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 extra_Ts = [np.zeros_like(W10list[7]) for ivar in range(3)]
                 W10list = W10list[:4] + extra_Ws*2 + W10list[4:6] + extra_ks + W10list[6:8] + extra_Ts + W10list[8:]
 
-            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2)
+            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim)
     
     #def parse_W(W):
     #    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k0,k1,k2,k3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h = W
