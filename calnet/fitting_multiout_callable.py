@@ -62,6 +62,9 @@ def compute_us(W1,W2,fval,fprimeval,opt):
     W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
     XX,XXp,Eta,Xi = parse_W2(W2,opt)
     nN = opt['nN']
+    nondim = opt['nondim']
+    if nondim:
+        W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3],[W0x,W0y,W0x,W0y,W0x,W0y,K0,K0,K0,T0,T0,T0])]
     if fval.shape[0]==2*nN:
         XX = np.concatenate((XX,XX),axis=0)
         XXp = np.concatenate((XXp,XXp),axis=0)
@@ -238,14 +241,14 @@ def compute_f_fprime_t_avg_12_(W1,W2,perturbation,max_dist=1,burn_in=0.5,opt=Non
 
     return YYmean,YYprimemean
 
-def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100):
+def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False):
 
     shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter]
+    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim']
+    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim]
     for key,val in zip(keys,vals):
         opt[key] = val
 

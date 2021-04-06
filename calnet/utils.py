@@ -1489,6 +1489,9 @@ def set_bounds_by_code(lb,ub,bdlist):
     
     set_bound(lb,[bd==1.5 for bd in bdlist],val=0)
     set_bound(ub,[bd==1.5 for bd in bdlist],val=1)
+
+    set_bound(lb,[bd==-1.5 for bd in bdlist],val=-1)
+    set_bound(ub,[bd==-1.5 for bd in bdlist],val=1)
     
     set_bound(lb,[bd==-1 for bd in bdlist],val=-1)
     set_bound(ub,[bd==-1 for bd in bdlist],val=-1)
