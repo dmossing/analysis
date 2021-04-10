@@ -1173,8 +1173,8 @@ def compute_f_fprime_t_avg(Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1=0,h2=0
         XXp12 = XXp#np.concatenate((XXp,XXp),axis=0)
         Eta12 = Eta#np.concatenate((Eta,Eta),axis=0)
         Xi12 = Xi#np.concatenate((Xi,Xi),axis=0)
-    WWmx,WWmy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wmx,Wmy]]
-    WWsx,WWsy = [gen_Weight_k_kappa_t(W,k,kappa,T,nS=nS,nT=nT) for W in [Wsx,Wsy]]
+    WWmx,WWmy = [gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT) for W in [Wmx,Wmy]]
+    WWsx,WWsy = [gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT) for W in [Wsx,Wsy]]
     fval = compute_f_(Eta12,Xi12,s02)
     fprimeval = compute_fprime_(Eta12,Xi12,s02)
     #resEta12 = Eta12 - u_fn_k_kappa_t(XX12_no_opto,fval,Wmx,Wmy,K,kappa,T,nS=nS,nT=nT)
@@ -1270,7 +1270,7 @@ def compute_fprime_(Eta,Xi,s02,fprime_m=fprime_miller_troyer):
 def compute_f_(Eta,Xi,s02,pop_rate_fn=f_miller_troyer):
     return pop_rate_fn(Eta,compute_var(Xi,s02))
 
-def merge_by_neuron(r1,r2,expt_ids1,expt_ids2):
+def merge_expt_ids(expt_ids1,expt_ids2):
     # merge r1 and r2 into a single array with one row per neuron
     # find unique expt_ids of each
     u1 = np.unique(expt_ids1)
@@ -1283,27 +1283,40 @@ def merge_by_neuron(r1,r2,expt_ids1,expt_ids2):
     for u in uall:
         if u in u1:
             this_Nneurons = np.sum(expt_ids1==u)
-            Nneurons = Nneurons + this_Nneurons
         else:
             this_Nneurons = np.sum(expt_ids2==u)
-            Nneurons = Nneurons + this_Nneurons
+        Nneurons = Nneurons + this_Nneurons
         this_in_each = np.zeros((this_Nneurons,2),dtype='bool')
         this_in_each[:,0] = (u in u1)
         this_in_each[:,1] = (u in u2)
         in_each = np.concatenate((in_each,this_in_each),axis=0)
         
     # use this to construct an array of merged expt_ids (1 and 2), and new neuron_ids
-    neuron_ids = np.arange(Nneurons)
-    expt_ids = np.zeros_like(neuron_ids)
+    expt_ids = np.zeros((Nneurons,))
     expt_ids[in_each[:,0]] = expt_ids1
     expt_ids[in_each[:,1]] = expt_ids2
+    return expt_ids,in_each
     
+def merge_by_neuron(r1,r2,expt_ids1,expt_ids2):
+    expt_ids,in_each = merge_expt_ids(expt_ids1,expt_ids2)
+    Nneurons = expt_ids.shape[0]
+    neuron_ids = np.arange(Nneurons)
     # use this to construct an array of merged rs (1 and 2)
     rmerged = np.nan*np.ones((Nneurons,2)+r1.shape[1:])
     rmerged[in_each[:,0],0] = r1
     rmerged[in_each[:,1],1] = r2
-    
     return rmerged,expt_ids,neuron_ids
+
+def align_by_neuron(r1,r2,expt_ids1,expt_ids2):
+    expt_ids,in_each = merge_expt_ids(expt_ids1,expt_ids2)
+    Nneurons = expt_ids.shape[0]
+    neuron_ids = np.arange(Nneurons)
+    # use this to construct an array of merged rs (1 and 2)
+    r1aligned = np.nan*np.ones((Nneurons,)+r1.shape[1:])
+    r2aligned = np.nan*np.ones((Nneurons,)+r2.shape[1:])
+    r1aligned[in_each[:,0]] = r1
+    r2aligned[in_each[:,1]] = r2
+    return r1aligned,r2aligned,expt_ids,neuron_ids
 
 def compute_couplings(YY_opto,mdls):
     nfiles,nopto,nN,ntypes = YY_opto.shape

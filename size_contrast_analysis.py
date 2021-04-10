@@ -1009,3 +1009,16 @@ def plot_bootstrapped_size_tuning(data,icontrasts=np.arange(6),colors=None,usize
     size_tuning = sim_utils.gen_size_tuning(data)    
     usize0 = np.concatenate(((0,),usize))
     ut.plot_bootstrapped_errorbars_hillel(usize0,size_tuning[:,:,icontrasts].transpose((0,2,1)),pct=(16,84),colors=colors)
+
+def symmetrize(arr):
+    return np.concatenate((arr,arr[0:1]))
+
+def plot_size_contrast_ori(arr):
+    nsize,ncontrast,nangle = arr.shape
+    for i in range(nsize):
+        for j in range(ncontrast):
+            plt.subplot(nsize,ncontrast,i*ncontrast+j+1)
+            plt.fill_between(np.arange(nangle+1),symmetrize(arr[i,j]),alpha=0.5)
+            plt.plot(np.arange(nangle+1),symmetrize(arr[i,j]))
+            plt.ylim(arr.min(),1.1*arr.max())
+            plt.axis('off')

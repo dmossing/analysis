@@ -276,8 +276,33 @@ def sort_by_pref_dir(rs,ori_axis=3):
     return rs_sort
 
 def sort_both_by_pref_dir(rs,other,ori_axis=3):
-    rs_sort = rs.copy()
-    other_sort = other.copy()
+    return sort_all_by_pref_dir((rs,ori_axis),(other,ori_axis))
+    #rs_sort = rs.copy()
+    #other_sort = other.copy()
+    #for ir in range(len(rs_sort)):
+    #    rs_ori = rs_sort[ir].copy()
+    #    dims_to_avg = np.flip(np.arange(len(rs_ori.shape)))
+    #    dims_to_avg = dims_to_avg[dims_to_avg!=0]
+    #    dims_to_avg = dims_to_avg[dims_to_avg!=ori_axis]
+    #    for idim in dims_to_avg: #while len(rs_ori.shape)>2:
+    #        rs_ori = np.nanmean(rs_ori,idim) #np.nanmean(rs_ori,1)
+    #    nroi = rs_ori.shape[0]
+    #    nori = rs_ori.shape[1]
+    #    pref_dir = np.argmax(rs_ori,axis=1)
+#   #      ii,jj = np.meshgrid(np.arange(rs_ori.shape[0]),np.arange(rs_ori.shape[1]),indexing='ij')
+    #    slicer = [slice(None) for idim in range(len(rs_sort[ir].shape)-1)]
+    #    for iroi in range(nroi):
+    #        order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
+    #        slicer[ori_axis-1] = order
+    #        rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
+    #        other_sort[ir][iroi] = other_sort[ir][iroi][slicer]
+    #return rs_sort,other_sort
+
+def sort_all_by_pref_dir(rs,*others):
+    rs_sort = rs[0].copy()
+    ori_axis = rs[1]
+    others_sort = [other[0].copy() for other in others]
+    other_ori_axes = [other[1] for other in others]
     for ir in range(len(rs_sort)):
         rs_ori = rs_sort[ir].copy()
         dims_to_avg = np.flip(np.arange(len(rs_ori.shape)))
@@ -288,14 +313,16 @@ def sort_both_by_pref_dir(rs,other,ori_axis=3):
         nroi = rs_ori.shape[0]
         nori = rs_ori.shape[1]
         pref_dir = np.argmax(rs_ori,axis=1)
-#         ii,jj = np.meshgrid(np.arange(rs_ori.shape[0]),np.arange(rs_ori.shape[1]),indexing='ij')
         slicer = [slice(None) for idim in range(len(rs_sort[ir].shape)-1)]
+        other_slicers = [[slice(None) for idim in range(len(other_sort[ir].shape)-1)] for other_sort in others_sort]
         for iroi in range(nroi):
             order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
             slicer[ori_axis-1] = order
             rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
-            other_sort[ir][iroi] = other_sort[ir][iroi][slicer]
-    return rs_sort,other_sort
+            for iother in range(len(others)):
+                other_slicers[iother][other_ori_axes[iother]-1] = order
+                others_sort[iother][ir][iroi] = others_sort[iother][ir][iroi][other_slicers[iother]]
+    return [rs_sort]+others_sort
 
 def fix_fg_dir(rs):
     rs_sort = rs.copy()
@@ -405,12 +432,12 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
 
-def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000):
+def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84)):
     xx = np.linspace(animal_data[:,0].min(),animal_data[:,0].max(),101)
     stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
     YY = xx[:,np.newaxis]*stats[0]+stats[1]
-    lb_YY = np.nanpercentile(YY,16,axis=1)
-    ub_YY = np.nanpercentile(YY,84,axis=1)
+    lb_YY = np.nanpercentile(YY,pct[0],axis=1)
+    ub_YY = np.nanpercentile(YY,pct[1],axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
     plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
     plt.plot(xx,mn_YY,c=c,alpha=alpha)

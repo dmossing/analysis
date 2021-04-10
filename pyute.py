@@ -1935,9 +1935,16 @@ def circ_align_to_entry(data,entry,axis=1):
     naxis = shp[axis]
     data_aligned = np.nan*np.ones(shp)
     for iroi in range(data.shape[0]):
-        slicer = [slice(None) for idim in range(ndim-1)]
-        slicer[axis-1] = list(np.arange(entry[iroi],naxis))+list(np.arange(0,entry[iroi]))
-        data_aligned[iroi] = data[iroi][slicer]
+        #slicer = [slice(None) for idim in range(ndim-1)]
+        #slicer[axis-1] = list(np.arange(entry[iroi],naxis))+list(np.arange(0,entry[iroi]))
+        #data_aligned[iroi] = data[iroi][slicer]
+        data_aligned[iroi] = np.roll(data[iroi],-entry[iroi],axis=axis-1)
+    return data_aligned
+
+def circ_align_to_entry_axiswise(data,entry,based_axis=0,entry_axis=1):
+    data_t = np.moveaxis(data,based_axis,0)
+    data_aligned_t = circ_align_to_entry(data_t,entry,axis=entry_axis)
+    data_aligned = np.moveaxis(data_aligned_t,0,based_axis)
     return data_aligned
 
 def align_to_pref_size(sc):
@@ -1957,10 +1964,10 @@ def circ_align_to_pref(data,axis=1):
     data_aligned = circ_align_to_entry(data,pref,axis=axis)
     return data_aligned
 
-def imshow_hot_cold(arr,mx=None):
+def imshow_hot_cold(arr,mx=None,interpolation='nearest'):
     if mx is None:
         mx = np.nanmax(np.abs(arr))
-    plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx)
+    plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx,interpolation=interpolation)
 
 def zero_origin(cmd='y'):
     if 'y' in cmd:
