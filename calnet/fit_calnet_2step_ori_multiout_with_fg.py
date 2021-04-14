@@ -44,20 +44,28 @@ def invert_f_mt(y):
 def compute_fprime_m__(Eta,Xi,s02,nS=2,nT=2):
     return sim_utils.fprime_miller_troyer(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))*Xi
 
-def invert_fprime_mt(Ypc_list,Eta0,nN=36,nQ=4,nS=2,nT=2,fudge=1e-2):
-    Yp = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=0)
+def invert_fprime_mt(Ypc_list,Eta0,nN=36,nQ=4,nS=2,nT=2,fudge=1e-2,foldT=True):
+    Yp = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=0,foldT=foldT)
     fp = compute_fprime_m__(Eta0,np.zeros_like(Eta0),np.ones((nQ,)),nS=nS,nT=nT)
     #Ypc_list[iS][icelltype-1] = [(s[idim],v[idim]) for idim in range(ndims)]
     Xi0 = Yp/(fp + fudge)
     return Xi0
 
-def get_pc_dim(Ypc_list,nN=36,nPQ=4,nS=2,nT=2,idim=0):
-    Yp = np.zeros((nN*nT,nPQ*nS))
-    for iS in range(nS):
-        for iQ in range(nPQ):
-            #print('Ypc shape %d, %d: '%(iS,iQ)+str((Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]).shape))
-            Yp[:,iS*nPQ+iQ] = Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1] 
-    Yp = calnet.utils.unfold_T_(Yp,nS=nS,nT=nT,nPQ=nPQ)
+def get_pc_dim(Ypc_list,nN=36,nPQ=4,nS=2,nT=2,idim=0,foldT=True):
+    if foldT:
+        Yp = np.zeros((nN*nT,nPQ*nS))
+        for iS in range(nS):
+            for iQ in range(nPQ):
+                #print('Ypc shape %d, %d: '%(iS,iQ)+str((Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]).shape))
+                Yp[:,iS*nPQ+iQ] = Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1] 
+        Yp = calnet.utils.unfold_T_(Yp,nS=nS,nT=nT,nPQ=nPQ)
+    else:
+        Yp = np.zeros((nN,nPQ*nS*nT))
+        for iS in range(nS):
+            for iT in range(nT):
+                for iQ in range(nPQ):
+                    #print('Ypc shape %d, %d: '%(iS,iQ)+str((Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]).shape))
+                    Yp[:,iS*nT*nPQ+iT*nPQ+iQ] = Ypc_list[iS][iT][iQ][idim][0]*Ypc_list[iS][iT][iQ][idim][1] 
     return Yp
 
 def initialize_W(Xhat,Yhat,scale_by=0.2):
@@ -161,7 +169,7 @@ def norm_to_W0(W1,W0):
     W1[to_norm] = W1[to_norm]/W0[to_norm]
     return W1
 
-def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _ in range(4)],lams=np.zeros((8,)),nondim=False):
+def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _ in range(4)],lams=np.zeros((8,)),foldT=True,nondim=False):
     nP = Xhat[0][0].shape[1]
     nQ = Yhat[0][0].shape[1]
     nN = Yhat[0][0].shape[0]
@@ -170,11 +178,11 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
 
     XXhat = calnet.utils.flatten_nested_list_of_2d_arrays(Xhat)
     YYhat = calnet.utils.flatten_nested_list_of_2d_arrays(Yhat)
-    XXphat = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=0)
-    YYphat = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=0)
+    XXphat = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=0,foldT=foldT)
+    YYphat = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=0,foldT=foldT)
 
     Eta0 = invert_f_mt(YYhat)
-    Xi0 = invert_fprime_mt(Ypc_list,Eta0,nN=nN,nQ=nQ,nS=nS,nT=nT)
+    Xi0 = invert_fprime_mt(Ypc_list,Eta0,nN=nN,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
 
     sameSs = [True,False,True]
     sameTs = [True,True,False]
@@ -226,60 +234,158 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
 
     return Wlist
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False):
+def get_Rs_slice(Rs_mean,Rs_cov,slc):
+    for iR in range(len(Rs_mean)):
+        for ialign in range(len(Rs_mean[iR])):
+            Rs_mean[iR][ialign] = Rs_mean[iR][ialign][slc]
+            for idim in range(len(Rs_cov[iR][ialign])):
+                Rs_cov[iR][ialign][idim][1] = Rs_cov[iR][ialign][idim][1][slc]
+    return Rs_mean,Rs_cov
+
+
+def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False,fit_running=False,fit_non_running=True,fit_sc=True,fit_fg=False):
     
     
     nsize,ncontrast = 6,6
     
-    npfile = np.load(ca_data_file,allow_pickle=True)[()]#,{'rs':rs},allow_pickle=True) # ,'rs_denoise':rs_denoise
-    rs = npfile['rs']
-    
+    nrun = 2
     nsize,ncontrast,ndir = 6,6,8
+    nstim_fg = 5
+
+    fit_both_running = (fit_non_running and fit_running)
+    fit_both_stims = (fit_sc and fit_fg)
+
+    if not fit_both_running:
+        nrun = 1
+        if fit_non_running:
+            irun = 0
+        elif fit_running:
+            irun = 1
+
+    nsc = nrun*nsize*ncontrast*ndir
+    nfg = nrun*nstim_fg*ndir
+
+    npfile = np.load(ca_data_file,allow_pickle=True)[()]#,{'rs':rs},allow_pickle=True) # ,'rs_denoise':rs_denoise
+    if fit_both_running: 
+        Rs_mean = npfile['Rs_mean_run']
+        Rs_cov = npfile['Rs_cov_run']
+        if not fit_both_stims:
+            if fit_sc:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
+            elif fit_fg:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
+    else:
+        Rs_mean = npfile['Rs_mean'][irun]
+        Rs_cov = npfile['Rs_cov'][irun]
+        if not fit_both_stims:
+            if fit_sc:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
+            elif fit_fg:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
+    
     ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    ndims = 5
     nT = len(ori_dirs)
-    nS = len(rs[0])
+    nS = len(Rs_mean[0])
     
     def sum_to_1(r):
         R = r.reshape((r.shape[0],-1))
-        R = R/np.nansum(R,axis=1)[:,np.newaxis] # changed 8/28
+        R = R/np.nansum(R[:,~np.isnan(R.sum(0))],axis=1)[:,np.newaxis] # changed 21/4/10
         return R
     
     def norm_to_mean(r):
         R = r.reshape((r.shape[0],-1))
         R = R/np.nanmean(R[:,~np.isnan(R.sum(0))],axis=1)[:,np.newaxis]
         return R
+
+    def ori_avg(Rs,these_ori_dirs):
+        if fit_sc:
+            rs_sc = np.nanmean(Rs[:nsc].reshape((nrun,nsize,ncontrast,ndir))[:,:,:,these_ori_dirs],-1)
+            rs_sc[:,1:,1:] = ssi.convolve(rs_sc,kernel,'valid')
+            rs_sc = rs_sc.reshape((nrun*nsize*ncontrast))
+            if fit_fg:
+                rs_fg = np.nanmean(Rs[nsc:].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+                rs_fg = rs_fg.reshape((nrun*nstim_fg))
+            else:
+                rs_fg = np.zeros((0,))
+        elif fit_fg:
+            rs_sc = np.zeros((0,))
+            rs_fg = np.nanmean(Rs.reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+            rs_fg = rs_fg.reshape((nrun*nstim_fg))
+        Rso = np.concatenate((rs_sc,rs_fg))
+        return Rso
     
-    Rs = [[None,None] for i in range(len(rs))]
-    Rso = [[[None for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(rs))]
-    rso = [[[None for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(rs))]
-    
-    for iR,r in enumerate(rs):#rs_denoise):
-        print(iR)
-        for ialign in range(nS):
-            Rs[iR][ialign] = sum_to_1(r[ialign][:,:nsize,:])
+    Rso_mean = [[[None for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
+    Rso_cov = [[[[[None,None] for idim in range(ndims)] for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
     
     kernel = np.ones((1,2,2))
     kernel = kernel/kernel.sum()
     
-    for iR,r in enumerate(rs):
+    for iR,r in enumerate(Rs_mean):
         for ialign in range(nS):
             for iori in range(nT):
-                Rso[iR][ialign][iori] = np.nanmean(Rs[iR][ialign].reshape((-1,nsize,ncontrast,ndir))[:,:,:,ori_dirs[iori]],-1)
-                Rso[iR][ialign][iori][:,:,0] = np.nanmean(Rso[iR][ialign][iori][:,:,0],1)[:,np.newaxis]
-
-                Rso[iR][ialign][iori][:,1:,1:] = ssi.convolve(Rso[iR][ialign][iori],kernel,'valid')
-                Rso[iR][ialign][iori] = Rso[iR][ialign][iori].reshape(Rso[iR][ialign][iori].shape[0],-1) #nroi x nstim
+                Rso_mean[iR][ialign][iori] = ori_avg(Rs_mean[iR][ialign],ori_dirs[iori])
+                for idim in range(ndims):
+                    Rso_cov[iR][ialign][iori][idim][0] = Rs_cov[iR][ialign][idim][0]
+                    Rso_cov[iR][ialign][iori][idim][1] = ori_avg(Rs_cov[iR][ialign][idim][1],ori_dirs[iori])
 
     def set_bound(bd,code,val=0):
         # set bounds to 0 where 0s occur in 'code'
         for iitem in range(len(bd)):
             bd[iitem][code[iitem]] = val
     
-    nN = 36
+    nN = (36*fit_sc + 5*fit_fg)*(1 + fit_both_running)
     nS = 2
-    nP = 2
+    nP = 2 + fit_both_running
     nT = 2
     nQ = 4
+
+    ndims = 5
+    ncelltypes = 5
+    #print('foldT: %d'%foldT)
+    if foldT:
+        Yhat = [None for iS in range(nS)]
+        Xhat = [None for iS in range(nS)]
+        Ypc_list = [None for iS in range(nS)]
+        Xpc_list = [None for iS in range(nS)]
+        print('have not written this yet')
+        assert(True==False)
+    else:
+        Yhat = [[None for iT in range(nT)] for iS in range(nS)]
+        Xhat = [[None for iT in range(nT)] for iS in range(nS)]
+        Ypc_list = [[None for iT in range(nT)] for iS in range(nS)]
+        Xpc_list = [[None for iT in range(nT)] for iS in range(nS)]
+        for iS in range(nS):
+            mx = np.zeros((ncelltypes,))
+            yy = [None for icelltype in range(ncelltypes)]
+            for icelltype in range(ncelltypes):
+                yy[icelltype] = np.concatenate(Rso_mean[icelltype][iS])
+                mx[icelltype] = np.nanmax(yy[icelltype])
+            for iT in range(nT):
+                y = [Rso_mean[icelltype][iS][iT][:,np.newaxis]/mx[icelltype] for icelltype in range(1,ncelltypes)]
+                Yhat[iS][iT] = np.concatenate(y,axis=1)
+                Ypc_list[iS][iT] = [None for icelltype in range(1,ncelltypes)]
+                for icelltype in range(1,ncelltypes):
+                    Ypc_list[iS][iT][icelltype-1] = [(this_dim[0]/mx[icelltype],this_dim[1]) for this_dim in Rso_cov[icelltype][iS][iT]]
+                icelltype = 0
+                x = Rso_mean[icelltype][iS][iT][:,np.newaxis]/mx[icelltype]
+                if fit_both_running:
+                    run_vector = np.zeros_like(x)
+                    if fit_both_stims:
+                        run_vector[int(np.round(nsc/2)):nsc] = 1
+                        run_vector[-int(np.round(nfg/2)):] = 1
+                    else:
+                        run_vector[int(np.round(run_vector.shape[0]/2)):,:] = 1
+                else:
+                    run_vector = np.zeros((x.shape[0],0))
+                Xhat[iS][iT] = np.concatenate((x,np.ones_like(x),run_vector),axis=1)
+                Xpc_list[iS][iT] = [None for iinput in range(2+fit_both_running)]
+                Xpc_list[iS][iT][0] = [(this_dim[0]/mx[icelltype],this_dim[1]) for this_dim in Rso_cov[icelltype][iS][iT]]
+                Xpc_list[iS][iT][1] = [(0,np.zeros((Xhat[0][0].shape[0],))) for idim in range(ndims)]
+                if fit_both_running:
+                    Xpc_list[iS][iT][2] = [(0,np.zeros((Xhat[0][0].shape[0],))) for idim in range(ndims)]
+    nN,nP = Xhat[0][0].shape
+    nQ = Yhat[0][0].shape[1]
     
     # code for bounds: 0 , constrained to 0
     # +/-1 , constrained to +/-1
@@ -291,7 +397,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     
     W0x_bounds = 3*np.ones((nP,nQ),dtype=int)
     W0x_bounds[0,:] = 2 # L4 PCs are excitatory
-    W0x_bounds[0,1] = 0 # SSTs don't receive L4 input
+    W0x_bounds[0,1] = 0 # SSTs don't receive L4 input 
     
     if allow_var:
         if nondim:
@@ -308,12 +414,13 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     W0y_bounds[1,1] = 0 # SSTs don't inhibit themselves
     # W0y_bounds[3,1] = 0 # PVs are allowed to inhibit SSTs, consistent with Hillel's unpublished results, but not consistent with Pfeffer et al.
     W0y_bounds[2,0] = 0 # VIPs don't inhibit L2/3 PCs. According to Pfeffer et al., only L5 PCs were found to get VIP inhibition
+    W0y_bounds[2,2] = 0 # newly added: no VIP-VIP inhibition 
 
 
     if not constrain_wts is None:
         for wt in constrain_wts:
             W0y_bounds[wt[0],wt[1]] = 0
-            Wsy_bounds[wt[0],wt[1]] = 0
+            W1y_bounds[wt[0],wt[1]] = 0
     
     def tile_nS_nT_nN(kernel):
         row = np.concatenate([kernel for idim in range(nS*nT)],axis=0)[np.newaxis,:]
@@ -371,10 +478,19 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     k3_bounds = k1_bounds.copy()*0
     T3_bounds = T1_bounds.copy()*0
     
-    X_bounds = tile_nS_nT_nN(np.array([2,1]))
+    if fit_both_running:
+        to_tile = Xhat[0][0][:,1:]
+        to_tile = np.concatenate((2*np.ones((to_tile.shape[0],1)),to_tile),axis=1)
+        X_bounds = np.tile(to_tile,(1,nS*nT))
+    else:
+        X_bounds = tile_nS_nT_nN(np.array([2,1]))
+    #print(X_bounds.shape)
     # X_bounds = np.array([np.array([2,1,2,1])]*nN)
     
-    Xp_bounds = tile_nS_nT_nN(np.array([3,0])) # edited to set XXp to 0 for spont. term
+    if fit_both_running:
+        Xp_bounds = tile_nS_nT_nN(np.array([3,0,0])) # edited to set XXp to 0 for spont. term
+    else:
+        Xp_bounds = tile_nS_nT_nN(np.array([3,0])) # edited to set XXp to 0 for spont. term
     # Xp_bounds = np.array([np.array([3,1,3,1])]*nN)
     
     # Y_bounds = tile_nS_nT_nN(2*np.ones((nQ,)))
@@ -425,90 +541,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     ub2 = np.concatenate([b.flatten() for b in ub2])
     bounds1 = [(a,b) for a,b in zip(lb1,ub1)]
     bounds2 = [(a,b) for a,b in zip(lb2,ub2)]
-
-    topo_stims = np.arange(36)
-    topo_shape = (6,6)
     
-    nS = 2
-    ndims = 5
-    ncelltypes = 5
-    #print('foldT: %d'%foldT)
-    if foldT:
-        Yhat = [None for iS in range(nS)]
-        Xhat = [None for iS in range(nS)]
-        Ypc_list = [None for iS in range(nS)]
-        Xpc_list = [None for iS in range(nS)]
-        for iS in range(nS):
-            Yhat[iS] = [None for iT in range(nT)]
-            Xhat[iS] = [None for iT in range(nT)]
-            mx = np.zeros((ncelltypes,))
-            yy = [None for icelltype in range(ncelltypes)]
-            for icelltype in range(ncelltypes):
-                yy[icelltype] = np.nanmean(Rso[icelltype][iS][0],0)
-                mx[icelltype] = np.nanmax(yy[icelltype])
-            for iT in range(nT):
-                y = [np.nanmean(Rso[icelltype][iS][iT],axis=0)[:,np.newaxis]/mx[icelltype] for icelltype in range(1,ncelltypes)]
-                Yhat[iS][iT] = np.concatenate(y,axis=1)
-                icelltype = 0
-                x = np.nanmean(Rso[icelltype][iS][iT],0)[:,np.newaxis]/mx[icelltype]
-                Xhat[iS][iT] = np.concatenate((x,np.ones_like(x)),axis=1)
-
-            Ypc_list[iS] = [None for icelltype in range(1,ncelltypes)]
-            for icelltype in range(1,ncelltypes):
-                # Rso: nroi x nN 
-                rss = np.concatenate([Rso[icelltype][iS][iT].copy() for iT in range(nT)],axis=1)#.reshape(Rs[icelltype][ialign].shape[0],-1)
-                rss = rss[np.isnan(rss).sum(1)==0]
-                #print('rss shape: '+str(rss.shape))
-                try:
-                    u,s,v = np.linalg.svd(rss-np.mean(rss,0)[np.newaxis])
-                    #print('v shape: '+str(v.shape))
-                    Ypc_list[iS][icelltype-1] = [(s[idim],v[idim]) for idim in range(ndims)]
-                except:
-                    print('nope on Y')
-
-            icelltype = 0
-            rss = np.concatenate([Rso[icelltype][iS][iT].copy() for iT in range(nT)],axis=1)#.reshape(Rs[icelltype][ialign].shape[0],-1)
-            rss = rss[np.isnan(rss).sum(1)==0]
-            u,s,v = np.linalg.svd(rss-rss.mean(0)[np.newaxis])
-            Xpc_list[iS] = [None for iinput in range(2)]
-            Xpc_list[iS][0] = [(s[idim],v[idim]) for idim in range(ndims)]
-            Xpc_list[iS][1] = [(0,np.zeros((Xpc_list[0][0][0][1].shape[0],))) for idim in range(ndims)]
-
-    else:
-        Yhat = [[None for iT in range(nT)] for iS in range(nS)]
-        Xhat = [[None for iT in range(nT)] for iS in range(nS)]
-        Ypc_list = [[None for iT in range(nT)] for iS in range(nS)]
-        Xpc_list = [[None for iT in range(nT)] for iS in range(nS)]
-        for iS in range(nS):
-            mx = np.zeros((ncelltypes,))
-            yy = [None for icelltype in range(ncelltypes)]
-            for icelltype in range(ncelltypes):
-                yy[icelltype] = np.nanmean(Rso[icelltype][iS][0],0)
-                mx[icelltype] = np.nanmax(yy[icelltype])
-            for iT in range(nT):
-                y = [np.nanmean(Rso[icelltype][iS][iT],axis=0)[:,np.newaxis]/mx[icelltype] for icelltype in range(1,ncelltypes)]
-                Ypc_list[iS][iT] = [None for icelltype in range(1,ncelltypes)]
-                for icelltype in range(1,ncelltypes):
-                    rss = Rso[icelltype][iS][iT].copy() #.reshape(Rs[icelltype][ialign].shape[0],-1)
-                    rss = rss[np.isnan(rss).sum(1)==0]
-                    try:
-                        u,s,v = np.linalg.svd(rss-np.mean(rss,0)[np.newaxis])
-                        Ypc_list[iS][iT][icelltype-1] = [(s[idim],v[idim]) for idim in range(ndims)]
-                    except:
-                        print('nope on Y')
-                Yhat[iS][iT] = np.concatenate(y,axis=1)
-                icelltype = 0
-                x = np.nanmean(Rso[icelltype][iS][iT],0)[:,np.newaxis]/mx[icelltype]
-                Xhat[iS][iT] = np.concatenate((x,np.ones_like(x)),axis=1)
-                icelltype = 0
-                rss = Rso[icelltype][iS][iT].copy()
-                rss = rss[np.isnan(rss).sum(1)==0]
-                u,s,v = np.linalg.svd(rss-rss.mean(0)[np.newaxis])
-                Xpc_list[iS][iT] = [None for iinput in range(2)]
-                Xpc_list[iS][iT][0] = [(s[idim],v[idim]) for idim in range(ndims)]
-                Xpc_list[iS][iT][1] = [(0,np.zeros((Xhat[0][0].shape[0],))) for idim in range(ndims)]
-    nN,nP = Xhat[0][0].shape
-    nQ = Yhat[0][0].shape[1]
     
     def compute_f_(Eta,Xi,s02):
         return sim_utils.f_miller_troyer(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))
@@ -536,12 +569,14 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     opto_dict = np.load(opto_silencing_data_file,allow_pickle=True)[()]
 
     Yhat_opto = opto_dict['Yhat_opto']
-    Yhat_opto = Yhat_opto.reshape((nN*2,-1))
+    Yhat_opto = np.ones((nN*2,nQ*nS*nT))
+    #Yhat_opto = Yhat_opto.reshape((nN*2,-1))
     Yhat_opto[0::12] = np.nanmean(Yhat_opto[0::12],axis=0)[np.newaxis]
     Yhat_opto[1::12] = np.nanmean(Yhat_opto[1::12],axis=0)[np.newaxis]
     Yhat_opto = Yhat_opto/np.nanmax(Yhat_opto[0::2],0)[np.newaxis,:]
     #print(Yhat_opto.shape)
-    h_opto = opto_dict['h_opto']
+    h_opto = np.zeros((nN*2,))
+    #h_opto = opto_dict['h_opto']
     #dYY1 = Yhat_opto[1::2]-Yhat_opto[0::2]
 
     YYhat_halo = Yhat_opto.reshape((nN,2,-1))
@@ -573,12 +608,14 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     opto_dict = np.load(opto_activation_data_file,allow_pickle=True)[()]
 
     Yhat_opto = opto_dict['Yhat_opto']
-    Yhat_opto = Yhat_opto.reshape((nN*2,-1))
+    Yhat_opto = np.ones((nN*2,nQ*nS*nT))
+    #Yhat_opto = Yhat_opto.reshape((nN*2,-1))
     Yhat_opto[0::12] = np.nanmean(Yhat_opto[0::12],axis=0)[np.newaxis]
     Yhat_opto[1::12] = np.nanmean(Yhat_opto[1::12],axis=0)[np.newaxis]
     Yhat_opto = Yhat_opto/Yhat_opto[0::2].max(0)[np.newaxis,:]
     #print(Yhat_opto.shape)
-    h_opto = opto_dict['h_opto']
+    h_opto = np.zeros((nN*2,))
+    #h_opto = opto_dict['h_opto']
     #dYY2 = Yhat_opto[1::2]-Yhat_opto[0::2]
 
     YYhat_chrimson = Yhat_opto.reshape((nN,2,-1))
@@ -611,7 +648,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     YYhat = calnet.utils.flatten_nested_list_of_2d_arrays(Yhat)
     XXhat = calnet.utils.flatten_nested_list_of_2d_arrays(Xhat)
     Eta0 = invert_f_mt(YYhat)
-    Xi0 = invert_fprime_mt(Ypc_list,Eta0,nN=nN,nQ=nQ,nS=nS,nT=nT)
+    Xi0 = invert_fprime_mt(Ypc_list,Eta0,nN=nN,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
 
     ntries = 1
     nhyper = 1
@@ -650,9 +687,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             W10list[nextraK+9] = np.zeros(shapes1[nextraK+9]) # T
             W10list[nextraK+10] = np.zeros(shapes1[nextraK+10]) # T
             W20list[0] = XXhat #np.concatenate(Xhat,axis=1) #XX
-            W20list[1] = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=0) #XXp
+            W20list[1] = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=0,foldT=foldT) #XXp
             W20list[2] = Eta0 #np.zeros(shapes[nextraT+10]) #Eta
             W20list[3] = Xi0 #Xi
+            #print(XXhat.shape)
             isn_init = np.array(((3,5),(-5,-5)))
             if init_W_from_lsq:
                 # shapes1
@@ -662,7 +700,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,K0,K1,T0,T1 = initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1)
                 nvar,nxy = 4,2
                 freeze_vals = [[None for _ in range(nxy)] for _ in range(nvar)]
-                lams = 100*np.array((0,1,1,1,0,1,0,1))
+                lams = 1e5*np.array((0,1,1,1,0,1,0,1))
                 for ivar in range(nvar):
                     for ixy in range(nxy):
                         iflat = np.ravel_multi_index((ivar,ixy),(nvar,nxy))
@@ -670,7 +708,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                         freeze_vals[ivar][ixy][bd1list[iflat]==0] = np.nan
                 if constrain_isn:
                     freeze_vals[0][1][slice(0,None,3)][:,slice(0,None,3)] = isn_init
-                thisWlist = initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=freeze_vals,lams=lams)
+                thisWlist = initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=freeze_vals,lams=lams,foldT=foldT)
                 Winds = [0,1,2,3,4,5,6,7,9,10,14,15]
                 for ivar,Wind in enumerate(Winds):
                     W10list[Wind] = thisWlist[ivar]
@@ -727,7 +765,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 extra_Ts = [np.zeros_like(W10list[7]) for ivar in range(3)]
                 W10list = W10list[:4] + extra_Ws*2 + W10list[4:6] + extra_ks + W10list[6:8] + extra_Ts + W10list[8:]
 
-            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim,topo_stims=topo_stims,topo_shape=topo_shape)
+            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim)
     
     #def parse_W(W):
     #    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,k0,k1,k2,k3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h = W
