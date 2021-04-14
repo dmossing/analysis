@@ -834,6 +834,18 @@ def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2,power=True):
         WW = circulate_mult(WT,KK,nS,Mu=MuK)
     return WW
 
+def gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=2,nT=2,power=True):
+    MuT = np.array((1,1))
+    MuK = np.array((1,kappa))
+    WT = circulate_in_out(W,Tin,Tout,nT,Mu=MuT,mult=not power)
+    def listify(K):
+        KKlist = [K for iT in range(nT)]
+        KK = np.concatenate(KKlist,axis=0)
+        return KK
+    KKin,KKout = [listify(x) for x in [Kin,Kout]]
+    WW = circulate_in_out(WT,KKin,KKout,nS,Mu=MuK,mult=not power)
+    return WW
+
 def deriv_WW_to_W(WW,K,kappa,T,nS=2,nT=2):
     # given derivative with respect to elements of WW, return derivative with 
     # respect to elements of W
@@ -843,10 +855,15 @@ def deriv_WW_to_W(WW,K,kappa,T,nS=2,nT=2):
     W = decirculate(WT,K,nS,Mu=MuK)
     return W
 
-def circulate(V,M,nZ,Mu=None):
-    if not M.size:
+def circulate_in_out(V,Min,Mout,nZ,Mu=None,mult=False):
+    if not Min.size:
         return V
-    Vpartlist = [V*(M[np.newaxis,:]**np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    if mult:
+        Mfn = lambda x,y: x*y
+    else:
+        Mfn = lambda x,y: x**y
+    #Vpartlist = [V*(M[np.newaxis,:]**np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    Vpartlist = [V*Mfn(Min[np.newaxis,:]*Mout[:,np.newaxis],np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
     if Mu is None:
         Mu = np.ones((nZ,))
     #VVlist = [np.concatenate([m*v for m,v in zip(Mu,Vpartlist[nZ-iZ-1:2*nZ-iZ-1])],axis=1) for iZ in range(nZ)]
@@ -855,17 +872,36 @@ def circulate(V,M,nZ,Mu=None):
     VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
     return VV
 
+def circulate(V,M,nZ,Mu=None,mult=False):
+    return circulate_in_out(V,M,np.ones((V.shape[0],)),nZ,Mu=Mu,mult=mult)
+    #if not M.size:
+    #    return V
+    #if mult:
+    #    Mfn = lambda x,y: x*y
+    #else:
+    #    Mfn = lambda x,y: x**y
+    ##Vpartlist = [V*(M[np.newaxis,:]**np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    #Vpartlist = [V*Mfn(M[np.newaxis,:],np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    #if Mu is None:
+    #    Mu = np.ones((nZ,))
+    ##VVlist = [np.concatenate([m*v for m,v in zip(Mu,Vpartlist[nZ-iZ-1:2*nZ-iZ-1])],axis=1) for iZ in range(nZ)]
+    #VVlist = [np.concatenate(Vpartlist[nZ-iZ-1:2*nZ-iZ-1],axis=1) for iZ in range(nZ)]
+    ##VV = np.concatenate(VVlist,axis=0)
+    #VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
+    #return VV
+
 def circulate_mult(V,M,nZ,Mu=None):
-    if not M.size:
-        return V
-    Vpartlist = [V*(M[np.newaxis,:]*np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
-    if Mu is None:
-        Mu = np.ones((nZ,))
-    #VVlist = [np.concatenate([m*v for m,v in zip(Mu,Vpartlist[nZ-iZ-1:2*nZ-iZ-1])],axis=1) for iZ in range(nZ)]
-    VVlist = [np.concatenate(Vpartlist[nZ-iZ-1:2*nZ-iZ-1],axis=1) for iZ in range(nZ)]
-    #VV = np.concatenate(VVlist,axis=0)
-    VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
-    return VV
+    return circulate(V,M,nZ,Mu=Mu,mult=True)
+    #if not M.size:
+    #    return V
+    #Vpartlist = [V*(M[np.newaxis,:]*np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    #if Mu is None:
+    #    Mu = np.ones((nZ,))
+    ##VVlist = [np.concatenate([m*v for m,v in zip(Mu,Vpartlist[nZ-iZ-1:2*nZ-iZ-1])],axis=1) for iZ in range(nZ)]
+    #VVlist = [np.concatenate(Vpartlist[nZ-iZ-1:2*nZ-iZ-1],axis=1) for iZ in range(nZ)]
+    ##VV = np.concatenate(VVlist,axis=0)
+    #VV = np.concatenate([m*v for m,v in zip(Mu,VVlist)],axis=0)
+    #return VV
 
 def decirculate(VV,M,nZ,Mu=None):
     if not M.size:

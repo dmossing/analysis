@@ -23,6 +23,10 @@ def u_fn(XX,YY,Wx,Wy,K,kappa,T,opt,power=True):
     WWx,WWy = [gen_Weight(W,K,kappa,T,opt,power=power) for W in [Wx,Wy]]
     return XX @ WWx + YY @ WWy
 
+def u_fn_in_out(XX,YY,Wx,Wy,Kin,Kxout,Kyout,kappa,Tin,Txout,Tyout,opt,power=True):
+    WWx,WWy = [gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,power=power) for [W,Kout,Tout] in zip([Wx,Wy],[Kxout,Kyout],[Txout,Tyout])]
+    return XX @ WWx + YY @ WWy
+
 def unparse_W(*Ws):
     return np.concatenate([ww.flatten() for ww in Ws])
 
@@ -35,6 +39,10 @@ def normalize(arr,opt):
 def gen_Weight(W,K,kappa,T,opt,power=True):
     nS,nT = opt['nS'],opt['nT']
     return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT,power=power) 
+
+def gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,power=True):
+    nS,nT = opt['nS'],opt['nT']
+    return utils.gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=nS,nT=nT,power=power) 
     
 def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,opt):
     nQ,nS,nT,foldT = opt['nQ'],opt['nS'],opt['nT'],opt['foldT']
@@ -78,6 +86,24 @@ def compute_us(W1,W2,fval,fprimeval,opt):
     u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt,power=power1)
     u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt,power=power1)
     u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt,power=power1)
+    return u0,u1,u2,u3
+
+def compute_us_in_out(W1,W2,fval,fprimeval,opt):
+    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1,opt)
+    XX,XXp,Eta,Xi = parse_W2(W2,opt)
+    nN = opt['nN']
+    nondim = opt['nondim']
+    if nondim:
+        W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1],[W0x,W0y,W0x,W0y,W0x,W0y,Kin0,Kxout0,Kyout0,Tin0,Txout0,Tyout0])]
+    if fval.shape[0]==2*nN:
+        XX = np.concatenate((XX,XX),axis=0)
+        XXp = np.concatenate((XXp,XXp),axis=0)
+    power0 = True
+    power1 = False
+    u0 = u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
+    u1 = u_fn_in_out(XX,fval,W1x,W1y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XX,fval,W0x,W0y,Kin1,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin1,Txout0,Tyout0,opt,power=power1)
+    u2 = u_fn_in_out(XXp,fprimeval,W2x,W2y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout1,Kyout1,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout1,Tyout1,opt,power=power1)
+    u3 = u_fn_in_out(XXp,fprimeval,W3x,W3y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
     return u0,u1,u2,u3
 
 def compute_res(W1,W2,opt):
@@ -244,6 +270,19 @@ def compute_f_fprime_t_avg_12_(W1,W2,perturbation,max_dist=1,burn_in=0.5,opt=Non
 def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False):
 
     shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
+
+    opt = {}
+    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim']
+    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim]
+    for key,val in zip(keys,vals):
+        opt[key] = val
+
+    return opt
+
+def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False):
+
+    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
