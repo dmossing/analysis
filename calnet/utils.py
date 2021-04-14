@@ -1270,31 +1270,58 @@ def compute_fprime_(Eta,Xi,s02,fprime_m=fprime_miller_troyer):
 def compute_f_(Eta,Xi,s02,pop_rate_fn=f_miller_troyer):
     return pop_rate_fn(Eta,compute_var(Xi,s02))
 
-def merge_expt_ids(expt_ids1,expt_ids2):
+#def merge_expt_ids(expt_ids1,expt_ids2):
+#    # merge r1 and r2 into a single array with one row per neuron
+#    # find unique expt_ids of each
+#    u1 = np.unique(expt_ids1)
+#    u2 = np.unique(expt_ids2)
+#    uall = np.unique(np.concatenate((expt_ids1,expt_ids2)))
+#    
+#    # build a logical array of which neurons are present in which of r1, r2
+#    Nneurons = 0
+#    in_each = np.zeros((Nneurons,2),dtype='bool')
+#    for u in uall:
+#        if u in u1:
+#            this_Nneurons = np.sum(expt_ids1==u)
+#        else:
+#            this_Nneurons = np.sum(expt_ids2==u)
+#        Nneurons = Nneurons + this_Nneurons
+#        this_in_each = np.zeros((this_Nneurons,2),dtype='bool')
+#        this_in_each[:,0] = (u in u1)
+#        this_in_each[:,1] = (u in u2)
+#        in_each = np.concatenate((in_each,this_in_each),axis=0)
+#        
+#    # use this to construct an array of merged expt_ids (1 and 2), and new neuron_ids
+#    expt_ids = np.zeros((Nneurons,))
+#    expt_ids[in_each[:,0]] = expt_ids1
+#    expt_ids[in_each[:,1]] = expt_ids2
+#    return expt_ids,in_each
+
+def merge_expt_ids(*expt_idses):
     # merge r1 and r2 into a single array with one row per neuron
     # find unique expt_ids of each
-    u1 = np.unique(expt_ids1)
-    u2 = np.unique(expt_ids2)
-    uall = np.unique(np.concatenate((expt_ids1,expt_ids2)))
+    us = [np.unique(ei) for ei in expt_idses]
+    uall = np.unique(np.concatenate(expt_idses))
+    nei = len(expt_idses)
     
     # build a logical array of which neurons are present in which of r1, r2
     Nneurons = 0
-    in_each = np.zeros((Nneurons,2),dtype='bool')
+    in_each = np.zeros((Nneurons,nei),dtype='bool')
     for u in uall:
-        if u in u1:
-            this_Nneurons = np.sum(expt_ids1==u)
-        else:
-            this_Nneurons = np.sum(expt_ids2==u)
+        roinos = [np.sum(ei==u) for ei in expt_idses]
+        #print(roinos)
+        this_Nneurons = np.amax(roinos)
         Nneurons = Nneurons + this_Nneurons
-        this_in_each = np.zeros((this_Nneurons,2),dtype='bool')
-        this_in_each[:,0] = (u in u1)
-        this_in_each[:,1] = (u in u2)
+        this_in_each = np.zeros((this_Nneurons,nei),dtype='bool')
+        for iei in range(nei):
+            this_in_each[:,iei] = (u in us[iei])
         in_each = np.concatenate((in_each,this_in_each),axis=0)
         
     # use this to construct an array of merged expt_ids (1 and 2), and new neuron_ids
     expt_ids = np.zeros((Nneurons,))
-    expt_ids[in_each[:,0]] = expt_ids1
-    expt_ids[in_each[:,1]] = expt_ids2
+    for iei in range(nei):
+        expt_ids[in_each[:,iei]] = expt_idses[iei]
+
     return expt_ids,in_each
     
 def merge_by_neuron(r1,r2,expt_ids1,expt_ids2):
@@ -1317,6 +1344,18 @@ def align_by_neuron(r1,r2,expt_ids1,expt_ids2):
     r1aligned[in_each[:,0]] = r1
     r2aligned[in_each[:,1]] = r2
     return r1aligned,r2aligned,expt_ids,neuron_ids
+
+def align_all_by_neuron(*rs_and_eis):
+    rs,eis = zip(*rs_and_eis)
+    nrs = len(rs)
+    expt_ids,in_each = merge_expt_ids(*eis)
+    Nneurons = expt_ids.shape[0]
+    neuron_ids = np.arange(Nneurons)
+    # use this to construct an array of merged rs (1 and 2)
+    rs_aligned = [np.nan*np.ones((Nneurons,)+r.shape[1:]) for r in rs]
+    for ir in range(nrs):
+        rs_aligned[ir][in_each[:,ir]] = rs[ir]
+    return rs_aligned,expt_ids,neuron_ids
 
 def compute_couplings(YY_opto,mdls):
     nfiles,nopto,nN,ntypes = YY_opto.shape
