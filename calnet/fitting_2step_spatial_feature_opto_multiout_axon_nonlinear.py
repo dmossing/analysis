@@ -9,8 +9,10 @@ import matplotlib.pyplot as plt
 from calnet import utils
 import calnet.fitting_multiout_callable as fmc
 
-def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W10list=None,W20list=None,bounds1=None,bounds2=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,constrain_isn=False,opto_mask=None,nsize=6,ncontrast=6,coupling_constraints=[(1,0,-1)],tv=False,topo_stims=np.arange(36),topo_shape=(6,6),use_opto_transforms=False,opto_transform1=None,opto_transform2=None,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,verbose=True,foldT=True,nondim=False):
+def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W10list=None,W20list=None,bounds1=None,bounds2=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,l1_penalty=1.0,constrain_isn=False,opto_mask=None,nsize=6,ncontrast=6,coupling_constraints=[(1,0,-1)],tv=False,topo_stims=np.arange(36),topo_shape=(6,6),use_opto_transforms=False,opto_transform1=None,opto_transform2=None,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,verbose=True,foldT=True,nondim=False):
     # coupling constraints: (i,j,sgn) --> coupling term i->j is constrained to be > 0 (sgn=1) or < 0 (sgn=-1)
+
+    print('applying L1 penalty = %f to higher order terms'%l1_penalty)
     
     fudge = 1e-4
     noise = 1
@@ -536,11 +538,17 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     
     def optimize1(W10,W20,compute_hessian=False,simulate=True,verbose=True):
 
-        allhot = np.zeros(W10.shape)
-        allhot[:nP*nQ+nQ**2] = 1
-        W_l2_reg = lambda W: np.sum((W*allhot)**2)
-        f = lambda W: minusLW(W,W20,simulate=simulate,verbose=verbose) + l2_penalty*W_l2_reg(W)
-        fprime = lambda W: minusdLdW1(W,W20,simulate=simulate,verbose=verbose) + 2*l2_penalty*W*allhot
+        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
+        W0hot = np.zeros(W10.shape)
+        W0hot[:nP*nQ+nQ**2] = 1
+        l1_penalty_vars = [0,0,1,1,1,1,1,1,0,0,1,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0]
+        l1_penalty_vars = [val*np.ones(shp) for val,shp in zip(l1_penalty_vars,shapes1)]
+        print('applying L1 penalty = %f to higher order terms'%l1_penalty)
+        Wnhot = unparse_W(*l1_penalty_vars)
+        W0_l2_reg = lambda W: np.sum((W*W0hot)**2)
+        Wn_l1_reg = lambda W: np.sum(np.abs(W*Wnhot))
+        f = lambda W: minusLW(W,W20,simulate=simulate,verbose=verbose) + l2_penalty*W0_l2_reg(W) + l1_penalty*Wn_l1_reg(W)
+        fprime = lambda W: minusdLdW1(W,W20,simulate=simulate,verbose=verbose) + 2*l2_penalty*W*W0hot + l1_penalty*np.sign(W)*Wnhot
 
         fix_violations(W10,bounds1)
         

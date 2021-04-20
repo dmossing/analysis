@@ -14,7 +14,7 @@ ca_data_file = calnet_data_fold+'rs_sc_fg_pval_0_05_210410.npy'
 opto_silencing_data_file = calnet_data_fold+'vip_halo_data_for_sim_vip_full_info.npy'
 opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
 
-init_noise = 0.1
+init_noise = 0.3
 allow_var = True
 multiout = True
 multiout2 = True
@@ -38,6 +38,8 @@ fit_running = False
 fit_non_running = True
 fit_sc = True
 fit_fg = True
+l2_penalty = 0.1
+l1_penalty = 10.0
 
 parallel = True
 
@@ -50,7 +52,8 @@ fit_options = {'ca_data_file':ca_data_file,\
 'fit_s02':True,\
 'constrain_isn':True,\
 'tv':tv,\
-'l2_penalty':0.1,\
+'l2_penalty':l2_penalty,\
+'l1_penalty':l1_penalty,\
 'init_noise':init_noise,\
 'init_W_from_lsq':True,\
 'scale_init_by':1,\
