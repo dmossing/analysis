@@ -7,6 +7,7 @@ from autograd import jacobian
 from autograd import hessian
 import matplotlib.pyplot as plt
 from calnet import utils
+import scipy.signal as ssi
 
 # Yhat is all measured tuning curves, Y is the averages of the model tuning curves
 def parse_W1(W,opt):
@@ -27,6 +28,10 @@ def u_fn_in_out(XX,YY,Wx,Wy,Kin,Kxout,Kyout,kappa,Tin,Txout,Tyout,opt,power=True
     WWx,WWy = [gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,power=power) for [W,Kout,Tout] in zip([Wx,Wy],[Kxout,Kyout],[Txout,Tyout])]
     return XX @ WWx + YY @ WWy
 
+def u_fn_WW(XX,YY,WW):
+    XXYY = np.concatenate((XX,YY),axis=1)
+    return XXYY @ WW
+
 def unparse_W(*Ws):
     return np.concatenate([ww.flatten() for ww in Ws])
 
@@ -43,6 +48,20 @@ def gen_Weight(W,K,kappa,T,opt,power=True):
 def gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,power=True):
     nS,nT = opt['nS'],opt['nT']
     return utils.gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=nS,nT=nT,power=power) 
+
+def gen_Weight_flex(*args,**kwargs):
+    opt = args[-1]
+    if 'axon' in opt and opt['axon']:
+        Wx,Wy,Kin,Kxout,Kyout,kappa,Tin,Txout,Tyout,opt = args
+        WWx,WWy = [gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,**kwargs) for [W,Kout,Tout] in zip([Wx,Wy],[Kxout,Kyout],[Txout,Tyout])]
+        return WWx,WWy
+    else:
+        W0x,W0y,K,kappa,T,opt = args
+        WWx,WWy = [gen_Weight(W,K,kappa,T,**kwargs) for W in [Wx,Wy]]
+        return WWx,WWy
+
+def gen_Weight_c(*args,**kwargs):
+    return np.concatenate(gen_Weight_flex(*args,**kwargs),axis=0) 
     
 def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,opt):
     nQ,nS,nT,foldT = opt['nQ'],opt['nS'],opt['nT'],opt['foldT']
@@ -66,44 +85,81 @@ def W1_W2_from_list(Wlist):
     W2 = unparse_W(XX,XXp,Eta,Xi)
     return W1,W2
 
-def compute_us(W1,W2,fval,fprimeval,opt):
+def compute_WWs(W1,opt):
+    if 'axon' in opt and opt['axon']:
+        return compute_WWs_in_out(W1,opt)
     W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
     nN = opt['nN']
     nondim = opt['nondim']
     if nondim:
         W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3],[W0x,W0y,W0x,W0y,W0x,W0y,K0,K0,K0,T0,T0,T0])]
-    if fval.shape[0]==2*nN:
-        XX = np.concatenate((XX,XX),axis=0)
-        XXp = np.concatenate((XXp,XXp),axis=0)
-    #u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt)
-    #u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt)
-    #u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt)
-    #u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt)
     power0 = True
     power1 = False
-    u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt,power=power0)
-    u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt,power=power1)
-    u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt,power=power1)
-    u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt,power=power1)
-    return u0,u1,u2,u3
+    WW0 = gen_Weight_c(W0x,W0y,K0,kappa,T0,opt,power=power0)
+    WW1 = gen_Weight_c(W1x,W1y,K0,kappa,T0,opt,power=power0) + gen_Weight_c(W0x,W0y,K1,kappa,T0,opt,power=power1) + gen_Weight_c(W0x,W0y,K0,kappa,T1,opt,power=power1)
+    WW2 = gen_Weight_c(W2x,W2y,K0,kappa,T0,opt,power=power0) + gen_Weight_c(W0x,W0y,K2,kappa,T0,opt,power=power1) + gen_Weight_c(W0x,W0y,K0,kappa,T2,opt,power=power1)
+    WW3 = gen_Weight_c(W3x,W3y,K0,kappa,T0,opt,power=power0) + gen_Weight_c(W0x,W0y,K3,kappa,T0,opt,power=power1) + gen_Weight_c(W0x,W0y,K0,kappa,T3,opt,power=power1)
+    return WW0,WW1,WW2,WW3
 
-def compute_us_in_out(W1,W2,fval,fprimeval,opt):
+def compute_WWs_in_out(W1,opt):
     W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    nN = opt['nN']
     nondim = opt['nondim']
     if nondim:
         W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1],[W0x,W0y,W0x,W0y,W0x,W0y,Kin0,Kxout0,Kyout0,Tin0,Txout0,Tyout0])]
+    power0 = True
+    power1 = False
+
+    WW0 = gen_Weight_c(W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
+    WW1 = gen_Weight_c(W1x,W1y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + gen_Weight_c(W0x,W0y,Kin1,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + gen_Weight_c(W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin1,Txout0,Tyout0,opt,power=power1)
+    WW2 = gen_Weight_c(W2x,W2y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + gen_Weight_c(W0x,W0y,Kin0,Kxout1,Kyout1,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + gen_Weight_c(W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout1,Tyout1,opt,power=power1)
+    WW3 = gen_Weight_c(W3x,W3y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
+    return WW0,WW1,WW2,WW3
+
+def compute_us(W1,W2,fval,fprimeval,opt):
+    if 'axon' in opt and opt['axon']:
+        return compute_us_in_out(W1,W2,fval,fprimeval,opt)
+    #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
+    XX,XXp,Eta,Xi = parse_W2(W2,opt)
+    
+    WWlist = compute_WWs(W1,opt)
+
+    nN = opt['nN']
+    #nondim = opt['nondim']
+    #if nondim:
+    #    W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3],[W0x,W0y,W0x,W0y,W0x,W0y,K0,K0,K0,T0,T0,T0])]
     if fval.shape[0]==2*nN:
         XX = np.concatenate((XX,XX),axis=0)
         XXp = np.concatenate((XXp,XXp),axis=0)
     power0 = True
     power1 = False
-    u0 = u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
-    u1 = u_fn_in_out(XX,fval,W1x,W1y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XX,fval,W0x,W0y,Kin1,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin1,Txout0,Tyout0,opt,power=power1)
-    u2 = u_fn_in_out(XXp,fprimeval,W2x,W2y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout1,Kyout1,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout1,Tyout1,opt,power=power1)
-    u3 = u_fn_in_out(XXp,fprimeval,W3x,W3y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
+    #WWlist = compute_WWs(W1,W2,opt)
+    u0,u1,u2,u3 = [u_fn_WW(x,y,WW) for x,y,WW in zip([XX,XX,XXp,XXp],[fval,fval,fprimeval,fprimeval],WWlist)]
+    #u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt,power=power0)
+    #u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt,power=power1)
+    #u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt,power=power1)
+    #u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt,power=power1)
+    return u0,u1,u2,u3
+
+def compute_us_in_out(W1,W2,fval,fprimeval,opt):
+    #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1,opt)
+    XX,XXp,Eta,Xi = parse_W2(W2,opt)
+    
+    WWlist = compute_WWs(W1,opt)
+
+    nN = opt['nN']
+    #nondim = opt['nondim']
+    #if nondim:
+    #    W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1],[W0x,W0y,W0x,W0y,W0x,W0y,Kin0,Kxout0,Kyout0,Tin0,Txout0,Tyout0])]
+    if fval.shape[0]==2*nN:
+        XX = np.concatenate((XX,XX),axis=0)
+        XXp = np.concatenate((XXp,XXp),axis=0)
+    power0 = True
+    power1 = False
+    u0,u1,u2,u3 = [u_fn_WW(x,y,WW) for x,y,WW in zip([XX,XX,XXp,XXp],[fval,fval,fprimeval,fprimeval],WWlist)]
+    #u0 = u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
+    #u1 = u_fn_in_out(XX,fval,W1x,W1y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XX,fval,W0x,W0y,Kin1,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin1,Txout0,Tyout0,opt,power=power1)
+    #u2 = u_fn_in_out(XXp,fprimeval,W2x,W2y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout1,Kyout1,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout1,Tyout1,opt,power=power1)
+    #u3 = u_fn_in_out(XXp,fprimeval,W3x,W3y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
     return u0,u1,u2,u3
 
 def compute_res(W1,W2,opt):
@@ -191,8 +247,11 @@ def compute_f_fprime_t_12_(W1,W2,perturbation,max_dist=1,opt=None): # max dist a
     return YY12,YYp12
 
 def compute_f_fprime_t_avg_(W1,W2,perturbation,burn_in=0.5,max_dist=1,opt=None):
-    dt,niter = opt['dt'],opt['niter']
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
+    dt,niter,axon = opt['dt'],opt['niter'],opt['axon']
+    if not axon:
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
+    else:
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1,opt)
     XX,XXp,Eta,Xi = parse_W2(W2,opt)
     fval = compute_f_(Eta,Xi,s02,opt)
     fprimeval = compute_fprime_(Eta,Xi,s02,opt)
@@ -273,8 +332,8 @@ def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troy
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim]
+    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim','axon']
+    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim,False]
     for key,val in zip(keys,vals):
         opt[key] = val
 
@@ -286,8 +345,8 @@ def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim]
+    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim','axon']
+    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim,True]
     for key,val in zip(keys,vals):
         opt[key] = val
 
@@ -948,3 +1007,173 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     W2t = parse_W2(W21) #[XX,XXp,Eta,Xi]
     
     return W1t,W2t,loss,gr,hess,result
+
+def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit_sc=True,fit_fg=True,foldT=False,pdim=0):
+
+    def get_Rs_slice(Rs_mean,Rs_cov,slc):
+        for iR in range(len(Rs_mean)):
+            for ialign in range(len(Rs_mean[iR])):
+                Rs_mean[iR][ialign] = Rs_mean[iR][ialign][slc]
+                for idim in range(len(Rs_cov[iR][ialign])):
+                    Rs_cov[iR][ialign][idim][1] = Rs_cov[iR][ialign][idim][1][slc]
+        return Rs_mean,Rs_cov
+
+    def get_pc_dim(Ypc_list,nN=36,nPQ=4,nS=2,nT=2,idim=0,foldT=True):
+        if foldT:
+            Yp = np.zeros((nN*nT,nPQ*nS))
+            for iS in range(nS):
+                for iQ in range(nPQ):
+                    #print('Ypc shape %d, %d: '%(iS,iQ)+str((Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]).shape))
+                    Yp[:,iS*nPQ+iQ] = Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]
+            Yp = calnet.utils.unfold_T_(Yp,nS=nS,nT=nT,nPQ=nPQ)
+        else:
+            Yp = np.zeros((nN,nPQ*nS*nT))
+            for iS in range(nS):
+                for iT in range(nT):
+                    for iQ in range(nPQ):
+                        #print('Ypc shape %d, %d: '%(iS,iQ)+str((Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]).shape))
+                        Yp[:,iS*nT*nPQ+iT*nPQ+iQ] = Ypc_list[iS][iT][iQ][idim][0]*Ypc_list[iS][iT][iQ][idim][1]
+        return Yp
+
+    nrun = 2
+    nsize,ncontrast,ndir = 6,6,8
+    nstim_fg = 5
+
+    fit_both_running = (fit_non_running and fit_running)
+    fit_both_stims = (fit_sc and fit_fg)
+
+    if not fit_both_running:
+        nrun = 1
+        if fit_non_running:
+            irun = 0
+        elif fit_running:
+            irun = 1
+
+    nsc = nrun*nsize*ncontrast*ndir
+    nfg = nrun*nstim_fg*ndir
+
+    npfile = np.load(ca_data_file,allow_pickle=True)[()]#,{'rs':rs},allow_pickle=True) # ,'rs_denoise':rs_denoise
+    if fit_both_running:
+        Rs_mean = npfile['Rs_mean_run']
+        Rs_cov = npfile['Rs_cov_run']
+        if not fit_both_stims:
+            if fit_sc:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
+            elif fit_fg:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
+    else:
+        Rs_mean = npfile['Rs_mean'][irun]
+        Rs_cov = npfile['Rs_cov'][irun]
+        if not fit_both_stims:
+            if fit_sc:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
+            elif fit_fg:
+                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
+
+    ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    ndims = 5
+    nT = len(ori_dirs)
+    nS = len(Rs_mean[0])
+
+    def sum_to_1(r):
+        R = r.reshape((r.shape[0],-1))
+        R = R/np.nansum(R[:,~np.isnan(R.sum(0))],axis=1)[:,np.newaxis] # changed 21/4/10
+        return R
+
+    def norm_to_mean(r):
+        R = r.reshape((r.shape[0],-1))
+        R = R/np.nanmean(R[:,~np.isnan(R.sum(0))],axis=1)[:,np.newaxis]
+        return R
+
+    def ori_avg(Rs,these_ori_dirs):
+        if fit_sc:
+            rs_sc = np.nanmean(Rs[:nsc].reshape((nrun,nsize,ncontrast,ndir))[:,:,:,these_ori_dirs],-1)
+            rs_sc[:,1:,1:] = ssi.convolve(rs_sc,kernel,'valid')
+            rs_sc = rs_sc.reshape((nrun*nsize*ncontrast))
+            if fit_fg:
+                rs_fg = np.nanmean(Rs[nsc:].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+                rs_fg = rs_fg.reshape((nrun*nstim_fg))
+            else:
+                rs_fg = np.zeros((0,))
+        elif fit_fg:
+            rs_sc = np.zeros((0,))
+            rs_fg = np.nanmean(Rs.reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+            rs_fg = rs_fg.reshape((nrun*nstim_fg))
+        Rso = np.concatenate((rs_sc,rs_fg))
+        return Rso
+
+    Rso_mean = [[[None for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
+    Rso_cov = [[[[[None,None] for idim in range(ndims)] for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
+
+    kernel = np.ones((1,2,2))
+    kernel = kernel/kernel.sum()
+
+    for iR,r in enumerate(Rs_mean):
+        for ialign in range(nS):
+            for iori in range(nT):
+                Rso_mean[iR][ialign][iori] = ori_avg(Rs_mean[iR][ialign],ori_dirs[iori])
+                for idim in range(ndims):
+                    Rso_cov[iR][ialign][iori][idim][0] = Rs_cov[iR][ialign][idim][0]
+                    Rso_cov[iR][ialign][iori][idim][1] = ori_avg(Rs_cov[iR][ialign][idim][1],ori_dirs[iori])
+
+    def set_bound(bd,code,val=0):
+        # set bounds to 0 where 0s occur in 'code'
+        for iitem in range(len(bd)):
+            bd[iitem][code[iitem]] = val
+
+    nN = (36*fit_sc + 5*fit_fg)*(1 + fit_both_running)
+    nS = 2
+    nP = 2 + fit_both_running
+    nT = 2
+    nQ = 4
+
+    ndims = 5
+    ncelltypes = 5
+    #print('foldT: %d'%foldT)
+    if foldT:
+        Yhat = [None for iS in range(nS)]
+        Xhat = [None for iS in range(nS)]
+        Ypc_list = [None for iS in range(nS)]
+        Xpc_list = [None for iS in range(nS)]
+        print('have not written this yet')
+        assert(True==False)
+    else:
+        Yhat = [[None for iT in range(nT)] for iS in range(nS)]
+        Xhat = [[None for iT in range(nT)] for iS in range(nS)]
+        Ypc_list = [[None for iT in range(nT)] for iS in range(nS)]
+        Xpc_list = [[None for iT in range(nT)] for iS in range(nS)]
+        for iS in range(nS):
+            mx = np.zeros((ncelltypes,))
+            yy = [None for icelltype in range(ncelltypes)]
+            for icelltype in range(ncelltypes):
+                yy[icelltype] = np.concatenate(Rso_mean[icelltype][iS])
+                mx[icelltype] = np.nanmax(yy[icelltype])
+            for iT in range(nT):
+                y = [Rso_mean[icelltype][iS][iT][:,np.newaxis]/mx[icelltype] for icelltype in range(1,ncelltypes)]
+                Yhat[iS][iT] = np.concatenate(y,axis=1)
+                Ypc_list[iS][iT] = [None for icelltype in range(1,ncelltypes)]
+                for icelltype in range(1,ncelltypes):
+                    Ypc_list[iS][iT][icelltype-1] = [(this_dim[0]/mx[icelltype],this_dim[1]) for this_dim in Rso_cov[icelltype][iS][iT]]
+                icelltype = 0
+                x = Rso_mean[icelltype][iS][iT][:,np.newaxis]/mx[icelltype]
+                if fit_both_running:
+                    run_vector = np.zeros_like(x)
+                    if fit_both_stims:
+                        run_vector[int(np.round(nsc/2)):nsc] = 1
+                        run_vector[-int(np.round(nfg/2)):] = 1
+                    else:
+                        run_vector[int(np.round(run_vector.shape[0]/2)):,:] = 1
+                else:
+                    run_vector = np.zeros((x.shape[0],0))
+                Xhat[iS][iT] = np.concatenate((x,np.ones_like(x),run_vector),axis=1)
+                Xpc_list[iS][iT] = [None for iinput in range(2+fit_both_running)]
+                Xpc_list[iS][iT][0] = [(this_dim[0]/mx[icelltype],this_dim[1]) for this_dim in Rso_cov[icelltype][iS][iT]]
+                Xpc_list[iS][iT][1] = [(0,np.zeros((Xhat[0][0].shape[0],))) for idim in range(ndims)]
+                if fit_both_running:
+                    Xpc_list[iS][iT][2] = [(0,np.zeros((Xhat[0][0].shape[0],))) for idim in range(ndims)]
+
+    YYhat = utils.flatten_nested_list_of_2d_arrays(Yhat)
+    XXhat = utils.flatten_nested_list_of_2d_arrays(Xhat)
+    XXphat = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=pdim,foldT=foldT)
+    YYphat = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=pdim,foldT=foldT)
+    return XXhat,YYhat,XXphat,YYphat
