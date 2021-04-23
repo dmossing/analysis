@@ -379,12 +379,15 @@ def analyze_simply(folds=None,files=None,rets=None,adjust_fns=None,rgs=None,data
         nbefore = 8
         nafter = 8
 
+        print((thisdatafoldbase,thisfold,thisfile))
+        print(datafiles)
+        print(len(datafiles))
         proc = at.analyze(datafiles,stimfile,frame_adjust=frame_adjust,rg=rg,nbefore=nbefore,nafter=nafter,stim_params=stim_params)
-        
-        try:
-            proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
-        except:
-            print('retinotopy not saved for ' + session_id)
+    # now will get retinotopy info from retinotopy_0 data struct fields i/o from procfile --> matching size_contrast_analysis.py
+#        try:
+#            proc['ret_vars'] = at.gen_ret_vars(retfile,stimfile)
+#        except:
+#            print('retinotopy not saved for ' + session_id)
 
         proc['position'] = sio.loadmat(stimfile,squeeze_me=True)['result'][()]['position']
 

@@ -399,11 +399,12 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             #    this_expt['rf_displacement_deg'] = rf_displacement_deg
             #    this_expt['rf_ctr'] = rf_ctr
             #    this_expt['stim_offset_deg'] = stim_offset
-            this_expt['rf_mapping_pval'] = pval_ret[:]
-            this_expt['rf_distance_deg'] = rf_distance_deg
-            this_expt['rf_displacement_deg'] = rf_displacement_deg
-            this_expt['rf_ctr'] = rf_ctr
-            this_expt['stim_offset_deg'] = stim_offset
+            if 'retinotopy_0' in this_session or 'ret_vars' in proc[key]:
+                this_expt['rf_mapping_pval'] = pval_ret[:]
+                this_expt['rf_distance_deg'] = rf_distance_deg
+                this_expt['rf_displacement_deg'] = rf_displacement_deg
+                this_expt['rf_ctr'] = rf_ctr
+                this_expt['stim_offset_deg'] = stim_offset
 
             this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
             this_expt.create_dataset('F',data=dfof)
