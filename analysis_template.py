@@ -115,6 +115,7 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     # load running and pupil data
     dxdt = ut.loadmat(datafiles[0],'dxdt').flatten()
     try:
+        # first entry of pupil_ctr is x, second entry is y
         pupil_ctr,pupil_area,pupil_frac_ctr,pupil_frac_area = ut.loadmat(datafiles[0],['pupil_ctr','pupil_area','pupil_frac_ctr','pupil_frac_area'])
         pupil_area = pupil_area.flatten()
         pupil_frac_area = pupil_frac_area.flatten()
@@ -365,6 +366,7 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
 
                 #ctr = this_session['retinotopy_0']['ctr'][:] # center of retinotopic mapping stimuli
                 stim_offset = proc[key]['position'][:]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN
+                #stim_offset = proc[key]['position'][:][::-1]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN; NOW IN Y,X ORDER, 21/4/22
 
                 pval_ret = this_session['retinotopy_0']['rf_mapping_pval'][:]
 
