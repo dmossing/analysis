@@ -271,7 +271,7 @@ def get_Rs_slice(Rs_mean,Rs_cov,slc):
     return Rs_mean,Rs_cov
 
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False,fit_running=False,fit_non_running=True,fit_sc=True,fit_fg=False):
+def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,l1_penalty=1.0,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False,fit_running=False,fit_non_running=True,fit_sc=True,fit_fg=False):
     
     
     nsize,ncontrast = 6,6
@@ -669,8 +669,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     wt_dict = {}
     wt_dict['X'] = 1
     wt_dict['Y'] = 3
-    wt_dict['Eta'] = 1# 10
-    wt_dict['Xi'] = 0.1
+    wt_dict['Eta'] = 3# 10
+    wt_dict['Xi'] = 3
     wt_dict['stims'] = np.ones((nN,1)) #(np.arange(30)/30)[:,np.newaxis]**1 #
     wt_dict['barrier'] = 0. #30.0 #0.1
     wt_dict['opto'] = 0#1e0#1e-1#1e1
@@ -807,7 +807,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
                 W10list = W10list[:4] + extra_Ws*2 + W10list[4:6] + extra_ks + W10list[6:8] + extra_Ts + W10list[8:]
 
             print(len(W10list))
-            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim)
+            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,l1_penalty=l1_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim)
     
     #def parse_W(W):
     #    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kout0,Kout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h = W
