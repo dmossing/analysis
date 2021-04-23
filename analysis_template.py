@@ -365,8 +365,8 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
                 rf_ctr = this_session['retinotopy_0']['rf_ctr'][:]
 
                 #ctr = this_session['retinotopy_0']['ctr'][:] # center of retinotopic mapping stimuli
-                #stim_offset = proc[key]['position'][:]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN
-                stim_offset = proc[key]['position'][:][::-1]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN; NOW IN Y,X ORDER, 21/4/22
+                stim_offset = proc[key]['position'][:]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN
+                #stim_offset = proc[key]['position'][:][::-1]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN; NOW IN Y,X ORDER, 21/4/22
 
                 pval_ret = this_session['retinotopy_0']['rf_mapping_pval'][:]
 
