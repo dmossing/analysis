@@ -1,16 +1,17 @@
 #!/usr/bin/env python
 
-import calnet.fit_calnet_2step_ori_multiout_axon_with_fg as fcowo
+import calnet.fit_calnet_2step_ori_multiout_axon_with_fg_run_modulation as fcowo
 import sys
 import pyute as ut
-import numpy as np
+import autograd.numpy as np
 import calnet.utils
 import glob
 
 calnet_data_fold = '/home/dan/calnet_data/'
 
 #ca_data_file = calnet_data_fold+'rs_vm_denoise_200605.npy'
-ca_data_file = calnet_data_fold+'rs_sc_fg_pval_0_05_210410.npy'
+#ca_data_file = calnet_data_fold+'rs_sc_fg_pval_0_05_210410.npy'
+ca_data_file = calnet_data_fold+'rs_sc_fg_ret_pval_0_05_210423.npy'
 opto_silencing_data_file = calnet_data_fold+'vip_halo_data_for_sim_vip_full_info.npy'
 opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
 
@@ -38,6 +39,7 @@ fit_running = True#False
 fit_non_running = True
 fit_sc = True
 fit_fg = True
+fit_ret = True
 l2_penalty = 0.1
 l1_penalty = 10.0
 
@@ -69,7 +71,8 @@ fit_options = {'ca_data_file':ca_data_file,\
 'fit_running':fit_running,\
 'fit_non_running':fit_non_running,\
 'fit_sc':fit_sc,\
-'fit_fg':fit_fg}
+'fit_fg':fit_fg,\
+'fit_ret':fit_ret}
 
 if __name__=="__main__":
     weight_base = sys.argv[1]

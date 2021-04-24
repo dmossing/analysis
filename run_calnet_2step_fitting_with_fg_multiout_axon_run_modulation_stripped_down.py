@@ -1,23 +1,24 @@
 #!/usr/bin/env python
 
-import calnet.fit_calnet_2step_ori_multiout_axon_with_fg as fcowo
+import calnet.fit_calnet_2step_ori_multiout_axon_with_fg_run_modulation as fcowo
 import sys
 import pyute as ut
-import numpy as np
+import autograd.numpy as np
 import calnet.utils
 import glob
 
 calnet_data_fold = '/home/dan/calnet_data/'
 
 #ca_data_file = calnet_data_fold+'rs_vm_denoise_200605.npy'
-ca_data_file = calnet_data_fold+'rs_sc_fg_pval_0_05_210410.npy'
+#ca_data_file = calnet_data_fold+'rs_sc_fg_pval_0_05_210410.npy'
+ca_data_file = calnet_data_fold+'rs_sc_fg_ret_pval_0_05_210423.npy'
 opto_silencing_data_file = calnet_data_fold+'vip_halo_data_for_sim_vip_full_info.npy'
 opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
 
 init_noise = 0.3
-allow_var = True
-multiout = True
-multiout2 = True
+allow_var = False#True
+multiout = False#True
+multiout2 = False#True
 tv = True
 correct_Eta = False
 init_Eta_with_s02 = False
@@ -31,15 +32,19 @@ simulate2 = True
 verbose = True
 free_amplitude = False
 no_halo_res = False
-ignore_halo_vip=False
+ignore_halo_vip = False
 foldT = False
 nondim = True
-fit_running = True#False
+fit_running = False
 fit_non_running = True
 fit_sc = True
-fit_fg = True
+fit_fg = False
+fit_ret = True
 l2_penalty = 0.1
 l1_penalty = 10.0
+nT = 1
+axon = False
+run_modulation = False
 
 parallel = True
 
@@ -69,7 +74,11 @@ fit_options = {'ca_data_file':ca_data_file,\
 'fit_running':fit_running,\
 'fit_non_running':fit_non_running,\
 'fit_sc':fit_sc,\
-'fit_fg':fit_fg}
+'fit_fg':fit_fg,\
+'fit_ret':fit_ret,\
+'nT':nT,\
+'axon':axon,\
+'run_modulation':run_modulation}
 
 if __name__=="__main__":
     weight_base = sys.argv[1]

@@ -7,322 +7,13 @@ from autograd import jacobian
 from autograd import hessian
 import matplotlib.pyplot as plt
 from calnet import utils
+import calnet.fitting_multiout_callable as fmc
 
-# Yhat is all measured tuning curves, Y is the averages of the model tuning curves
-def parse_W1(W,opt):
-    shapes1 = opt['shapes1']
-    Ws = utils.parse_thing(W,shapes1)
-    return Ws
-
-def parse_W2(W,opt):
-    shapes2 = opt['shapes2']
-    Ws = utils.parse_thing(W,shapes2)
-    return Ws
-
-def u_fn(XX,YY,Wx,Wy,K,kappa,T,opt,power=True):
-    WWx,WWy = [gen_Weight(W,K,kappa,T,opt,power=power) for W in [Wx,Wy]]
-    return XX @ WWx + YY @ WWy
-
-def u_fn_in_out(XX,YY,Wx,Wy,Kin,Kxout,Kyout,kappa,Tin,Txout,Tyout,opt,power=True):
-    WWx,WWy = [gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,power=power) for [W,Kout,Tout] in zip([Wx,Wy],[Kxout,Kyout],[Txout,Tyout])]
-    return XX @ WWx + YY @ WWy
-
-def unparse_W(*Ws):
-    return np.concatenate([ww.flatten() for ww in Ws])
-
-def normalize(arr,opt):
-    arrsum = arr.sum(1)
-    well_behaved = (arrsum>0)[:,np.newaxis]
-    arrnorm = well_behaved*arr/arrsum[:,np.newaxis] + (~well_behaved)*np.ones_like(arr)/arr.shape[1]
-    return arrnorm
-
-def gen_Weight(W,K,kappa,T,opt,power=True):
-    nS,nT = opt['nS'],opt['nT']
-    return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT,power=power) 
-
-def gen_Weight_in_out(W,Kin,Kout,kappa,Tin,Tout,opt,power=True):
-    nS,nT = opt['nS'],opt['nT']
-    return utils.gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=nS,nT=nT,power=power) 
-    
-def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,opt):
-    nQ,nS,nT,foldT = opt['nQ'],opt['nS'],opt['nT'],opt['foldT']
-    return utils.compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
-
-def compute_var(Xi,s02,opt):
-    nS,nT,fudge = opt['nS'],opt['nT'],opt['fudge']
-    return fudge+Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)],axis=0)
-
-def compute_fprime_(Eta,Xi,s02,opt):
-    pop_deriv_fn = opt['pop_deriv_fn']
-    return pop_deriv_fn(Eta,compute_var(Xi,s02,opt))*Xi
-
-def compute_f_(Eta,Xi,s02,opt):
-    pop_rate_fn = opt['pop_rate_fn']
-    return pop_rate_fn(Eta,compute_var(Xi,s02,opt))
-
-def W1_W2_from_list(Wlist):
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,XX,XXp,Eta,Xi,h1,h2,bl,amp = Wlist
-    W1 = unparse_W(W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp)
-    W2 = unparse_W(XX,XXp,Eta,Xi)
-    return W1,W2
-
-def compute_us(W1,W2,fval,fprimeval,opt):
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    nN = opt['nN']
-    nondim = opt['nondim']
-    if nondim:
-        W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,K1,K2,K3,T1,T2,T3],[W0x,W0y,W0x,W0y,W0x,W0y,K0,K0,K0,T0,T0,T0])]
-    if fval.shape[0]==2*nN:
-        XX = np.concatenate((XX,XX),axis=0)
-        XXp = np.concatenate((XXp,XXp),axis=0)
-    #u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt)
-    #u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt)
-    #u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt)
-    #u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt)
-    power0 = True
-    power1 = False
-    u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,opt,power=power0)
-    u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,opt,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,opt,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,opt,power=power1)
-    u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,opt,power=power1)
-    u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,opt,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,opt,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,opt,power=power1)
-    return u0,u1,u2,u3
-
-def compute_us_in_out(W1,W2,fval,fprimeval,opt):
-    run_modulation = ('run_modulation' in opt) and opt['run_modulation']
-    if run_modulation:
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1,opt)
-    else:
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    nN = opt['nN']
-    nondim = opt['nondim']
-    if nondim:
-        #if run_modulation:
-        #    W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1],[W0x,W0y,W0x,W0y,W0x,W0y,W0x,W0y,Kin0,Kxout0,Kyout0,Tin0,Txout0,Tyout0])]
-        #else:
-        W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1 = [x*y for x,y in zip([W1x,W1y,W2x,W2y,W3x,W3y,Kin1,Kxout1,Kyout1,Tin1,Txout1,Tyout1],[W0x,W0y,W0x,W0y,W0x,W0y,Kin0,Kxout0,Kyout0,Tin0,Txout0,Tyout0])]
-    if fval.shape[0]==2*nN:
-        XX = np.concatenate((XX,XX),axis=0)
-        XXp = np.concatenate((XXp,XXp),axis=0)
-    power0 = True
-    power1 = False
-    if run_modulation:
-        u0,u1,u2,u3 = [np.zeros(fval.shape) for _ in range(4)]
-        run_condition = XX[:,2]
-        #print(run_condition.mean())
-        #print(XX.shape)
-        #print(XX[:41])
-        #print(XX[41:])
-        #print(XX.mean(0))
-        W0xs,W1xs,W2xs,W3xs = [[Wx,Wx*(1+W0xrun)] for Wx in [W0x,W1x,W2x,W3x]]
-        W0ys,W1ys,W2ys,W3ys = [[Wy,Wy*(1+W0yrun)] for Wy in [W0y,W1y,W2y,W3y]]
-        for irun,crit in enumerate([1-run_condition[:,np.newaxis],run_condition[:,np.newaxis]]):
-            u0 = u0 + crit*(u_fn_in_out(XX,fval,W0xs[irun],W0ys[irun],Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0))
-            u1 = u1 + crit*(u_fn_in_out(XX,fval,W1xs[irun],W1ys[irun],Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XX,fval,W0xs[irun],W0ys[irun],Kin1,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XX,fval,W0xs[irun],W0ys[irun],Kin0,Kxout0,Kyout0,kappa,Tin1,Txout0,Tyout0,opt,power=power1))
-            u2 = u2 + crit*(u_fn_in_out(XXp,fprimeval,W2xs[irun],W2ys[irun],Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XXp,fprimeval,W0xs[irun],W0ys[irun],Kin0,Kxout1,Kyout1,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XXp,fprimeval,W0xs[irun],W0ys[irun],Kin0,Kxout0,Kyout0,kappa,Tin0,Txout1,Tyout1,opt,power=power1))
-            u3 = u3 + crit*(u_fn_in_out(XXp,fprimeval,W3xs[irun],W3ys[irun],Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0))
-    else:
-        u0 = u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
-        u1 = u_fn_in_out(XX,fval,W1x,W1y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XX,fval,W0x,W0y,Kin1,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XX,fval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin1,Txout0,Tyout0,opt,power=power1)
-        u2 = u_fn_in_out(XXp,fprimeval,W2x,W2y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout1,Kyout1,kappa,Tin0,Txout0,Tyout0,opt,power=power1) + u_fn_in_out(XXp,fprimeval,W0x,W0y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout1,Tyout1,opt,power=power1)
-        u3 = u_fn_in_out(XXp,fprimeval,W3x,W3y,Kin0,Kxout0,Kyout0,kappa,Tin0,Txout0,Tyout0,opt,power=power0)
-    return u0,u1,u2,u3
-
-def compute_res(W1,W2,opt):
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    fval = compute_f_(Eta,Xi,s02,opt)
-    fprimeval = compute_fprime_(Eta,Xi,s02,opt)
-    u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval,opt)
-    resEta = Eta - u0 - u2
-    resXi  = Xi - u1 - u3
-    return resEta,resXi
-
-def compute_f_fprime_(W1,W2,opt):
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    return compute_f_(Eta,Xi,s02,opt),compute_fprime_(Eta,Xi,s02,opt)
-
-def compute_f_fprime_t_(W1,W2,perturbation,max_dist=1,opt=None): # max dist added 10/14/20
-    dt,niter = opt['dt'],opt['niter']
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    fval = compute_f_(Eta,Xi,s02,opt)
-    fprimeval = compute_fprime_(Eta,Xi,s02,opt)
-    u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval,opt)
-    resEta = Eta - u0 - u2
-    resXi  = Xi - u1 - u3
-    YY = fval + perturbation
-    YYp = fprimeval
-    def dYYdt(YY,Eta1,Xi1,opt):
-        return -YY + compute_f_(Eta1,Xi1,s02,opt)
-    def dYYpdt(YYp,Eta1,Xi1,opt):
-        return -YYp +compute_fprime_(Eta1,Xi1,s02,opt)
-    for t in range(niter):
-        if np.mean(np.abs(YY-fval)) < max_dist:
-            u0,u1,u2,u3 = compute_us(W1,W2,YY,YYp,opt)
-            Eta1 = resEta + u0 + u2
-            Xi1 = resXi + u1 + u3
-            YY = YY + dt*dYYdt(YY,Eta1,Xi1,opt)
-            YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1,opt)
-        elif np.remainder(t,500)==0:
-            print('unstable fixed point?')
-    
-    return YY,YYp
-
-def compute_f_fprime_t_12_(W1,W2,perturbation,max_dist=1,opt=None): # max dist added 10/14/20
-    dt,niter = opt['dt'],opt['niter']
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    fval = compute_f_(Eta,Xi,s02,opt)
-    fprimeval = compute_fprime_(Eta,Xi,s02,opt)
-    if share_residuals:
-        u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval,opt)
-        resEta = Eta - u0 - u2
-        resXi  = Xi - u1 - u3
-        resEta12 = np.concatenate((resEta,resEta),axis=0)
-        resXi12 = np.concatenate((resXi,resXi),axis=0)
-    else:
-        resEta12 = 0
-        resXi12 = 0
-    nQ,nS,nT = [opt[key] for key in ['nQ','nS','nT']]
-    dHH = np.zeros((nN,nQ*nS*nT))
-    dHH[:,np.arange(2,nQ*nS*nT,nQ)] = 1
-    dHH = np.concatenate((dHH*h1,dHH*h2),axis=0)
-    YY = fval + perturbation
-    YYp = fprimeval
-    XX12 = np.concatenate((XX,XX),axis=0)
-    YY12 = np.concatenate((YY,YY),axis=0)
-    YYp12 = np.concatenate((YYp,YYp),axis=0)
-    def dYYdt(YY,Eta1,Xi1,opt):
-        return -YY + compute_f_(Eta1,Xi1,s02,opt)
-    def dYYpdt(YYp,Eta1,Xi1,opt):
-        return -YYp + compute_fprime_(Eta1,Xi1,s02,opt)
-    for t in range(niter):
-        if np.mean(np.abs(YY-fval)) < max_dist:
-            u0,u1,u2,u3 = compute_us(W1,W2,YY12,YYp12,opt)
-            Eta121 = resEta12 + u0 + u2 + dHH
-            Xi121 = resXi12 + u1 + u3
-            YY12 = YY12 + dt*dYYdt(YY12,Eta121,Xi121,opt)
-            YYp12 = YYp12 + dt*dYYpdt(YYp12,Eta121,Xi121,opt)
-        elif np.remainder(t,500)==0:
-            print('unstable fixed point?')
-
-    #YY12 = YY12 + np.tile(bl,nS*nT)[np.newaxis,:]
-    
-    return YY12,YYp12
-
-def compute_f_fprime_t_avg_(W1,W2,perturbation,burn_in=0.5,max_dist=1,opt=None):
-    dt,niter = opt['dt'],opt['niter']
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    fval = compute_f_(Eta,Xi,s02,opt)
-    fprimeval = compute_fprime_(Eta,Xi,s02,opt)
-    u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval,opt)
-    resEta = Eta - u0 - u2
-    resXi  = Xi - u1 - u3
-    YY = fval + perturbation
-    YYp = fprimeval
-    YYmean = np.zeros_like(Eta)
-    YYprimemean = np.zeros_like(Eta)
-    def dYYdt(YY,Eta1,Xi1,opt):
-        return -YY + compute_f_(Eta1,Xi1,s02,opt)
-    def dYYpdt(YYp,Eta1,Xi1,opt):
-        return -YYp + compute_fprime_(Eta1,Xi1,s02,opt)
-    for t in range(niter):
-        if np.mean(np.abs(YY-fval)) < max_dist:
-            u0,u1,u2,u3 = compute_us(W1,W2,YY,YYp,opt)
-            Eta1 = resEta + u0 + u2
-            Xi1 = resXi + u1 + u3
-            YY = YY + dt*dYYdt(YY,Eta1,Xi1,opt)
-            YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1,opt)
-        else:
-            print('unstable fixed point?')
-        if t>niter*burn_in:
-            YYmean = YYmean + 1/niter/burn_in*YY
-            YYprimemean = YYprimemean + 1/niter/burn_in*YYp
-
-    return YYmean,YYprimemean
-
-def compute_f_fprime_t_avg_12_(W1,W2,perturbation,max_dist=1,burn_in=0.5,opt=None): # max dist added 10/14/20
-    dt,niter = opt['dt'],opt['niter']
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1,opt)
-    XX,XXp,Eta,Xi = parse_W2(W2,opt)
-    fval = compute_f_(Eta,Xi,s02,opt)
-    fprimeval = compute_fprime_(Eta,Xi,s02,opt)
-    u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval,opt)
-    if share_residuals:
-        resEta = Eta - u0 - u2
-        resXi  = Xi - u1 - u3
-        resEta12 = np.concatenate((resEta,resEta),axis=0)
-        resXi12 = np.concatenate((resXi,resXi),axis=0)
-    else:
-        resEta12 = 0
-        resXi12 = 0
-    nQ,nS,nT = [opt[key] for key in ['nQ','nS','nT']]
-    dHH = np.zeros((nN,nQ*nS*nT))
-    dHH[:,np.arange(2,nQ*nS*nT,nQ)] = 1
-    dHH = np.concatenate((dHH*h1,dHH*h2),axis=0)
-    YY = fval + perturbation
-    YYp = fprimeval
-    XX12 = np.concatenate((XX,XX),axis=0)
-    YY12 = np.concatenate((YY,YY),axis=0)
-    YYp12 = np.concatenate((YYp,YYp),axis=0)
-    YYmean = np.zeros_like(YY12)
-    YYprimemean = np.zeros_like(YY12)
-    def dYYdt(YY,Eta1,Xi1,opt):
-        return -YY + compute_f_(Eta1,Xi1,s02,opt)
-    def dYYpdt(YYp,Eta1,Xi1,opt):
-        return -YYp + compute_fprime_(Eta1,Xi1,s02,opt)
-    for t in range(niter):
-        if np.mean(np.abs(YY-fval)) < max_dist:
-            u0,u1,u2,u3 = compute_us(W1,W2,YY12,YYp12,opt)
-            Eta121 = resEta12 + u0 + u2 + dHH
-            Xi121 = resXi12 + u1 + u3
-            YY12 = YY12 + dt*dYYdt(YY12,Eta121,Xi121,opt)
-            YYp12 = YYp12 + dt*dYYpdt(YYp12,Eta121,Xi121,opt)
-        elif np.remainder(t,500)==0:
-            print('unstable fixed point?')
-        if t>niter*burn_in:
-            YYmean = YYmean + 1/niter/burn_in*YY12
-            YYprimemean = YYprimemean + 1/niter/burn_in*YYp12
-
-    return YYmean,YYprimemean
-
-def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False):
-
-    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
-    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
-
-    opt = {}
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim]
-    for key,val in zip(keys,vals):
-        opt[key] = val
-
-    return opt
-
-def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False,run_modulation=False):
-
-    if not run_modulation:
-        shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
-    else:
-        shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
-    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
-
-    opt = {}
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim','run_modulation']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim,run_modulation]
-    for key,val in zip(keys,vals):
-        opt[key] = val
-
-    return opt
-
-
-def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W10list=None,W20list=None,bounds1=None,bounds2=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,constrain_isn=False,opto_mask=None,nsize=6,ncontrast=6,coupling_constraints=[(1,0,-1)],tv=False,topo_stims=np.arange(36),topo_shape=(6,6),use_opto_transforms=False,opto_transform1=None,opto_transform2=None,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,verbose=True,foldT=True):
+def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None,neuron_rate_fn=None,W10list=None,W20list=None,bounds1=None,bounds2=None,dt=1e-1,perturbation_size=5e-2,niter=1,wt_dict=None,eta=0.1,compute_hessian=False,l2_penalty=1.0,l1_penalty=1.0,constrain_isn=False,opto_mask=None,nsize=6,ncontrast=6,coupling_constraints=[(1,0,-1)],tv=False,topo_stims=np.arange(36),topo_shape=(6,6),use_opto_transforms=False,opto_transform1=None,opto_transform2=None,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,verbose=True,foldT=True,nondim=False,run_modulation=True):
     # coupling constraints: (i,j,sgn) --> coupling term i->j is constrained to be > 0 (sgn=1) or < 0 (sgn=-1)
 
+    print('applying L1 penalty = %f to higher order terms'%l1_penalty)
+    
     fudge = 1e-4
     noise = 1
     big_val = 1e6
@@ -340,7 +31,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     nQ = Yhat[0][0].shape[1]
     assert(nN==Yhat[0][0].shape[0])
 
-    opt = gen_opt(nN=nN,nP=nP,nQ=nQ,nS=nS,nT=nT,foldT=foldT,pop_rate_fn=pop_rate_fn,pop_deriv_fn=pop_deriv_fn,fudge=fudge)
+    opt = fmc.gen_opt_axon(nN=nN,nP=nP,nQ=nQ,nS=nS,nT=nT,foldT=foldT,pop_rate_fn=pop_rate_fn,pop_deriv_fn=pop_deriv_fn,fudge=fudge,dt=dt,niter=niter,nondim=nondim,run_modulation=run_modulation)
     
     def add_key_val(d,key,val):
         if not key in d:
@@ -397,6 +88,15 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     else:
         constrain_coupling = False
 
+        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kout0,Kout1,kappa,Tin0,Tin1,Tout0,Tout1,h1,h2,bl,amp = parse_W1(W1)
+        #XX,XXp,Eta,Xi = parse_W2(W2)
+    #shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
+    #shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(1,),(nQ*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+    shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
+    #shapes1 = opt['shapes1']
+    #shapes2 = opt['shapes2']
+
     first = True
         
     # Yhat is all measured tuning curves, Y is the averages of the model tuning curves
@@ -417,11 +117,11 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         arrnorm = well_behaved*arr/arrsum[:,np.newaxis] + (~well_behaved)*np.ones_like(arr)/arr.shape[1]
         return arrnorm
     
-    def gen_Weight(W,K,kappa,T,power=True):
-        return utils.gen_Weight_k_kappa_t(W,K,kappa,T,nS=nS,nT=nT,power=power)
+    def gen_Weight(W,Kin,Kout,kappa,Tin,Tout):
+        return utils.gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=nS,nT=nT) 
         
-    def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list):
-        return utils.compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
+    def compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nPQ=nQ):
+        return utils.compute_kl_divergence(stim_deriv,noise,mu_data,mu_model,pc_list,nQ=nPQ,nS=nS,nT=nT,foldT=foldT)
 
     def compute_var(Xi,s02):
         return fudge+Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)],axis=0)
@@ -433,28 +133,27 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         return pop_rate_fn(Eta,compute_var(Xi,s02))
 
     def compute_us(W1,W2,fval,fprimeval):
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
-        XX,XXp,Eta,Xi = parse_W2(W2)
-        if fval.shape[0]==2*nN:
-            XX = np.concatenate((XX,XX),axis=0)
-            XXp = np.concatenate((XXp,XXp),axis=0)
-        power0 = True
-        power1 = False
-        u0 = u_fn(XX,fval,W0x,W0y,K0,kappa,T0,power=power0)
-        u1 = u_fn(XX,fval,W1x,W1y,K0,kappa,T0,power=power0) + u_fn(XX,fval,W0x,W0y,K1,kappa,T0,power=power1) + u_fn(XX,fval,W0x,W0y,K0,kappa,T1,power=power1)
-        u2 = u_fn(XXp,fprimeval,W2x,W2y,K0,kappa,T0,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K2,kappa,T0,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T2,power=power1)
-        u3 = u_fn(XXp,fprimeval,W3x,W3y,K0,kappa,T0,power=power0) + u_fn(XXp,fprimeval,W0x,W0y,K3,kappa,T0,power=power1) + u_fn(XXp,fprimeval,W0x,W0y,K0,kappa,T3,power=power1)
-        return u0,u1,u2,u3
+        return fmc.compute_us_in_out(W1,W2,fval,fprimeval,opt)
+        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kout0,Kout1,kappa,Tin0,Tin1,Tout0,Tout1,h1,h2,bl,amp = parse_W1(W1)
+        #XX,XXp,Eta,Xi = parse_W2(W2)
+        #if fval.shape[0]==2*nN:
+        #    XX = np.concatenate((XX,XX),axis=0)
+        #    XXp = np.concatenate((XXp,XXp),axis=0)
+        #u0 = u_fn(XX,fval,W0x,W0y,Kin0,kappa,Tin0)
+        #u1 = u_fn(XX,fval,W1x,W1y,Kin0,kappa,Tin0) + u_fn(XX,fval,W0x,W0y,Kin1,kappa,Tin0) + u_fn(XX,fval,W0x,W0y,Kin0,kappa,Tin1)
+        #u2 = u_fn(XXp,fprimeval,W2x,W2y,Kin0,kappa,Tin0) + u_fn(XXp,fprimeval,W0x,W0y,Kout0,kappa,Tin0) + u_fn(XXp,fprimeval,W0x,W0y,Kin0,kappa,Tout0)
+        #u3 = u_fn(XXp,fprimeval,W3x,W3y,Kin0,kappa,Tin0) + u_fn(XXp,fprimeval,W0x,W0y,Kout1,kappa,Tin0) + u_fn(XXp,fprimeval,W0x,W0y,Kin0,kappa,Tout1)
+        #return u0,u1,u2,u3
 
     def compute_f_fprime_(W1,W2):
-        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kout0,Kout1,kappa,Tin0,Tin1,Tout0,Tout1,h1,h2,bl,amp = parse_W1(W1)
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
         XX,XXp,Eta,Xi = parse_W2(W2)
         return compute_f_(Eta,Xi,s02),compute_fprime_(Eta,Xi,s02)
 
     def compute_f_fprime_t_(W1,W2,perturbation,max_dist=1): # max dist added 10/14/20
-        #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
         XX,XXp,Eta,Xi = parse_W2(W2)
         fval = compute_f_(Eta,Xi,s02)
         fprimeval = compute_fprime_(Eta,Xi,s02)
@@ -484,8 +183,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         return YY,YYp
 
     def compute_f_fprime_t_12_(W1,W2,perturbation,max_dist=1): # max dist added 10/14/20
-        #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
         XX,XXp,Eta,Xi = parse_W2(W2)
         fval = compute_f_(Eta,Xi,s02)
         fprimeval = compute_fprime_(Eta,Xi,s02)
@@ -527,8 +226,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     # GOT TO THIS LINE IN ADAPTING CODE
 
     def compute_f_fprime_t_avg_(W1,W2,perturbation,burn_in=0.5,max_dist=1):
-        #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
         XX,XXp,Eta,Xi = parse_W2(W2)
         fval = compute_f_(Eta,Xi,s02)
         fprimeval = compute_fprime_(Eta,Xi,s02)
@@ -552,8 +251,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
                 YYp = YYp + dt*dYYpdt(YYp,Eta1,Xi1)
             else:
                 print('unstable fixed point?')
-            #Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,K,kappa,T)
-            #Xi1 = resXi + u_fn(XX,YY,Wsx,Wsy,K,kappa,T)
+            #Eta1 = resEta + u_fn(XX,YY,Wmx,Wmy,Kin,Kout,kappa,Tin,Tout)
+            #Xi1 = resXi + u_fn(XX,YY,Wsx,Wsy,Kin,Kout,kappa,Tin,Tout)
             #YY = YY + dt*dYYdt(YY,Eta1,Xi1)
             if t>niter*burn_in:
                 #YYp = compute_fprime_(Eta1,Xi1,s02)
@@ -565,8 +264,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         return YYmean,YYprimemean
 
     def compute_f_fprime_t_avg_12_(W1,W2,perturbation,max_dist=1,burn_in=0.5): # max dist added 10/14/20
-        #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
         XX,XXp,Eta,Xi = parse_W2(W2)
         fval = compute_f_(Eta,Xi,s02)
         fprimeval = compute_fprime_(Eta,Xi,s02)
@@ -610,18 +309,18 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         
         return YYmean,YYprimemean
 
-    def u_fn(XX,YY,Wx,Wy,K,kappa,T,power=True):
-        WWx,WWy = [gen_Weight(W,K,kappa,T,power=power) for W in [Wx,Wy]]
-        return XX @ WWx + YY @ WWy
+    #def u_fn(XX,YY,Wx,Wy,Kin,Kout,kappa,Tin,Tout):
+    #    WWx,WWy = [gen_Weight(W,Kin,Kout,kappa,Tin,Tout) for W in [Wx,Wy]]
+    #    return XX @ WWx + YY @ WWy
                     
     def minusLW(W1,W2,simulate=True,verbose=True):
         
         def compute_sq_error(a,b,wt):
             return np.sum(wt*(a-b)**2)
         
-        def compute_kl_error(mu_data,pc_list,mu_model,fprimeval,wt):
+        def compute_kl_error(mu_data,pc_list,mu_model,fprimeval,wt,nPQ=nQ):
             # how to model variability in X?
-            kl = compute_kl_divergence(fprimeval,noise,mu_data,mu_model,pc_list)#,foldT=foldT,nQ=nQ,nS=nS,nT=nT)
+            kl = compute_kl_divergence(fprimeval,noise,mu_data,mu_model,pc_list,nPQ=nPQ)#,foldT=foldT,nQ=nQ,nS=nS,nT=nT)
             return kl #wt*kl
             # principled way would be to use 1/wt for noise term. Should add later.
 
@@ -646,10 +345,10 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             return dYYterm
 
         def compute_coupling(W1,W2):
-            #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-            W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+            #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+            W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
             XX,XXp,Eta,Xi = parse_W2(W2)
-            WWy = gen_Weight(W0y,K0,kappa,T0,power=True)
+            WWy = gen_Weight(W0y,Kin0,Kout0,kappa,Tin0,Tout0)
             Phi = fprime_m(Eta,compute_var(Xi,s02))
             Phi = np.concatenate((Phi,Phi),axis=0)
             Phi1 = np.array([np.diag(phi) for phi in Phi])
@@ -661,7 +360,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             # -1 for negative or +1 for positive
             coupling = compute_coupling(W1,W2)
             log_arg = sgn*coupling[:,i,j]
-            cost = utils.minus_sum_log_ceil(log_arg,big_val/nN)
+            cost = utils.minus_sum_log_slope(log_arg,big_val/nN)
             return cost
 
         #def compute_eta_tv(this_Eta):
@@ -671,24 +370,24 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         #    return diff_size + diff_contrast
 
         def compute_isn_error(W1,W2):
-            #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-            W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+            #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+            W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
             XX,XXp,Eta,Xi = parse_W2(W2)
             Phi = fprime_m(Eta,compute_var(Xi,s02))
             #print('min Eta: %f'%np.min(Eta[:,0]))
             #print('WEE: %f'%Wmy[0,0])
             #print('min phiE*WEE: %f'%np.min(Phi[:,0]*Wmy[0,0]))
             log_arg = Phi[:,0]*W0y[0,0]-1
-            cost = utils.minus_sum_log_ceil(log_arg,big_val/nN)
+            cost = utils.minus_sum_log_slope(log_arg,big_val/nN)
             #print('ISN cost: %f'%cost)
             return cost
         
         def compute_tv_error(W1,W2):
             # sq l2 norm for tv error
-            #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-            W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+            #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+            W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
             XX,XXp,Eta,Xi = parse_W2(W2)
-            topo_var_list = [arr.reshape(topo_shape+(-1,)) for arr in \
+            topo_var_list = [arr[topo_stims].reshape(topo_shape+(-1,)) for arr in \
                     [XX,XXp,Eta,Xi]]
             sqdiffy = [np.sum(np.abs(np.diff(top,axis=0))**2) for top in topo_var_list]
             sqdiffx = [np.sum(np.abs(np.diff(top,axis=1))**2) for top in topo_var_list]
@@ -705,11 +404,14 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
                 return dsmi
             dsmis = [compute_dsmi(f) for f in [fval,fval12[:nN],fval12[nN:]]]
             smi_halo_error = halo_frac*(dsmis[0] - dsmis[1])**2
-            smi_chrimson_error = (1-halo_frac)*utils.minus_sum_log_ceil(dsmis[2] - dsmis[1],big_val)
+            smi_chrimson_error = (1-halo_frac)*utils.minus_sum_log_slope(dsmis[2] - dsmis[1],big_val)
             return smi_halo_error,smi_chrimson_error
 
-        #Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,K0,K1,K2,K3,kappa,T0,T1,T2,T3,h1,h2,bl,amp = parse_W1(W1)
+        #Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,XX,XXp,Eta,Xi,h1,h2 = parse_W(W)
+        #print(shapes1)
+        #print(W1.size)
+        #print(np.sum([np.prod(w) for w in shapes1]))
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
         XX,XXp,Eta,Xi = parse_W2(W2)
 
         #utils.print_labeled('T',T)
@@ -729,8 +431,8 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
 
         bltile = np.tile(bl,nS*nT)[np.newaxis,:]
         
-        Xterm = compute_kl_error(XXhat,Xpc_list,XX,XXp,wtStim*wtInp) # XX the modeled input layer (L4)
-        Yterm = compute_kl_error(YYhat,Ypc_list,amp*fval+bltile,amp*fprimeval,wtStim*wtCell) # fval the modeled output layer (L2/3)
+        Xterm = compute_kl_error(XXhat,Xpc_list,XX,XXp,wtStim*wtInp,nPQ=nP) # XX the modeled input layer (L4)
+        Yterm = compute_kl_error(YYhat,Ypc_list,amp*fval+bltile,amp*fprimeval,wtStim*wtCell,nPQ=nQ) # fval the modeled output layer (L2/3)
 
         u0,u1,u2,u3 = compute_us(W1,W2,fval,fprimeval)
 
@@ -816,15 +518,15 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         srtinds = np.argsort(drW)
         return drW[srtinds],prW[:,srtinds]
     
-    def compute_eig_penalty_(W0y,K0,kappa,T0):
+    def compute_eig_penalty_(W0y,Kin0,Kout0,kappa,Tin0,Tout0):
         # still need to finish! Hopefully won't need
         # need to fix this to reflect addition of kappa argument
-        Wsquig = gen_Weight(W0y,K0,kappa,T0,power=True)
+        Wsquig = gen_Weight(W0y,Kin0,Kout0,kappa,Tin0,Tout0)
         drW,prW = sorted_r_eigs(Wsquig - np.eye(nQ*nS*nT))
         plW = np.linalg.inv(prW)
         eig_outer_all = [np.real(np.outer(plW[:,k],prW[k,:])) for k in range(nS*nQ*nT)]
         eig_penalty_size_all = [barrier_wt/np.abs(np.real(drW[k])) for k in range(nS*nQ*nT)]
-        eig_penalty_dir_w = [eig_penalty_size*((eig_outer[:nQ,:nQ] + eig_outer[nQ:,nQ:]) + K0[np.newaxis,:]*(eig_outer[:nQ,nQ:] + kappa*eig_outer[nQ:,:nQ])) for eig_outer,eig_penalty_size in zip(eig_outer_all,eig_penalty_size_all)]
+        eig_penalty_dir_w = [eig_penalty_size*((eig_outer[:nQ,:nQ] + eig_outer[nQ:,nQ:]) + Kin0[np.newaxis,:]*(eig_outer[:nQ,nQ:] + kappa*eig_outer[nQ:,:nQ])) for eig_outer,eig_penalty_size in zip(eig_outer_all,eig_penalty_size_all)]
         eig_penalty_dir_k = [eig_penalty_size*((eig_outer[:nQ,nQ:] + eig_outer[nQ:,:nQ]*kappa)*W0y).sum(0) for eig_outer,eig_penalty_size in zip(eig_outer_all,eig_penalty_size_all)]
         eig_penalty_dir_kappa = [eig_penalty_size*(eig_outer[nQ:,:nQ]*k0[np.newaxis,:]*W0y).sum().reshape((1,)) for eig_outer,eig_penalty_size in zip(eig_outer_all,eig_penalty_size_all)]
         eig_penalty_dir_w = np.array(eig_penalty_dir_w).sum(0)
@@ -834,7 +536,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     
     def compute_eig_penalty(W):
         # still need to finish! Hopefully won't need
-        W0mx,W0my,W0sx,W0sy,s020,K0,kappa0,T0,XX0,XXp0,Eta0,Xi0,h10,h20,Eta10,Eta20 = parse_W(W)
+        W0mx,W0my,W0sx,W0sy,s020,Kin0,kappa0,Tin0,XX0,XXp0,Eta0,Xi0,h10,h20,Eta10,Eta20 = parse_W(W)
         eig_penalty_dir_w,eig_penalty_dir_k,eig_penalty_dir_kappa = compute_eig_penalty_(W0my,k0,kappa0)
         eig_penalty_W = unparse_W(np.zeros_like(W0mx),eig_penalty_dir_w,np.zeros_like(W0sx),np.zeros_like(W0sy),np.zeros_like(s020),eig_penalty_dir_k,eig_penalty_dir_kappa,np.zeros_like(XX0),np.zeros_like(XXp0),np.zeros_like(Eta0),np.zeros_like(Xi0))
 #         assert(True==False)
@@ -842,25 +544,59 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     
     def optimize1(W10,W20,compute_hessian=False,simulate=True,verbose=True):
 
-        allhot = np.zeros(W10.shape)
-        allhot[:nP*nQ+nQ**2] = 1
-        W_l2_reg = lambda W: np.sum((W*allhot)**2)
-        f = lambda W: minusLW(W,W20,simulate=simulate,verbose=verbose) + l2_penalty*W_l2_reg(W)
-        fprime = lambda W: minusdLdW1(W,W20,simulate=simulate,verbose=verbose) + 2*l2_penalty*W*allhot
+        #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1)
+        W0hot = np.zeros(W10.shape)
+        W0hot[:nP*nQ+nQ**2] = 1
+        l1_penalty_vars = [0,0,1,1,1,1,1,1,1,1,0,0,1,0,0,1,1,0,0,1,0,0,1,1,0,0,0,0]
+        l1_penalty_vars = [val*np.ones(shp) for val,shp in zip(l1_penalty_vars,shapes1)]
+        print('applying L1 penalty = %f to higher order terms'%l1_penalty)
+        Wnhot = unparse_W(*l1_penalty_vars)
 
-        fix_violations(W10,bounds1)
+        set_const = np.array([(b[0]==b[1]) for b in bounds1])
+        const_val = np.array([b[0] for b in bounds1])[set_const]
+
+        W0_l2_reg = lambda W: np.sum((W*W0hot)**2)
+        Wn_l1_reg = lambda W: np.sum(np.abs(W*Wnhot))
+
+        f_inner = lambda W: minusLW(W,W20,simulate=simulate,verbose=verbose) + l2_penalty*W0_l2_reg(W) + l1_penalty*Wn_l1_reg(W)
+        fprime_inner = lambda W: minusdLdW1(W,W20,simulate=simulate,verbose=verbose) + 2*l2_penalty*W*W0hot + l1_penalty*np.sign(W)*Wnhot
+
+        def f_outer(w):
+            W = np.zeros_like(W10)
+            W[~set_const] = w
+            W[set_const] = const_val
+            return f_inner(W) 
+
+        def fprime_outer(w):
+            W = np.zeros_like(W10)
+            W[~set_const] = w
+            W[set_const] = const_val
+            return fprime_inner(W)[~set_const]
         
         #W11,loss,result = sop.fmin_l_bfgs_b(f,W10,fprime=fprime,bounds=bounds1,factr=1e2,maxiter=int(1e3),maxls=40)
         options = {}
         options['factr']=1e2
         options['maxiter']=int(1e3)
         options['maxls']=40
-        result = sop.minimize(f,W10,jac=fprime,bounds=bounds1,options=options,method='L-BFGS-B')
-        W11 = result.x
+
+        print(W10.size)
+        print(len(bounds1))
+        print(np.sum([np.prod(shp) for shp in shapes1]))
+        fix_violations(W10,bounds1)
+        w10 = W10[~set_const]
+        loose_bounds1 = [b for b,sc in zip(bounds1,set_const) if not sc]
+
+        result = sop.minimize(f_outer,w10,jac=fprime_outer,bounds=loose_bounds1,options=options,method='L-BFGS-B')
+        w11 = result.x
         loss = result.fun
+
+        W11 = np.zeros_like(W10)
+        W11[set_const] = const_val
+        W11[~set_const] = w11
+
         if compute_hessian:
-            gr = grad(lambda W1: minusLW(W1,W2,simulate=simulate,verbose=verbose))(W1)
-            hess = hessian(lambda W1: minusLW(W1,W2,simulate=simulate,verbose=verbose))(W1)
+            gr = grad(lambda W1: minusLW(W1,W2,simulate=simulate,verbose=verbose))(W11)
+            hess = hessian(lambda W1: minusLW(W1,W2,simulate=simulate,verbose=verbose))(W11)
         else:
             gr = None
             hess = None
@@ -945,17 +681,20 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         return W21,loss,gr,hess,result
     
     W10 = unparse_W(*W10list)
+    #print('W10 shape: %d'%W10.size)
     W20 = unparse_W(*W20list)
 
     #simulate1,simulate2 = True,False
     verbose1,verbose2 = verbose,verbose
 
     old_loss = np.inf
-    if stimwise:
+    if stimwise: # TEMPORARILY SKIPPING FOR DEBUGGING PURPOSES
         W21,loss,gr,hess,result = optimize2_stimwise(W10,W20,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
     else:
         W21,loss,gr,hess,result = optimize2(W10,W20,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
     W11,loss,gr,hess,result = optimize1(W10,W21,compute_hessian=compute_hessian,simulate=simulate1,verbose=verbose1)
+
+    #W11,loss,gr,hess,result = optimize1(W10,W20,compute_hessian=compute_hessian,simulate=simulate1,verbose=verbose1)
 
     delta = old_loss - loss
     while delta > 0.1:
@@ -970,7 +709,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         delta = old_loss - loss
 
         
-    W1t = parse_W1(W11) #[Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,h1,h2,bl,amp]
+    W1t = parse_W1(W11) #[Wmx,Wmy,Wsx,Wsy,s02,Kin,Kout,kappa,Tin,Tout,h1,h2,bl,amp]
     W2t = parse_W2(W21) #[XX,XXp,Eta,Xi]
     
     return W1t,W2t,loss,gr,hess,result

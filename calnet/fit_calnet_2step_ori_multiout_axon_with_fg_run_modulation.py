@@ -19,10 +19,10 @@ from autograd import hessian
 import size_contrast_analysis as sca
 import scipy.stats as sst
 import sim_utils
-from importlib import reload
-reload(sim_utils)
+#from importlib import reload
+#reload(sim_utils)
 import calnet.utils
-import calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear
+import calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear_run_modulation
 import calnet.fitting_multiout_callable as fmc
 import opto_utils
 import scipy.signal as ssi
@@ -262,16 +262,27 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
 
     return Wlist
 
-def get_Rs_slice(Rs_mean,Rs_cov,slc):
+#def get_Rs_slice(Rs_mean,Rs_cov,slc):
+#    for iR in range(len(Rs_mean)):
+#        for ialign in range(len(Rs_mean[iR])):
+#            Rs_mean[iR][ialign] = Rs_mean[iR][ialign][slc]
+#            for idim in range(len(Rs_cov[iR][ialign])):
+#                Rs_cov[iR][ialign][idim][1] = Rs_cov[iR][ialign][idim][1][slc]
+#    return Rs_mean,Rs_cov
+
+def get_Rs_slices(Rs_mean,Rs_cov,slcs):
     for iR in range(len(Rs_mean)):
         for ialign in range(len(Rs_mean[iR])):
-            Rs_mean[iR][ialign] = Rs_mean[iR][ialign][slc]
+            Rs_mean[iR][ialign] = np.concatenate([Rs_mean[iR][ialign][slc] for slc in slcs])
             for idim in range(len(Rs_cov[iR][ialign])):
-                Rs_cov[iR][ialign][idim][1] = Rs_cov[iR][ialign][idim][1][slc]
+                #print(Rs_cov[iR][ialign][idim][1].shape)
+                #print(slcs)
+                #print(len([Rs_cov[iR][ialign][idim][1][slc] for slc in slcs]))
+                #Rs_cov[iR][ialign][idim][1] = np.concatenate([Rs_cov[iR][ialign][idim][1][slc] for slc in slcs])
+                Rs_cov[iR][ialign][idim] = (Rs_cov[iR][ialign][idim][0],np.concatenate([Rs_cov[iR][ialign][idim][1][slc] for slc in slcs]))
     return Rs_mean,Rs_cov
 
-
-def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,l1_penalty=1.0,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False,fit_running=False,fit_non_running=True,fit_sc=True,fit_fg=False):
+def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_ret_pval_0_05_210423.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,multiout=True,multiout2=False,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,l1_penalty=1.0,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,foldT=False,free_amplitude=False,correct_Eta=False,init_Eta_with_s02=False,no_halo_res=False,ignore_halo_vip=False,use_opto_transforms=False,norm_opto_transforms=False,nondim=False,fit_running=False,fit_non_running=True,fit_sc=True,fit_fg=False,fit_ret=False,run_modulation=True,axon=True,nT=2):
     
     
     nsize,ncontrast = 6,6
@@ -279,9 +290,12 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     nrun = 2
     nsize,ncontrast,ndir = 6,6,8
     nstim_fg = 5
+    nstim_ret = 5
+
+    print((fit_sc,fit_fg,fit_ret))
 
     fit_both_running = (fit_non_running and fit_running)
-    fit_both_stims = (fit_sc and fit_fg)
+    fit_all_stims = (fit_sc and fit_fg and fit_ret)
 
     if not fit_both_running:
         nrun = 1
@@ -292,29 +306,39 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
 
     nsc = nrun*nsize*ncontrast*ndir
     nfg = nrun*nstim_fg*ndir
+    nret = nrun*nstim_ret
 
     npfile = np.load(ca_data_file,allow_pickle=True)[()]#,{'rs':rs},allow_pickle=True) # ,'rs_denoise':rs_denoise
     if fit_both_running: 
         Rs_mean = npfile['Rs_mean_run']
         Rs_cov = npfile['Rs_cov_run']
-        if not fit_both_stims:
-            if fit_sc:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
-            elif fit_fg:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
     else:
         Rs_mean = npfile['Rs_mean'][irun]
         Rs_cov = npfile['Rs_cov'][irun]
-        if not fit_both_stims:
-            if fit_sc:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
-            elif fit_fg:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
+
+    if not fit_all_stims:
+        slcs = []
+        if fit_sc:
+            slcs = slcs + [slice(None,nsc)]
+        if fit_fg:
+            slcs = slcs + [slice(nsc,nsc+nfg)]
+        if fit_ret:
+            slcs = slcs + [slice(nsc+nfg,None)]
+        Rs_mean,Rs_cov = get_Rs_slices(Rs_mean,Rs_cov,slcs)
     
-    ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    if nT==3:
+        ori_dirs = [[0,4],[1,3,5,7],[2,6]]
+    elif nT==2:
+        ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    else:
+        nT = 1
+        ori_dirs = [[0,1,2,3,4,5,6,7]]
     ndims = 5
     nT = len(ori_dirs)
     nS = len(Rs_mean[0])
+
+    fg_start = nsc*fit_sc
+    ret_start = fg_start + nfg*fit_fg
     
     def sum_to_1(r):
         R = r.reshape((r.shape[0],-1))
@@ -331,16 +355,18 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
             rs_sc = np.nanmean(Rs[:nsc].reshape((nrun,nsize,ncontrast,ndir))[:,:,:,these_ori_dirs],-1)
             rs_sc[:,1:,1:] = ssi.convolve(rs_sc,kernel,'valid')
             rs_sc = rs_sc.reshape((nrun*nsize*ncontrast))
-            if fit_fg:
-                rs_fg = np.nanmean(Rs[nsc:].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
-                rs_fg = rs_fg.reshape((nrun*nstim_fg))
-            else:
-                rs_fg = np.zeros((0,))
-        elif fit_fg:
+        else:
             rs_sc = np.zeros((0,))
-            rs_fg = np.nanmean(Rs.reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+        if fit_fg:
+            rs_fg = np.nanmean(Rs[fg_start:fg_start+nfg].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
             rs_fg = rs_fg.reshape((nrun*nstim_fg))
-        Rso = np.concatenate((rs_sc,rs_fg))
+        else:
+            rs_fg = np.zeros((0,))
+        if fit_ret:
+            rs_ret = Rs[ret_start:ret_start+nret]
+        else:
+            rs_ret = np.zeros((0,))
+        Rso = np.concatenate((rs_sc,rs_fg,rs_ret))
         return Rso
     
     Rso_mean = [[[None for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
@@ -362,10 +388,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
         for iitem in range(len(bd)):
             bd[iitem][code[iitem]] = val
     
-    nN = (36*fit_sc + 5*fit_fg)*(1 + fit_both_running)
+    nN = (36*fit_sc + 5*fit_fg + 5*fit_ret)*(1 + fit_both_running)
     nS = 2
     nP = 2 + fit_both_running
-    nT = 2
+    #nT = 2
     nQ = 4
 
     ndims = 5
@@ -399,11 +425,18 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
                 x = Rso_mean[icelltype][iS][iT][:,np.newaxis]/mx[icelltype]
                 if fit_both_running:
                     run_vector = np.zeros_like(x)
-                    if fit_both_stims:
-                        run_vector[nsize*ncontrast:2*nsize*ncontrast] = 1
-                        run_vector[-nstim_fg:] = 1
-                    else:
-                        run_vector[int(np.round(run_vector.shape[0]/2)):,:] = 1
+                    if fit_sc:
+                        run_vector[int(nsc/ndir/2):int(nsc/ndir)] = 1
+                        #print(run_vector.sum())
+                    if fit_fg:
+                        #print(int((fg_start+nfg/2)/ndir))
+                        #print(int((fg_start+nfg)/ndir))
+                        run_vector[int((fg_start+nfg/2)/ndir):int((fg_start+nfg)/ndir)] = 1
+                        #print(run_vector.sum())
+                    if fit_ret:
+                        run_vector[int(ret_start/ndir+nret/2):int(ret_start/ndir+nret)] = 1
+                    print('run vector mean: '+str(run_vector.mean()))
+                    print('run vector shape: '+str(run_vector.shape))
                 else:
                     run_vector = np.zeros((x.shape[0],0))
                 Xhat[iS][iT] = np.concatenate((x,np.ones_like(x),run_vector),axis=1)
@@ -460,12 +493,12 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     else:
         s02_bounds = np.ones((nQ,))
     
-    Kin0_bounds = 1.5*np.ones((nQ,))
+    Kin0_bounds = 1.5*np.ones((nQ*(nS>1),))
     
-    kappa_bounds = np.ones((1,))
+    kappa_bounds = np.ones((nS-1,))
     # kappa_bounds = 2*np.ones((1,))
     
-    Tin0_bounds = 1.5*np.ones((nQ,))
+    Tin0_bounds = 1.5*np.ones((nQ*(nT>1),))
     #T_bounds[2:4] = 1 # PV and VIP are constrained to have flat ori tuning
     #Tin0_bounds[1:4] = 1 # SST,VIP, and PV are constrained to have flat ori tuning
 
@@ -502,15 +535,41 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
         W3x_bounds = W1x_bounds.copy()*0
         W3y_bounds = W1y_bounds.copy()*0
 
-    Kxout0_bounds = np.array((1.5,)+tuple(np.zeros((nP-1,))))
-    Txout0_bounds = Kxout0_bounds.copy()
-    Kxout1_bounds = np.array((kt_factor,)+tuple(np.zeros((nP-1,))))
-    Txout1_bounds = Kxout1_bounds.copy() 
+    if run_modulation:
+        W0xrun_bounds = -1.5*(W0x_bounds!=0).astype('int')
+        W0yrun_bounds = -1.5*(W0y_bounds!=0).astype('int')
+    else:
+        W0xrun_bounds = W0x_bounds.copy()*0
+        W0yrun_bounds = W0y_bounds.copy()*0
+
+    if nS>1:
+        Kxout0_bounds = np.array((1.5,)+tuple(np.zeros((nP-1,))))
+        Kxout1_bounds = np.array((kt_factor,)+tuple(np.zeros((nP-1,))))
+    else:
+        Kxout0_bounds = np.zeros((0,))
+        Kxout1_bounds = np.zeros((0,)) 
+    if nT>1:
+        Txout0_bounds = Kxout0_bounds.copy()
+        Txout1_bounds = Kxout1_bounds.copy() 
+    else:
+        Txout0_bounds = np.zeros((0,))
+        Txout1_bounds = np.zeros((0,)) 
 
     Kyout0_bounds = Kin0_bounds.copy()
     Tyout0_bounds = Tin0_bounds.copy()
     Kyout1_bounds = Kin1_bounds.copy()
     Tyout1_bounds = Tin1_bounds.copy()
+
+    if not axon:
+        Kxout0_bounds = np.ones_like(Kxout0_bounds)
+        Txout0_bounds = np.ones_like(Txout0_bounds)
+        Kxout1_bounds = np.zeros_like(Kxout1_bounds)
+        Txout1_bounds = np.zeros_like(Txout1_bounds)
+
+        Kyout0_bounds = np.ones_like(Kyout0_bounds)
+        Tyout0_bounds = np.ones_like(Tyout0_bounds)
+        Kyout1_bounds = np.zeros_like(Kyout1_bounds)
+        Tyout1_bounds = np.zeros_like(Tyout1_bounds)
     
     if fit_both_running:
         to_tile = Xhat[0][0][:,1:]
@@ -533,11 +592,11 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     Eta_bounds = tile_nS_nT_nN(3*np.ones((nQ,)))
     # Eta_bounds = 3*np.ones((nN,nT*nS*nQ))
     
-    #if allow_var:
-    #    Xi_bounds = tile_nS_nT_nN(3*np.ones((nQ,)))
-    #else:
-    #    Xi_bounds = tile_nS_nT_nN(np.zeros((nQ,)))
-    Xi_bounds = tile_nS_nT_nN(3*np.ones((nQ,))) # temporarily allowing Xi even if W1 is not allowed
+    if allow_var:
+        Xi_bounds = tile_nS_nT_nN(3*np.ones((nQ,)))
+    else:
+        Xi_bounds = tile_nS_nT_nN(np.zeros((nQ,)))
+    #Xi_bounds = tile_nS_nT_nN(3*np.ones((nQ,))) # temporarily allowing Xi even if W1 is not allowed
 
     # Xi_bounds = 3*np.ones((nN,nT*nS*nQ))
     
@@ -554,15 +613,18 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     
     # shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(1,),(nN,nS*nP),(nN,nS*nQ),(nN,nS*nQ),(nN,nS*nQ)]
     #shapes = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ),(1,)]
-    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(1,),(nQ*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+    print('shapes1: '+str(shapes1))
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
     #         W0x,    W0y,    W1x,    W1y,    W2x,    W2y,    W3x,    W3y,    s02,  k,    kappa,T,   XX,            XXp,          Eta,          Xi
     
     #lb = [-np.inf*np.ones(shp) for shp in shapes]
     #ub = [np.inf*np.ones(shp) for shp in shapes]
     #bdlist = [W0x_bounds,W0y_bounds,W1x_bounds,W1y_bounds,W2x_bounds,W2y_bounds,W3x_bounds,W3y_bounds,s02_bounds,k0_bounds,k1_bounds,k2_bounds,k3_bounds,kappa_bounds,Tin0_bounds,Tin1_bounds,Tout0_bounds,Tout1_bounds,X_bounds,Xp_bounds,Eta_bounds,Xi_bounds,h_bounds]
-    bd1list = [W0x_bounds,W0y_bounds,W1x_bounds,W1y_bounds,W2x_bounds,W2y_bounds,W3x_bounds,W3y_bounds,s02_bounds,Kin0_bounds,Kin1_bounds,Kxout0_bounds,Kyout0_bounds,Kxout1_bounds,Kyout1_bounds,kappa_bounds,Tin0_bounds,Tin1_bounds,Txout0_bounds,Tyout0_bounds,Txout1_bounds,Tyout1_bounds,h1_bounds,h2_bounds,bl_bounds,amp_bounds]
+    bd1list = [W0x_bounds,W0y_bounds,W1x_bounds,W1y_bounds,W2x_bounds,W2y_bounds,W3x_bounds,W3y_bounds,W0xrun_bounds,W0yrun_bounds,s02_bounds,Kin0_bounds,Kin1_bounds,Kxout0_bounds,Kyout0_bounds,Kxout1_bounds,Kyout1_bounds,kappa_bounds,Tin0_bounds,Tin1_bounds,Txout0_bounds,Tyout0_bounds,Txout1_bounds,Tyout1_bounds,h1_bounds,h2_bounds,bl_bounds,amp_bounds]
     bd2list = [X_bounds,Xp_bounds,Eta_bounds,Xi_bounds]
+
+    print('bd1 shapes: '+str([b.shape for b in bd1list]))
 
     lb1,ub1 = [[sgn*np.inf*np.ones(shp) for shp in shapes1] for sgn in [-1,1]]
     lb1,ub1 = calnet.utils.set_bounds_by_code(lb1,ub1,bd1list)
@@ -662,10 +724,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     if ignore_halo_vip:
         dYY1[:,2::nQ] = np.nan
     
-    from importlib import reload
-    reload(calnet)
-    reload(calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear)
-    reload(sim_utils)
+    #from importlib import reload
+    #reload(calnet)
+    #reload(calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear)
+    #reload(sim_utils)
     wt_dict = {}
     wt_dict['X'] = 1
     wt_dict['Y'] = 3
@@ -711,7 +773,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
             nextraK = nextraW + 3
             nextraT = nextraK + 3
             #Wstar_dict['as_list'] = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h1,h2,bl,amp]#,h2
-            init_val = [1,1,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1]
+            init_val = [1,1,0,0,0,0,0,0,0,0,1,0,0,0,0,0,0,1,0,0,0,0,0,0,0,0,0,1]
             W10list = [iv*np.ones(shp) for iv,shp in zip(init_val,shapes1)]
             #W10list[nextraW+4] = np.ones(shapes1[nextraW+4]) # s02
             #W10list[nextraW+5] = np.ones(shapes1[nextraW+5]) # K
@@ -749,11 +811,13 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
                 # W1list = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp]#,h2
                 # W0,W1,W2,W3,Kin0,Kin1,Tin0,Tin1
                 thisWlist = initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=freeze_vals,lams=lams,foldT=foldT)
-                Winds = [0,1,2,3,4,5,6,7,9,10,11,12,13,14,16,17,18,19,20,21]
+                #Winds = [0,1,2,3,4,5,6,7,9,10,11,12,13,14,16,17,18,19,20,21]
+                Winds = [0,1,2,3,4,5,6,7,11,12,13,14,15,16,18,19,20,21,22,23]
                 for ivar,Wind in enumerate(Winds):
-                    W10list[Wind] = thisWlist[ivar]
+                    if shapes1[Wind] == thisWlist[ivar].shape:
+                        W10list[Wind] = thisWlist[ivar]
                 #W10list[0],W10list[1] = initialize_W(Xhat,Yhat,scale_by=scale_init_by)
-                for Wind in Winds:
+                for Wind in Winds+[8,9]:
                     W10list[Wind] = W10list[Wind] + init_noise*np.random.randn(*W10list[Wind].shape)
             else:
                 if constrain_isn:
@@ -807,14 +871,14 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
                 W10list = W10list[:4] + extra_Ws*2 + W10list[4:6] + extra_ks + W10list[6:8] + extra_Ts + W10list[8:]
 
             print(len(W10list))
-            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,l1_penalty=l1_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim)
+            W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear_run_modulation.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,l1_penalty=l1_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim,run_modulation=run_modulation)
     
     #def parse_W(W):
     #    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kout0,Kout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h = W
     #    return W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kout0,Kout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h
     def parse_W1(W):
-        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = W #h2,
-        return W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp #h2,
+        W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = W #h2,
+        return W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp #h2,
     def parse_W2(W):
         XX,XXp,Eta,Xi = W
         return XX,XXp,Eta,Xi    
@@ -823,11 +887,11 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
         return np.concatenate([ww.flatten() for ww in Ws])
     
     itry = 0
-    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1t[0][0])#h2,
+    W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,h1,h2,bl,amp = parse_W1(W1t[0][0])#h2,
     XX,XXp,Eta,Xi = parse_W2(W2t[0][0])
     
     #labels = ['W0x','W0y','W1x','W1y','W2x','W2y','W3x','W3y','s02','Kin0','Kin1','Kout0','Kout1','kappa','Tin0','Tin1','Tout0','Tout1','XX','XXp','Eta','Xi','h']
-    labels1 = ['W0x','W0y','W1x','W1y','W2x','W2y','W3x','W3y','s02','Kin0','Kin1','Kxout0','Kyout0','Kxout1','Kyout1','kappa','Tin0','Tin1','Txout0','Tyout0','Txout1','Tyout1','h1','h2','bl','amp']#,'h2'
+    labels1 = ['W0x','W0y','W1x','W1y','W2x','W2y','W3x','W3y','W0xrun','W0yrun','s02','Kin0','Kin1','Kxout0','Kyout0','Kxout1','Kyout1','kappa','Tin0','Tin1','Txout0','Tyout0','Txout1','Tyout1','h1','h2','bl','amp']#,'h2'
     labels2 = ['XX','XXp','Eta','Xi']
     Wstar_dict = {}
     for i,label in enumerate(labels1):
@@ -837,7 +901,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_pval_0_05_210410.np
     #Wstar_dict = {}
     #for i,label in enumerate(labels):
     #    Wstar_dict[label] = W1t[0][0][i]
-    Wstar_dict['as_list'] = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h1,h2,bl,amp]#,h2
+    Wstar_dict['as_list'] = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h1,h2,bl,amp]#,h2
     Wstar_dict['loss'] = loss[0][0]
     Wstar_dict['wt_dict'] = wt_dict
     np.save(weights_file,Wstar_dict,allow_pickle=True)

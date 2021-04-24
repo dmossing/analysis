@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 import calnet.utils
-import numpy as np
+import autograd.numpy as np
 
 # dynamics fns
 
