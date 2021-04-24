@@ -117,7 +117,7 @@ def compute_tuning_tavg_with_sem(dsfile,datafield='decon',running=True,expttype=
                         else:
                             xmean = sc0['stimulus_location_x_deg'][:].mean()
                             ymean = sc0['stimulus_location_y_deg'][:].mean()
-                            y = y - np.array((ymean,xmean))[np.newaxis,:]
+                            y = y - np.array((xmean,ymean))[np.newaxis,:]
                     rf_conditions = [ut.k_and(~np.isnan(X[:,0]),~np.isnan(y[:,0])),sqerror<0.75,sigma>3.3,pval[ikey]<0.1]
                     lkat = np.ones((X.shape[0],),dtype='bool')
                     for cond in rf_conditions:

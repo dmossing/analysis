@@ -359,7 +359,7 @@ def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troy
 
     return opt
 
-def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False,run_modulation=False):
+def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False,run_modulation=False,axon=True):
 
     if not run_modulation:
         shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
@@ -368,13 +368,8 @@ def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
-<<<<<<< HEAD
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim','run_modulation']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim,run_modulation]
-=======
-    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim','axon']
-    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim,True]
->>>>>>> cc0eede54697a3d055b83be146d9d4f86ce425fc
+    keys = ['nN','nP','nQ','nS','nT','shapes1','shapes2','foldT','pop_rate_fn','pop_deriv_fn','fudge','dt','niter','nondim','run_modulation','axon']
+    vals = [nN,nP,nQ,nS,nT,shapes1,shapes2,foldT,pop_rate_fn,pop_deriv_fn,fudge,dt,niter,nondim,run_modulation,axon]
     for key,val in zip(keys,vals):
         opt[key] = val
 
@@ -1036,15 +1031,22 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     
     return W1t,W2t,loss,gr,hess,result
 
-def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit_sc=True,fit_fg=True,foldT=False,pdim=0):
+def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit_sc=True,fit_fg=True,fit_ret=False,foldT=False,pdim=0,nT=2):
 
-    def get_Rs_slice(Rs_mean,Rs_cov,slc):
+    def get_Rs_slices(Rs_mean,Rs_cov,slcs):
         for iR in range(len(Rs_mean)):
             for ialign in range(len(Rs_mean[iR])):
-                Rs_mean[iR][ialign] = Rs_mean[iR][ialign][slc]
+                Rs_mean[iR][ialign] = np.concatenate([Rs_mean[iR][ialign][slc] for slc in slcs])
                 for idim in range(len(Rs_cov[iR][ialign])):
-                    Rs_cov[iR][ialign][idim][1] = Rs_cov[iR][ialign][idim][1][slc]
+                    #print(Rs_cov[iR][ialign][idim][1].shape)
+                    #print(slcs)
+                    #print(len([Rs_cov[iR][ialign][idim][1][slc] for slc in slcs]))
+                    #Rs_cov[iR][ialign][idim][1] = np.concatenate([Rs_cov[iR][ialign][idim][1][slc] for slc in slcs])
+                    Rs_cov[iR][ialign][idim] = (Rs_cov[iR][ialign][idim][0],np.concatenate([Rs_cov[iR][ialign][idim][1][slc] for slc in slcs]))
         return Rs_mean,Rs_cov
+
+    def get_Rs_slice(Rs_mean,Rs_cov,slc):
+        return get_Rs_slices(Rs_mean,Rs_cov,[slc])
 
     def get_pc_dim(Ypc_list,nN=36,nPQ=4,nS=2,nT=2,idim=0,foldT=True):
         if foldT:
@@ -1066,9 +1068,10 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
     nrun = 2
     nsize,ncontrast,ndir = 6,6,8
     nstim_fg = 5
+    nstim_ret = 5
 
     fit_both_running = (fit_non_running and fit_running)
-    fit_both_stims = (fit_sc and fit_fg)
+    fit_all_stims = (fit_sc and fit_fg and fit_ret)
 
     if not fit_both_running:
         nrun = 1
@@ -1079,29 +1082,39 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
 
     nsc = nrun*nsize*ncontrast*ndir
     nfg = nrun*nstim_fg*ndir
+    nret = nrun*nstim_ret
 
     npfile = np.load(ca_data_file,allow_pickle=True)[()]#,{'rs':rs},allow_pickle=True) # ,'rs_denoise':rs_denoise
     if fit_both_running:
         Rs_mean = npfile['Rs_mean_run']
         Rs_cov = npfile['Rs_cov_run']
-        if not fit_both_stims:
-            if fit_sc:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
-            elif fit_fg:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
     else:
         Rs_mean = npfile['Rs_mean'][irun]
         Rs_cov = npfile['Rs_cov'][irun]
-        if not fit_both_stims:
-            if fit_sc:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(None,nsc))
-            elif fit_fg:
-                Rs_mean,Rs_cov = get_Rs_slice(Rs_mean,Rs_cov,slice(nsc,None))
 
-    ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    if not fit_all_stims:
+        slcs = []
+        if fit_sc:
+            slcs = slcs + [slice(None,nsc)]
+        if fit_fg:
+            slcs = slcs + [slice(nsc,nsc+nfg)]
+        if fit_ret:
+            slcs = slcs + [slice(nsc+nfg,None)]
+        Rs_mean,Rs_cov = get_Rs_slices(Rs_mean,Rs_cov,slcs)
+    
+    if nT==3:
+        ori_dirs = [[0,4],[1,3,5,7],[2,6]]
+    elif nT==2:
+        ori_dirs = [[0,4],[2,6]] #[[0,4],[1,3,5,7],[2,6]]
+    else:
+        nT = 1
+        ori_dirs = [[0,1,2,3,4,5,6,7]]
+
     ndims = 5
-    nT = len(ori_dirs)
     nS = len(Rs_mean[0])
+
+    fg_start = nsc*fit_sc
+    ret_start = fg_start + nfg*fit_fg
 
     def sum_to_1(r):
         R = r.reshape((r.shape[0],-1))
@@ -1118,17 +1131,36 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
             rs_sc = np.nanmean(Rs[:nsc].reshape((nrun,nsize,ncontrast,ndir))[:,:,:,these_ori_dirs],-1)
             rs_sc[:,1:,1:] = ssi.convolve(rs_sc,kernel,'valid')
             rs_sc = rs_sc.reshape((nrun*nsize*ncontrast))
-            if fit_fg:
-                rs_fg = np.nanmean(Rs[nsc:].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
-                rs_fg = rs_fg.reshape((nrun*nstim_fg))
-            else:
-                rs_fg = np.zeros((0,))
-        elif fit_fg:
+        else:
             rs_sc = np.zeros((0,))
-            rs_fg = np.nanmean(Rs.reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+        if fit_fg:
+            rs_fg = np.nanmean(Rs[fg_start:fg_start+nfg].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
             rs_fg = rs_fg.reshape((nrun*nstim_fg))
-        Rso = np.concatenate((rs_sc,rs_fg))
+        else:
+            rs_fg = np.zeros((0,))
+        if fit_ret:
+            rs_ret = Rs[ret_start:ret_start+nret]
+        else:
+            rs_ret = np.zeros((0,))
+        Rso = np.concatenate((rs_sc,rs_fg,rs_ret))
         return Rso
+
+    #def ori_avg(Rs,these_ori_dirs):
+    #    if fit_sc:
+    #        rs_sc = np.nanmean(Rs[:nsc].reshape((nrun,nsize,ncontrast,ndir))[:,:,:,these_ori_dirs],-1)
+    #        rs_sc[:,1:,1:] = ssi.convolve(rs_sc,kernel,'valid')
+    #        rs_sc = rs_sc.reshape((nrun*nsize*ncontrast))
+    #        if fit_fg:
+    #            rs_fg = np.nanmean(Rs[nsc:].reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+    #            rs_fg = rs_fg.reshape((nrun*nstim_fg))
+    #        else:
+    #            rs_fg = np.zeros((0,))
+    #    elif fit_fg:
+    #        rs_sc = np.zeros((0,))
+    #        rs_fg = np.nanmean(Rs.reshape((nrun,nstim_fg,ndir))[:,:,these_ori_dirs],-1)
+    #        rs_fg = rs_fg.reshape((nrun*nstim_fg))
+    #    Rso = np.concatenate((rs_sc,rs_fg))
+    #    return Rso
 
     Rso_mean = [[[None for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
     Rso_cov = [[[[[None,None] for idim in range(ndims)] for iT in range(nT)] for iS in range(nS)] for icelltype in range(len(Rs_mean))]
@@ -1149,10 +1181,10 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
         for iitem in range(len(bd)):
             bd[iitem][code[iitem]] = val
 
-    nN = (36*fit_sc + 5*fit_fg)*(1 + fit_both_running)
+    nN = (36*fit_sc + 5*fit_fg + 5*fit_ret)*(1 + fit_both_running)
     nS = 2
     nP = 2 + fit_both_running
-    nT = 2
+    #nT = 2
     nQ = 4
 
     ndims = 5
@@ -1186,7 +1218,7 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
                 x = Rso_mean[icelltype][iS][iT][:,np.newaxis]/mx[icelltype]
                 if fit_both_running:
                     run_vector = np.zeros_like(x)
-                    if fit_both_stims:
+                    if fit_all_stims:
                         run_vector[int(np.round(nsc/2)):nsc] = 1
                         run_vector[-int(np.round(nfg/2)):] = 1
                     else:
