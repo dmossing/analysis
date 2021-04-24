@@ -366,6 +366,7 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
 
                 #ctr = this_session['retinotopy_0']['ctr'][:] # center of retinotopic mapping stimuli
                 stim_offset = proc[key]['position'][:]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN
+                #stim_offset = proc[key]['position'][:][::-1]# - ctr # center of size contrast stimuli e.g. w/r/t retino center -- NOW WRT CENTER OF SCREEN; NOW IN Y,X ORDER, 21/4/22
 
                 pval_ret = this_session['retinotopy_0']['rf_mapping_pval'][:]
 
@@ -400,11 +401,12 @@ def add_data_struct_h5(filename, cell_type='PyrL23', keylist=None, frame_rate_di
             #    this_expt['rf_displacement_deg'] = rf_displacement_deg
             #    this_expt['rf_ctr'] = rf_ctr
             #    this_expt['stim_offset_deg'] = stim_offset
-            this_expt['rf_mapping_pval'] = pval_ret[:]
-            this_expt['rf_distance_deg'] = rf_distance_deg
-            this_expt['rf_displacement_deg'] = rf_displacement_deg
-            this_expt['rf_ctr'] = rf_ctr
-            this_expt['stim_offset_deg'] = stim_offset
+            if 'retinotopy_0' in this_session or 'ret_vars' in proc[key]:
+                this_expt['rf_mapping_pval'] = pval_ret[:]
+                this_expt['rf_distance_deg'] = rf_distance_deg
+                this_expt['rf_displacement_deg'] = rf_displacement_deg
+                this_expt['rf_ctr'] = rf_ctr
+                this_expt['stim_offset_deg'] = stim_offset
 
             this_expt.create_dataset('running_speed_cm_s',data=running_speed_cm_s)
             this_expt.create_dataset('F',data=dfof)

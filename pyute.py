@@ -1885,7 +1885,7 @@ def erase_top_right():
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
 
-def compute_osi(arr,ori):
+def compute_osi(arr,ori=np.arange(0,360,45)):
     # ori axis must be second to last
     trialno = ori.shape[0]
     th = np.deg2rad(np.mod(ori,180))

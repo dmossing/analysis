@@ -108,6 +108,16 @@ def compute_tuning_tavg_with_sem(dsfile,datafield='decon',running=True,expttype=
                     sigma = session['retinotopy_0']['rf_sigma'][:]
                     X = session['cell_center'][:]
                     y = sc0['rf_displacement_deg'][:].T
+                    if expttype=='retinotopy_0': 
+                        print('now subtracting center of rg for retinotopy expts')
+                        if 'size_contrast_0' in session:
+                            y = y - session['size_contrast_0']['stim_offset_deg'][:]
+                        elif 'figure_ground_0' in session:
+                            y = y - session['figure_ground_0']['stim_offset_deg'][:]
+                        else:
+                            xmean = sc0['stimulus_location_x_deg'][:].mean()
+                            ymean = sc0['stimulus_location_y_deg'][:].mean()
+                            y = y - np.array((ymean,xmean))[np.newaxis,:]
                     rf_conditions = [ut.k_and(~np.isnan(X[:,0]),~np.isnan(y[:,0])),sqerror<0.75,sigma>3.3,pval[ikey]<0.1]
                     lkat = np.ones((X.shape[0],),dtype='bool')
                     for cond in rf_conditions:
@@ -379,7 +389,7 @@ def gen_rs_modal_uparam_expt(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0
         roi_ids.append(this_roi_ids)
     return rs,expt_ids,roi_ids
 
-def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon'):
+def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon',use_uparam=True):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -391,6 +401,8 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
     tunings,tunings_sem,uparams,displacements,pvals = compute_tunings_tavg_with_sem(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
+    
+    #return tunings,tunings_sem,uparams,displacements,pvals # adding temporarily for diagnostics
     
     rs = []
     rs_sem = []
@@ -407,12 +419,6 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
             sel = selection[icelltype]
         else:
             sel = np.arange(len(these_tunings))
-        #these_uparams = [these_uparams[i] for i in sel if not these_tunings[i] is None]
-        #these_displacements = [these_displacements[i].T for i in sel if not these_tunings[i] is None]
-        #these_pvals = [these_pvals[i] for i in sel if not these_tunings[i] is None]
-        #these_tunings_sem = [these_tunings_sem[i] for i in sel if not these_tunings[i] is None]
-        #these_expt_ids = [i for i in sel if not these_tunings[i] is None]
-        #these_tunings = [these_tunings[i] for i in sel if not these_tunings[i] is None]
         these_displacements = [transpose_(td) for td in these_displacements]
         these_expt_ids = np.arange(nexpt)
         nexpt = len(these_tunings)
@@ -430,15 +436,22 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
                 ra = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
                 ra_sem = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
                 expt_ida = [np.ones((nroi,))*these_expt_ids[iexpt] for iexpt,nroi in enumerate(nrois)]
-                #roi_ida = [np.where(cc)[0] for cc in criterion]
                 roi_ida = [np.where(cc)[0] for cc in criterion if not cc is None]
                 for iexpt in range(nexpt):
                     if not these_tunings[iexpt] is None and iexpt in sel:
-                        assign_from_uparam(ra[iexpt],modal_uparam,these_tunings[iexpt][criterion[iexpt]],these_uparams[iexpt])
-                        assign_from_uparam(ra_sem[iexpt],modal_uparam,these_tunings_sem[iexpt][criterion[iexpt]],these_uparams[iexpt])
-                        #ra[iexpt] = average_up(ra[iexpt],average_ori=average_ori)
-                        #ra_sem[iexpt] = np.sqrt(average_up(ra_sem[iexpt]**2,average_ori=average_ori))
-                #ra = np.concatenate([np.nanmean(rra,0)[np.newaxis] for rra in ra],axis=0)
+                        if use_uparam:
+                            assign_from_uparam(ra[iexpt],modal_uparam,these_tunings[iexpt][criterion[iexpt]],these_uparams[iexpt])
+                            assign_from_uparam(ra_sem[iexpt],modal_uparam,these_tunings_sem[iexpt][criterion[iexpt]],these_uparams[iexpt])
+                        else:
+                            if np.all(np.array([mu.size==tu.size for mu,tu in zip(modal_uparam,these_uparams[iexpt])])):
+                                ra[iexpt] = these_tunings[iexpt][criterion[iexpt]]
+                                ra_sem[iexpt] = these_tunings_sem[iexpt][criterion[iexpt]]
+                            #else:
+                            #    ra[iexpt] = np.zeros((0,)+tuple(nparam))
+                            #    ra_sem[iexpt] = np.zeros((0,)+tuple(nparam))
+                            #    expt_ida[iexpt] = np.zeros((0,))
+                            #    roi_ida[iexpt] = np.zeros((0,))
+                #assert(True==False)
                 ra = np.concatenate(ra,axis=0)
                 ra_sem = np.concatenate(ra_sem,axis=0)
                 expt_ida = np.concatenate(expt_ida,axis=0)
@@ -1345,7 +1358,7 @@ def merge_expt_ids(*expt_idses):
     in_each = np.zeros((Nneurons,nei),dtype='bool')
     for u in uall:
         roinos = [np.sum(ei==u) for ei in expt_idses]
-        #print(roinos)
+        print(roinos)
         this_Nneurons = np.amax(roinos)
         Nneurons = Nneurons + this_Nneurons
         this_in_each = np.zeros((this_Nneurons,nei),dtype='bool')

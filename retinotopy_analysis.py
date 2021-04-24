@@ -534,7 +534,8 @@ def save_rf_center_info(dsname,keylist):
     for i in range(len(tuning)):
         paramdict.append(None)
         if not tuning[i] is None:
-            paramdict[i] = ut.fit_2d_gaussian(uparam[i],np.nanmean(tuning[i][:,:,:,nbefore:-nafter],-1))
+            #paramdict[i] = ut.fit_2d_gaussian(uparam[i],np.nanmean(tuning[i][:,:,:,nbefore:-nafter],-1))
+            paramdict[i] = ut.fit_2d_gaussian(uparam[i][::-1],np.nanmean(tuning[i][:,:,:,nbefore:-nafter],-1))
             
     rf_ctr = []
     for iexpt in range(len(roi_ctr)):
@@ -566,14 +567,16 @@ def compute_ret_vars_proc(proc):
 
     if not tuning is None:
         #paramdict = ut.fit_2d_gaussian(uparam,np.nanmean(tuning[:,:,:,nbefore:-nafter],-1))
-        paramdict = ut.fit_2d_gaussian_before_after(uparam,tuning,nbefore=nbefore,nafter=nafter)
+        #paramdict = ut.fit_2d_gaussian_before_after(uparam,tuning,nbefore=nbefore,nafter=nafter)
+        paramdict = ut.fit_2d_gaussian_before_after(uparam[::-1],tuning,nbefore=nbefore,nafter=nafter) # 21/4/22, making sure x coordinate is first
         
     running = np.nanmean(proc['trialrun'],-1)>7*4*np.pi/180
     paramdict_run = {}
     paramdict_nonrun = {}
     for criteria,pd in zip([running,~running],[paramdict_run,paramdict_nonrun]):
         tuning = ut.compute_tuning(strialwise,stim_id,cell_criteria=None,trial_criteria=criteria)
-        pd = ut.fit_2d_gaussian_before_after(uparam,tuning,nbefore=nbefore,nafter=nafter)
+        #pd = ut.fit_2d_gaussian_before_after(uparam,tuning,nbefore=nbefore,nafter=nafter)
+        pd = ut.fit_2d_gaussian_before_after(uparam[::-1],tuning,nbefore=nbefore,nafter=nafter) # 21/4/22, making sure x coordinate is first
 
     pval_ret = np.zeros(strialwise.shape[0])
     for i in range(strialwise.shape[0]):
