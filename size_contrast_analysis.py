@@ -1022,3 +1022,37 @@ def plot_size_contrast_ori(arr):
             plt.plot(np.arange(nangle+1),symmetrize(arr[i,j]))
             plt.ylim(arr.min(),1.1*arr.max())
             plt.axis('off')
+
+def compute_diff_avg(zdata,axis=0):
+    zdata_diff = np.diff(zdata,axis=axis)
+    zdata_diff_avg = np.zeros_like(zdata)
+    slicer = [slice(None) for idim in range(len(zdata.shape))]
+    for axind in [0,-1]:
+        slicer[axis] = axind
+        zdata_diff_avg[slicer] = zdata_diff[slicer]
+    slicer1 = slicer.copy()
+    slicer1[axis] = slice(1,-1)
+    slicer2 = slicer.copy()
+    slicer2[axis] = slice(None,-1)
+    slicer3 = slicer.copy()
+    slicer3[axis] = slice(1,None)
+    zdata_diff_avg[slicer1] = 0.5*zdata_diff[slicer2]+0.5*zdata_diff[slicer3]
+    return zdata_diff_avg
+
+def compute_slope_avg(tdata,zdata,axis=0):
+    slicer = [np.newaxis for idim in range(len(zdata.shape))]
+    slicer[axis] = slice(None)
+    zdata_slope = np.diff(zdata,axis=axis)/np.diff(tdata)[slicer]
+    zdata_slope_avg = np.zeros_like(zdata)
+    slicer = [slice(None) for idim in range(len(zdata.shape))]
+    for axind in [0,-1]:
+        slicer[axis] = axind
+        zdata_slope_avg[slicer] = zdata_slope[slicer]
+    slicer1 = slicer.copy()
+    slicer1[axis] = slice(1,-1)
+    slicer2 = slicer.copy()
+    slicer2[axis] = slice(None,-1)
+    slicer3 = slicer.copy()
+    slicer3[axis] = slice(1,None)
+    zdata_slope_avg[slicer1] = 0.5*zdata_slope[slicer2]+0.5*zdata_slope[slicer3]
+    return zdata_slope_avg

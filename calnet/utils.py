@@ -68,7 +68,7 @@ def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast
                     displacement[ikey][~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
     return tuning,uparam,displacement,pval
 
-def compute_tuning_tavg_with_sem(dsfile,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
+def compute_tuning_tavg_with_sem(dsfile,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4,ret_map_distance=True):
     # take in an HDF5 data struct, and convert to an n-dimensional matrix
     # describing the tuning curve of each neuron. For size-contrast stimuli, 
     # the dimensions of this matrix are ROI index x size x contrast x direction x time. 
@@ -114,19 +114,24 @@ def compute_tuning_tavg_with_sem(dsfile,datafield='decon',running=True,expttype=
                             y = y - session['size_contrast_0']['stim_offset_deg'][:]
                         elif 'figure_ground_0' in session:
                             y = y - session['figure_ground_0']['stim_offset_deg'][:]
+                        #if False:
+                        #    print('wat')
                         else:
                             xmean = sc0['stimulus_location_x_deg'][:].mean()
                             ymean = sc0['stimulus_location_y_deg'][:].mean()
                             y = y - np.array((xmean,ymean))[np.newaxis,:]
-                    rf_conditions = [ut.k_and(~np.isnan(X[:,0]),~np.isnan(y[:,0])),sqerror<0.75,sigma>3.3,pval[ikey]<0.1]
-                    lkat = np.ones((X.shape[0],),dtype='bool')
-                    for cond in rf_conditions:
-                        lkat_new = (lkat & cond)
-                        if lkat_new.sum()>=5:
-                            lkat = lkat_new.copy()
-                    linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
-                    displacement[ikey] = np.zeros_like(y)
-                    displacement[ikey][~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
+                    if ret_map_distance:
+                        rf_conditions = [ut.k_and(~np.isnan(X[:,0]),~np.isnan(y[:,0])),sqerror<0.75,sigma>3.3,pval[ikey]<0.1]
+                        lkat = np.ones((X.shape[0],),dtype='bool')
+                        for cond in rf_conditions:
+                            lkat_new = (lkat & cond)
+                            if lkat_new.sum()>=5:
+                                lkat = lkat_new.copy()
+                        linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
+                        displacement[ikey] = np.nan*np.ones_like(y)
+                        displacement[ikey][~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])
+                    else:
+                        displacement[ikey] = y # temporary: replacing retinotopy inferred from physical location with rf center
     return tuning,tuning_sem,uparam,displacement,pval
 
 def compute_tunings(dsnames,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
@@ -144,7 +149,7 @@ def compute_tunings(dsnames,datafield='decon',running=True,expttype='size_contra
         pvals.append(this_pval)
     return tunings,uparams,displacements,pvals
 
-def compute_tunings_tavg_with_sem(dsnames,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
+def compute_tunings_tavg_with_sem(dsnames,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4,ret_map_distance=True):
     # compute tuning as above, for each of a list of HDF5 files each corresponding to a particular cell type
     tunings = []
     tunings_sem = []
@@ -153,7 +158,7 @@ def compute_tunings_tavg_with_sem(dsnames,datafield='decon',running=True,expttyp
     pvals = []
     for dsname in dsnames:
         print(dsname)
-        this_tuning,this_tuning_sem,this_uparam,this_displacement,this_pval = compute_tuning_tavg_with_sem(dsname,datafield=datafield,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff)
+        this_tuning,this_tuning_sem,this_uparam,this_displacement,this_pval = compute_tuning_tavg_with_sem(dsname,datafield=datafield,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,ret_map_distance=ret_map_distance)
         tunings.append(this_tuning)
         tunings_sem.append(this_tuning)
         uparams.append(this_uparam)
@@ -389,7 +394,7 @@ def gen_rs_modal_uparam_expt(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0
         roi_ids.append(this_roi_ids)
     return rs,expt_ids,roi_ids
 
-def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon',use_uparam=True):
+def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',average_ori=True,run_cutoff=10,running_pct_cutoff=0.4,datafield='decon',use_uparam=True,ret_map_distance=True):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -400,7 +405,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,tunings_sem,uparams,displacements,pvals = compute_tunings_tavg_with_sem(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield)
+    tunings,tunings_sem,uparams,displacements,pvals = compute_tunings_tavg_with_sem(dsnames,running=running,expttype=expttype,run_cutoff=run_cutoff,running_pct_cutoff=running_pct_cutoff,datafield=datafield,ret_map_distance=ret_map_distance)
     
     #return tunings,tunings_sem,uparams,displacements,pvals # adding temporarily for diagnostics
     
@@ -408,6 +413,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
     rs_sem = []
     expt_ids = []
     roi_ids = []
+    disps = []
     for icelltype in range(len(tunings)):
         these_tunings = tunings[icelltype]
         these_tunings_sem = tunings_sem[icelltype]
@@ -430,6 +436,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
             this_rs_sem = []
             this_expt_ids = []
             this_roi_ids = []
+            this_disps = []
             for icriterion,criterion in enumerate([aligned,misaligned]):
                 #nrois = [get_nroi(tt[cc]) for tt,cc in zip(these_tunings,criterion)]
                 nrois = [get_nroi_(tt,cc,iexpt in sel) for iexpt,(tt,cc) in enumerate(zip(these_tunings,criterion))]
@@ -437,6 +444,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
                 ra_sem = [np.nan*np.ones((nroi,)+tuple(nparam)) for nroi in nrois]
                 expt_ida = [np.ones((nroi,))*these_expt_ids[iexpt] for iexpt,nroi in enumerate(nrois)]
                 roi_ida = [np.where(cc)[0] for cc in criterion if not cc is None]
+                dispa = [np.nan*np.ones((nroi,2)) for nroi in nrois]
                 for iexpt in range(nexpt):
                     if not these_tunings[iexpt] is None and iexpt in sel:
                         if use_uparam:
@@ -446,6 +454,7 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
                             if np.all(np.array([mu.size==tu.size for mu,tu in zip(modal_uparam,these_uparams[iexpt])])):
                                 ra[iexpt] = these_tunings[iexpt][criterion[iexpt]]
                                 ra_sem[iexpt] = these_tunings_sem[iexpt][criterion[iexpt]]
+                        dispa[iexpt] = these_displacements[iexpt].T[criterion[iexpt]]
                             #else:
                             #    ra[iexpt] = np.zeros((0,)+tuple(nparam))
                             #    ra_sem[iexpt] = np.zeros((0,)+tuple(nparam))
@@ -456,20 +465,24 @@ def gen_rs_modal_uparam_expt_with_sem(dsnames=None,selection=None,dcutoff=5,pval
                 ra_sem = np.concatenate(ra_sem,axis=0)
                 expt_ida = np.concatenate(expt_ida,axis=0)
                 roi_ida = np.concatenate(roi_ida,axis=0)
+                dispa = np.concatenate(dispa,axis=0)
                 this_rs.append(ra)
                 this_rs_sem.append(ra_sem)
                 this_expt_ids.append(expt_ida)
                 this_roi_ids.append(roi_ida)
+                this_disps.append(dispa)
         else:
             this_rs = [None for icriterion in range(2)]
             this_rs_sem = [None for icriterion in range(2)]
             this_expt_ids = [None for icriterion in range(2)]
             this_roi_ids = [None for icriterion in range(2)]
+            this_disps = [None for icriterion in range(2)]
         rs.append(this_rs)
         rs_sem.append(this_rs_sem)
         expt_ids.append(this_expt_ids)
         roi_ids.append(this_roi_ids)
-    return rs,rs_sem,expt_ids,roi_ids
+        disps.append(this_disps)
+    return rs,rs_sem,expt_ids,roi_ids,disps
 
 def transpose_(arr):
     if arr is None:
