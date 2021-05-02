@@ -1898,11 +1898,11 @@ def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light o
     nx = data.shape[1]
     for ilight in range(nx):
         plt.bar((ilight,),np.nanmean(data,0)[ilight],color=colors[ilight],alpha=0.5)
-        if errorstyle is 'sem':
+        if errorstyle=='sem':
             plt.errorbar(np.arange(nx),np.nanmean(data,0),np.nanstd(data,0)/np.sqrt(np.sum(~np.isnan(data),0)),fmt='none',c='k') 
-        elif errorstyle is 'std':
+        elif errorstyle=='std':
             plt.errorbar(np.arange(nx),np.nanmean(data,0),np.nanstd(data,0),fmt='none',c='k')
-        elif errorstyle is 'pct':
+        elif errorstyle=='pct':
             lb,ub = [np.nanpercentile(data,p,axis=0) for p in pct]
             mn = np.nanmean(data,0)
             yerr = np.concatenate(((mn-lb)[np.newaxis],(ub-mn)[np.newaxis]),axis=0)

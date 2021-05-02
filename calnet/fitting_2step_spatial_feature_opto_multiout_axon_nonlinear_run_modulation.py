@@ -440,17 +440,21 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         Xiterm = compute_sq_error(Xi,u1 + u3,wtStim*wtCell) # magnitude of fudge factor in input variability
         # returns value float
         #Optoterm = compute_opto_error_nonlinear(W) #testing out 8/20/20
-        opto_wt = np.concatenate([wtStimOpto*wtCellOpto*w for w in wtDirOpto],axis=0)
-        if use_opto_transforms:
-            dYYterm = compute_opto_error_nonlinear_transform(amp*fval+bltile,amp*fval12+bltile,opto_wt)
-        else:
-            dYYterm = compute_opto_error_nonlinear(amp*fval+bltile,amp*fval12+bltile,opto_wt)
+        
+        #opto_wt = np.concatenate([wtStimOpto*wtCellOpto*w for w in wtDirOpto],axis=0)
+        #if use_opto_transforms:
+        #    dYYterm = compute_opto_error_nonlinear_transform(amp*fval+bltile,amp*fval12+bltile,opto_wt)
+        #else:
+        #    dYYterm = compute_opto_error_nonlinear(amp*fval+bltile,amp*fval12+bltile,opto_wt)
+        Optoterm = 0# wtdYY*dYYterm
+
         if wtSMI != 0:
             SMIhaloterm,SMIchrimsonterm = compute_smi_error(fval,fval12,halo_frac=1-wtSMIchrimson)
         else:
             SMIhaloterm,SMIchrimsonterm = 0,0
-        Optoterm = 0# wtdYY*dYYterm
+
         cost = wtX*Xterm + wtY*Yterm + wtEta*Etaterm + wtXi*Xiterm + wtOpto*Optoterm + wtSMI*SMIhaloterm + wtSMI*SMIchrimsonterm# + wtEtaTV*EtaTVterm 
+
         if constrain_isn:
             ISNterm = compute_isn_error(W1,W2)
             cost = cost + wtISN*ISNterm
@@ -472,7 +476,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             print('Y:%f'%(wtY*Yterm.astype('float')))
             print('Eta:%f'%(wtEta*Etaterm))
             print('Xi:%f'%(wtXi*Xiterm))
-            print('Opto dYY:%f'%(wtOpto*wtdYY*dYYterm))
+            #print('Opto dYY:%f'%(wtOpto*wtdYY*dYYterm))
             #print('Opto Eta:%f'%(wtOpto*wtEta12*Eta12term))
             #print('TV:%f'%(wtEtaTV*EtaTVterm))
             print('TV:%f'%(wtTV*TVterm))
