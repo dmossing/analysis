@@ -682,6 +682,18 @@ def fprime_s_miller_troyer(mu,s2):
     A = 1/np.sqrt(2*np.pi)*np.exp(-u**2)# *np.sign(s) is implicit, as s is understood to be positive
     return A
 
+def f_identity(mu,s2):
+    return mu
+
+def fprime_identity(mu,s2):
+    return fprime_m_identity(mu,s2)
+
+def fprime_m_identity(mu,s2):
+    return np.ones(mu.shape)
+
+def fprime_s_identity(mu,s2):
+    return np.zeros(mu.shape)
+
 def fit_w(X,y,rate_fn,wm0=None,ws0=None,bounds=None):
     # X is (N,P), y is (N,). Finds w: (P,) weight matrix to explain y as y = f(X(wm),X(ws))
     # f is a static nonlinearity, given as a function of mean and std. of noise
@@ -714,6 +726,10 @@ def u_fn(X,Wx,Y,Wy,k):
 def evaluate_f_mt(X,Ws,offset,k):
     # Ws: Wx,Wy,s02,Y
     return f_miller_troyer(u_fn(X,Ws[0],Ws[3],Ws[1],k)+offset,Ws[2])
+
+def evaluate_f_identity(X,Ws,offset,k):
+    # Ws: Wx,Wy,s02,Y
+    return f_identity(u_fn(X,Ws[0],Ws[3],Ws[1],k)+offset,Ws[2])
 
 def fit_w_data_loss(X,ydata,rate_fn,wm0=None,ws0=None,s020=None,k0=None,bounds=None,niter=int(1e4)):
     # X is (N,P), y is (N,). Finds w: (P,) weight matrix to explain y as y = f(X(wm),X(ws))

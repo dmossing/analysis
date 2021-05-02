@@ -129,6 +129,10 @@ def compute_W_lsq(EtaXi,XXhat,YYhat,nP=2,nQ=4,freeze_vals=None,lam=0):
     resEtaXi = resEtaXi - Ymatrix_pred
     return Wx,Wy,resEtaXi
 
+def compute_res(EtaXi,XXhat,YYhat,Wx,Wy):
+    resEtaXi = EtaXi - XXhat @ Wx - YYhat @ Wy
+    return resEtaXi
+
 def pinv_tik(X,lam=0):
     #print('XTX: '+str(X.T @ X))
     if lam==0:
@@ -183,7 +187,7 @@ def norm_to_W0(W1,W0):
     W1[to_norm] = W1[to_norm]/W0[to_norm]
     return W1
 
-def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _ in range(4)],lams=np.zeros((8,)),foldT=True,nondim=False):
+def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _ in range(4)],lams=np.zeros((8,)),foldT=True,nondim=False,axon=True,Eta0=None,Xi0=None):
     nP = Xhat[0][0].shape[1]
     nQ = Yhat[0][0].shape[1]
     nN = Yhat[0][0].shape[0]
@@ -195,8 +199,10 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
     XXphat = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=0,foldT=foldT)
     YYphat = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=0,foldT=foldT)
 
-    Eta0 = invert_f_mt(YYhat)
-    Xi0 = invert_fprime_mt(Ypc_list,Eta0,nN=nN,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
+    if Eta0 is None:
+        Eta0 = invert_f_mt(YYhat)
+    if Xi0 is None:
+        Xi0 = invert_fprime_mt(Ypc_list,Eta0,nN=nN,nQ=nQ,nS=nS,nT=nT,foldT=foldT)
 
     sameSs = [True,False,True]
     sameTs = [True,True,False]
@@ -211,16 +217,19 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
         for isame,(sameS,sameT) in enumerate(zip(sameSs,sameTs)):
             XYs[idata][isame] = pixelwise_flatten(datas[idata],nN=nN,nPQ=nPQs[idata],nS=nS,nT=nT,sameS=sameS,sameT=sameT)
     # XYs: [XXhat,YYhat,XXphat,YYphat], each flattened into a list of: [original values, swapped S, swapped T]
-    thisEta0 = XYs[4][0]
-    thisXi0 = XYs[5][0]
-
+    resEta0 = XYs[4][0]
+    resXi0 = XYs[5][0]
 
     # derivations in ipad notes from 21/4/1
     idata1,idata2 = 0,1 # X,Y
     idiff1,idiff2 = 0,0 # same,same
-    W0x,W0y,resEta0 = compute_W_lsq(thisEta0,XYs[idata1][idiff1],XYs[idata2][idiff2],nP=nP,nQ=nQ,freeze_vals=freeze_vals[0],lam=lams[0])
+    W0x,W0y,resEta0 = compute_W_lsq(resEta0,XYs[idata1][idiff1],XYs[idata2][idiff2],nP=nP,nQ=nQ,freeze_vals=freeze_vals[0],lam=lams[0])
     idiff1,idiff2 = 1,1 # diffS,diffS
     Kin0,resEta0 = compute_KT_lsq(resEta0,XYs[idata1][idiff1],XYs[idata2][idiff2],W0x,W0y,nP=nP,nQ=nQ,lam=lams[4])
+    idiff1,idiff2 = 2,2 # diffT,diffT
+    Tin0,resEta0 = compute_KT_lsq(resEta0,XYs[idata1][idiff1],XYs[idata2][idiff2],W0x,W0y,nP=nP,nQ=nQ,lam=lams[6])
+
+    idiff1,idiff2 = 1,1 # diffS,diffS
     Kxout0,resEta0 = compute_KTout_lsq(resEta0,XYs[idata1][idiff1],W0x*Kin0[np.newaxis,:],itypemax=0)
     Kxout0 = 1 + Kxout0
     Kyout0,resEta0 = compute_KTout_lsq(resEta0,XYs[idata2][idiff2],W0y*Kin0[np.newaxis,:])
@@ -234,7 +243,7 @@ def initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1,freeze_vals=[None for _
 
     idata1,idata2 = 0,1 # X,Y
     idiff1,idiff2 = 0,0 # same,same
-    W1x,W1y,resXi0 = compute_W_lsq(thisXi0,XYs[idata1][idiff1],XYs[idata2][idiff2],nP=nP,nQ=nQ,freeze_vals=freeze_vals[1],lam=lams[1])
+    W1x,W1y,resXi0 = compute_W_lsq(resXi0,XYs[idata1][idiff1],XYs[idata2][idiff2],nP=nP,nQ=nQ,freeze_vals=freeze_vals[1],lam=lams[1])
     idiff1,idiff2 = 1,1 # diffS,diffS
     Kin1,resXi0 = compute_KT_lsq(resXi0,XYs[idata1][idiff1],XYs[idata2][idiff2],W0x*Kxout0[:,np.newaxis],W0y*Kyout0[:,np.newaxis],nP=nP,nQ=nQ,lam=lams[5])
     idiff1,idiff2 = 2,2 # diffT,diffT
@@ -584,6 +593,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_ret_pval_0_05_21042
         Xp_bounds = tile_nS_nT_nN(np.array([3,0,0])) # edited to set XXp to 0 for spont. term
     else:
         Xp_bounds = tile_nS_nT_nN(np.array([3,0])) # edited to set XXp to 0 for spont. term
+    if not multiout:
+        Xp_bounds = Xp_bounds*0
     # Xp_bounds = np.array([np.array([3,1,3,1])]*nN)
     
     # Y_bounds = tile_nS_nT_nN(2*np.ones((nQ,)))
@@ -729,7 +740,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_ret_pval_0_05_21042
     #reload(calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear)
     #reload(sim_utils)
     wt_dict = {}
-    wt_dict['X'] = 1
+    wt_dict['X'] = 3
     wt_dict['Y'] = 3
     wt_dict['Eta'] = 3# 10
     wt_dict['Xi'] = 3
@@ -738,7 +749,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_ret_pval_0_05_21042
     wt_dict['opto'] = 0#1e0#1e-1#1e1
     wt_dict['smi'] = 0
     wt_dict['isn'] = 0.1
-    wt_dict['tv'] = 1
+    wt_dict['tv'] = 0.1
 
 
     YYhat = calnet.utils.flatten_nested_list_of_2d_arrays(Yhat)
@@ -791,20 +802,20 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_ret_pval_0_05_21042
             W20list[3] = Xi0 #Xi
             #print(XXhat.shape)
             isn_init = np.array(((3,5),(-5,-5)))
+            nvar,nxy = 4,2
+            freeze_vals = [[None for _ in range(nxy)] for _ in range(nvar)]
+            for ivar in range(nvar):
+                for ixy in range(nxy):
+                    iflat = np.ravel_multi_index((ivar,ixy),(nvar,nxy))
+                    freeze_vals[ivar][ixy] = np.zeros(bd1list[iflat].shape)
+                    freeze_vals[ivar][ixy][bd1list[iflat]==0] = np.nan
             if init_W_from_lsq:
                 # shapes1
                 #0.W0x,1.W0y,2.W1x,3.W1y,4.W2x,5.W2y,6.W3x,7.W3y,8.s02,9.Kin0,10.Kin1,11.Kout0,12.Kout1,13.kappa,14.Tin0,15.Tin1,16.Txout0,Tyout0,17.Txout1,Tyout1,18.h1,19.h2,20.bl,21.amp
                 # shapes2
                 #0.XX,1.XXp,2.Eta,3.Xi
                 #W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,Kin0,Kin1,Tin0,Tin1 = initialize_Ws(Xhat,Yhat,Xpc_list,Ypc_list,scale_by=1)
-                nvar,nxy = 4,2
-                freeze_vals = [[None for _ in range(nxy)] for _ in range(nvar)]
                 lams = 1e5*np.array((0,1,1,1,0,1,0,1))
-                for ivar in range(nvar):
-                    for ixy in range(nxy):
-                        iflat = np.ravel_multi_index((ivar,ixy),(nvar,nxy))
-                        freeze_vals[ivar][ixy] = np.zeros(bd1list[iflat].shape)
-                        freeze_vals[ivar][ixy][bd1list[iflat]==0] = np.nan
                 if constrain_isn:
                     freeze_vals[0][1][slice(0,None,3)][:,slice(0,None,3)] = isn_init
                 #Wlist = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1]
@@ -826,51 +837,53 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_sc_fg_ret_pval_0_05_21042
                     #W10list[1][0,3] = 5 
                     #W10list[1][3,0] = -5
                     #W10list[1][3,3] = -5
-            np.save('/home/dan/calnet_data/W0list.npy',{'W10list':W10list,'W20list':W20list,'bd1list':bd1list,'bd2list':bd2list,'freeze_vals':freeze_vals,'bounds1':bounds1,'bounds2':bounds2},allow_pickle=True)
 
             if init_W_from_file:
                 # did not adjust this yet
+                #Wstar_dict['as_list'] = [W0x,W0y,W1x,W1y,W2x,W2y,W3x,W3y,W0xrun,W0yrun,s02,Kin0,Kin1,Kxout0,Kyout0,Kxout1,Kyout1,kappa,Tin0,Tin1,Txout0,Tyout0,Txout1,Tyout1,XX,XXp,Eta,Xi,h1,h2,bl,amp]#,h2
                 npyfile = np.load(init_file,allow_pickle=True)[()]
                 print(len(npyfile['as_list']))
                 print([w.shape for w in npyfile['as_list']])
-                W10list = [npyfile['as_list'][ivar] for ivar in [0,1,2,3,4,5,6,7,12]]
-                W20list = [npyfile['as_list'][ivar] for ivar in [8,9,10,11]]
+                W10list = [npyfile['as_list'][ivar] for ivar in list(np.arange(24))+[28,29,30,31]]
+                W20list = [npyfile['as_list'][ivar] for ivar in [24,25,26,27]]
                 if correct_Eta:
                     #assert(True==False)
                     W20list[2] = Eta0.copy()
-                if len(W10list) < len(shapes1):
-                    #assert(True==False)
-                    W10list = W10list + [np.array(1),np.zeros((nQ,)),np.zeros((nT*nS*nQ,))] # add bl, amp #np.array(1), #h2, 
+                #if len(W10list) < len(shapes1):
+                #    #assert(True==False)
+                #    W10list = W10list + [np.array(1),np.zeros((nQ,)),np.zeros((nT*nS*nQ,))] # add bl, amp #np.array(1), #h2, 
                 #W10 = unparse_W(W10list)
                 #W20 = unparse_W(W20list)
-                opt = fmc.gen_opt()
+                opt = fmc.gen_opt_axon(nN=nN,nP=nP,nQ=nQ,nS=nS,nT=nT,foldT=foldT,nondim=nondim,run_modulation=run_modulation)
+                #opt = fmc.gen_opt()
                 #resEta0,resXi0 = fmc.compute_res(W10,W20,opt)
-                if init_W1xy_with_res:
-                    W1x0,W1y0,Kin10,Tin10 = optimize_W1xy(W10list,W20list,opt)
-                    W0list[2] = W1x0
-                    W0list[3] = W1y0
-                    W0list[10] = Kin10
-                    W0list[15] = Tin10
-                if init_W2xy_with_res:
-                    W2x0,W2y0 = optimize_W2xy(W10list,W20list,opt)
-                    W0list[4] = W2x0
-                    W0list[5] = W2y0
+                #if init_W1xy_with_res:
+                #    W1x0,W1y0,Kin10,Tin10 = optimize_W1xy(W10list,W20list,opt)
+                #    W0list[2] = W1x0
+                #    W0list[3] = W1y0
+                #    W0list[10] = Kin10
+                #    W0list[15] = Tin10
+                #if init_W2xy_with_res:
+                #    W2x0,W2y0 = optimize_W2xy(W10list,W20list,opt)
+                #    W0list[4] = W2x0
+                #    W0list[5] = W2y0
                 if init_Eta_with_s02:
                     #assert(True==False)
                     s02 = W10list[4].copy()
                     Eta0 = invert_f_mt_with_s02(YYhat,s02,nS=nS,nT=nT)
                     W20list[2] = Eta0.copy()
-                for ivar in [0,1,4,5]: # Wmx, Wmy, s02, k
-                    print(init_noise)
+                for ivar in range(len(W10list)):#[0,1,4,5]: # Wmx, Wmy, s02, k
+                    #print(init_noise)
                     W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
                 #W0list = npyfile['as_list']
+            np.save('/home/dan/calnet_data/W0list.npy',{'W10list':W10list,'W20list':W20list,'bd1list':bd1list,'bd2list':bd2list,'freeze_vals':freeze_vals,'bounds1':bounds1,'bounds2':bounds2},allow_pickle=True)
 
-                extra_Ws = [np.zeros_like(W10list[ivar]) for ivar in range(2)]
-                extra_ks = [np.zeros_like(W10list[5]) for ivar in range(3)]
-                extra_Ts = [np.zeros_like(W10list[7]) for ivar in range(3)]
-                W10list = W10list[:4] + extra_Ws*2 + W10list[4:6] + extra_ks + W10list[6:8] + extra_Ts + W10list[8:]
+                #extra_Ws = [np.zeros_like(W10list[ivar]) for ivar in range(2)]
+                #extra_ks = [np.zeros_like(W10list[5]) for ivar in range(3)]
+                #extra_Ts = [np.zeros_like(W10list[7]) for ivar in range(3)]
+                #W10list = W10list[:4] + extra_Ws*2 + W10list[4:6] + extra_ks + W10list[6:8] + extra_Ts + W10list[8:]
 
-            print(len(W10list))
+            #print(len(W10list))
             W1t[ihyper][itry],W2t[ihyper][itry],loss[ihyper][itry],gr,hess,result = calnet.fitting_2step_spatial_feature_opto_multiout_axon_nonlinear_run_modulation.fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,pop_rate_fn=sim_utils.f_miller_troyer,pop_deriv_fn=sim_utils.fprime_miller_troyer,neuron_rate_fn=sim_utils.evaluate_f_mt,W10list=W10list.copy(),W20list=W20list.copy(),bounds1=bounds1,bounds2=bounds2,niter=niter,wt_dict=wt_dict,l2_penalty=l2_penalty,l1_penalty=l1_penalty,compute_hessian=False,dt=dt,perturbation_size=perturbation_size,dYY=dYY,constrain_isn=constrain_isn,tv=tv,foldT=foldT,use_opto_transforms=use_opto_transforms,opto_transform1=opto_transform1,opto_transform2=opto_transform2,nondim=nondim,run_modulation=run_modulation)
     
     #def parse_W(W):

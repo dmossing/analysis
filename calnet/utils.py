@@ -846,8 +846,7 @@ def gen_Weight_k_kappa(W,K,kappa):
     return WW
 
 def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2,power=True):
-    MuT = np.array((1,1))
-    MuK = np.array((1,kappa))
+    MuT,MuK = gen_Mu(kappa=kappa,nT=nT)
     if power:
         WT = circulate(W,T,nT,Mu=MuT)
     else:
@@ -861,8 +860,8 @@ def gen_Weight_k_kappa_t(W,K,kappa,T,nS=2,nT=2,power=True):
     return WW
 
 def gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=2,nT=2,power=True):
-    MuT = np.array((1,1))
-    MuK = np.array((1,kappa))
+    MuT,MuK = gen_Mu(kappa=kappa,nT=nT)
+    #print(MuT)
     WT = circulate_in_out(W,Tin,Tout,nT,Mu=MuT,mult=not power)
     def listify(K):
         KKlist = [K for iT in range(nT)]
@@ -872,11 +871,22 @@ def gen_Weight_in_out_k_kappa_t(W,Kin,Kout,kappa,Tin,Tout,nS=2,nT=2,power=True):
     WW = circulate_in_out(WT,KKin,KKout,nS,Mu=MuK,mult=not power)
     return WW
 
+def gen_Mu(kappa=np.array(()),nT=2):
+    if nT==3:
+        MuT = np.array((1,2,1))
+    elif nT==2:
+        MuT = np.array((1,1))
+    elif nT==1:
+        MuT = np.array((1,))
+    if np.isscalar(kappa):
+        kappa = (kappa,)
+    MuK = np.array((1,)+tuple(kappa))
+    return MuT,MuK
+
 def deriv_WW_to_W(WW,K,kappa,T,nS=2,nT=2):
     # given derivative with respect to elements of WW, return derivative with 
     # respect to elements of W
-    MuT = np.array((1,1))
-    MuK = np.array((1,kappa))
+    MuT,MuK = gen_Mu(kappa=kappa,nT=nT)
     WT = decirculate(WW,T,nT,Mu=MuT)
     W = decirculate(WT,K,nS,Mu=MuK)
     return W
@@ -889,6 +899,9 @@ def circulate_in_out(V,Min,Mout,nZ,Mu=None,mult=False):
     else:
         Mfn = lambda x,y: x**y
     #Vpartlist = [V*(M[np.newaxis,:]**np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
+    #print(V.shape)
+    #print(Min.shape)
+    #print(Mout.shape)
     Vpartlist = [V*Mfn(Min[np.newaxis,:]*Mout[:,np.newaxis],np.abs(iZ)) for iZ in range(-nZ+1,nZ)]
     if Mu is None:
         Mu = np.ones((nZ,))

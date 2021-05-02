@@ -38,7 +38,7 @@ def invert_f_mt(y,s02=1,floor=-5):
     xstar = np.zeros_like(y)
     for iy,yy in enumerate(y):
         if not isinstance(yy,np.ndarray):
-            to_invert = lambda x: sim_utils.f_miller_troyer(x,s02)-yy
+            to_invert = lambda x: sim_utils.f_identity(x,s02)-yy
             try:
                 xstar[iy] = sop.root_scalar(to_invert,x0=yy,x1=0).root
             except:
@@ -383,15 +383,16 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
 
     import sim_utils
 
-    pop_rate_fn=sim_utils.f_miller_troyer
-    pop_deriv_fn=sim_utils.fprime_miller_troyer
+    pop_rate_fn=sim_utils.f_identity
+    pop_deriv_fn=sim_utils.fprime_identity
+    pop_deriv_s_fn=sim_utils.fprime_s_identity
     def compute_f_(Eta,Xi,s02):
-        return sim_utils.f_miller_troyer(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))
+        return pop_rate_fn(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))
     def compute_fprime_m_(Eta,Xi,s02):
-        return sim_utils.fprime_miller_troyer(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))*Xi
+        return pop_deriv_fn(Eta,Xi**2+np.concatenate([s02 for ipixel in range(nS*nT)]))*Xi
     def compute_fprime_s_(Eta,Xi,s02):
         s2 = Xi**2+np.concatenate((s02,s02),axis=0)
-        return sim_utils.fprime_s_miller_troyer(Eta,s2)*(Xi/s2)
+        return pop_deriv_s_fn(Eta,s2)*(Xi/s2)
     def sorted_r_eigs(w):
         drW,prW = np.linalg.eig(w)
         srtinds = np.argsort(drW)

@@ -348,7 +348,7 @@ def compute_f_fprime_t_avg_12_(W1,W2,perturbation,max_dist=1,burn_in=0.5,opt=Non
 
 def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False):
 
-    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+    shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS>1),),(nQ*(nS>1),),(nQ*(nS>1),),(nQ*(nS>1),),(1,),(nQ*(nT>1),),(nQ*(nT>1),),(nQ*(nT>1),),(nQ*(nT>1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
@@ -362,9 +362,9 @@ def gen_opt(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troy
 def gen_opt_axon(nN=36,nP=2,nQ=4,nS=2,nT=2,foldT=True,pop_rate_fn=utils.f_miller_troyer,pop_deriv_fn=utils.fprime_miller_troyer,fudge=1e-4,dt=1e-1,niter=100,nondim=False,run_modulation=False,axon=True):
 
     if not run_modulation:
-        shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+        shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(1,),(nQ*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
     else:
-        shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(nP*(nS-1),),(nQ*(nS-1),),(1,),(nQ*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(nP*(nT-1),),(nQ*(nT-1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
+        shapes1 = [(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nP,nQ),(nQ,nQ),(nQ,),(nQ*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(nP*(nS>1),),(nQ*(nS>1),),(1,),(nQ*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(nP*(nT>1),),(nQ*(nT>1),),(1,),(1,),(nQ,),(nT*nS*nQ,)]
     shapes2 = [(nN,nT*nS*nP),(nN,nT*nS*nP),(nN,nT*nS*nQ),(nN,nT*nS*nQ)]
 
     opt = {}
