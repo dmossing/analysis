@@ -1060,7 +1060,7 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
                 for iQ in range(nPQ):
                     #print('Ypc shape %d, %d: '%(iS,iQ)+str((Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]).shape))
                     Yp[:,iS*nPQ+iQ] = Ypc_list[iS][iQ][idim][0]*Ypc_list[iS][iQ][idim][1]
-            Yp = calnet.utils.unfold_T_(Yp,nS=nS,nT=nT,nPQ=nPQ)
+            Yp = utils.unfold_T_(Yp,nS=nS,nT=nT,nPQ=nPQ)
         else:
             Yp = np.zeros((nN,nPQ*nS*nT))
             for iS in range(nS):
@@ -1243,11 +1243,11 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
     YYphat = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=pdim,foldT=foldT)
     return XXhat,YYhat,XXphat,YYphat
 
-def initialize_params(XXhat,YYhat,opt,wpcpc=5):
+def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
-    keys = ['nP','nQ','nN','nS','nT','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
+    keys = ['nP','nQ','nN','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
 
-    nP,nQ,nN,nS,nT,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
+    nP,nQ,nN,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
 
     shapes = [(nP,nQ),(nQ,nQ),(1,nQ),(1,nQ),(1,nQ),(1,nQ)]
 
@@ -1289,17 +1289,40 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
     else:
         B_bounds = 0*np.ones((1,nQ))
 
+    big_val = 1e6
+
     bdlist = [W0x_bounds,W0y_bounds,K0_bounds,S02_bounds,A_bounds,B_bounds]
 
     lb,ub = [[sgn*np.inf*np.ones(shp) for shp in shapes] for sgn in [-1,1]]
     lb,ub = utils.set_bounds_by_code(lb,ub,bdlist)
 
-    lb[1][0,0] = wpcpc
-    ub[1][0,0] = wpcpc
+    lb[0][0,0] = 1
+    ub[0][0,0] = np.inf
+    lb[0][0,3] = 0
+    ub[0][0,3] = np.inf
+
+    lb[1][0,0] = 0
+    ub[1][0,0] = np.inf
+    lb[1][3,3] = -np.inf
+    ub[1][3,3] = -2
+    lb[1][0,3] = 0
+    ub[1][0,3] = np.inf
+    lb[1][3,0] = -np.inf
+    ub[1][3,0] = 0
+
+#     lb[1][0,0] = wpcpc
+#     ub[1][0,0] = wpcpc
+#     lb[1][3,3] = wpvpv
+#     ub[1][3,3] = wpvpv
+#     lb[1][0,3] = wpcpc
+#     ub[1][0,3] = wpcpc
+#     lb[1][3,0] = wpvpv
+#     ub[1][3,0] = wpvpv
 
     XXstack = np.concatenate((XXhat,XXhat[:,list(nP+np.arange(nP))+list(np.arange(nP))]),axis=0)
     YYstack = np.concatenate((YYhat,YYhat[:,list(nQ+np.arange(nQ))+list(np.arange(nQ))]),axis=0)
     l2_penalty = 0#1e-4
+    eig_penalty = 1e-2
     for itype in [0,1,2,3]:
         this_lb,this_ub = [np.concatenate([llb[:,itype].flatten() for llb in bb]) for bb in [lb,ub]]
         these_bounds = list(zip(this_lb,this_ub))
@@ -1309,7 +1332,12 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
         def cost(wx,wy,k,s02,a,b):
             y = compute_y(wx,wy,k,s02,a,b)
             l2_term = np.sum(wx**2)+np.sum(wy**2)
-            return np.sum((YYstack[:,itype] - y)**2) + l2_penalty*l2_term
+            if itype == 0:
+                yprime = compute_yprime(wx,wy,k,s02,a,b)
+                eig_term = utils.minus_sum_log_slope(yprime*wy[0],big_val)
+            else:
+                eig_term = 0
+            return np.sum((YYstack[:,itype] - y)**2) + l2_penalty*l2_term + eig_penalty*eig_term
         def compute_y(wx,wy,k,s02,a,b):
             y = b + a*rate_f(XXstack @ np.concatenate((wx,k*wx)) + YYstack @ np.concatenate((wy,k*wy)),s02) #[:,others]
             return y
@@ -1331,12 +1359,19 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
             return np.concatenate([x.flatten() for x in args])
         wx0 = np.zeros((nP,))
         wy0 = np.zeros((nQ,))
+        if itype == 0 or itype==3:
+            wx0[0] = 1
+            wy0[0] = wpcpc
+            wy0[3] = wpvpv
+#         elif itype == 3:
+#             wy0[0] = wpcpc
         k0 = np.array((1,))
         s020 = np.array((1,))
         a0 = np.array((1,))
         b0 = np.array((0,))
         x0 = unparse(wx0,wy0,k0,s020,a0,b0)
         result = sop.minimize(cost_,x0,jac=cost_prime_,method='L-BFGS-B',bounds=these_bounds)
+#         print(result)
         x1 = result.x
         opt_param[:,itype] = x1
 
@@ -1346,35 +1381,43 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
         YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
 
-    eig_penalty = 0.1
-
-    l2_penalty = 1
+    eig_penalty = 1e-4
+    pc_eig_penalty = 1e-4
+    l2_penalty = 0#1e-4
 
     kappa = 1
     T = np.array(())
-    big_val = 1e5
 
+    lb[1][0,0] = 0
+    ub[1][0,0] = np.inf
     lb[1][3,3] = -np.inf
     ub[1][3,3] = 0
+    lb[1][0,3] = 0
+    ub[1][0,3] = np.inf
+    lb[1][3,0] = -np.inf
+    ub[1][3,0] = 0
+
+    lb[3] = 0*np.ones_like(lb[3])
+    ub[3] = np.inf*np.ones_like(ub[3])
 
     def compute_WW(W,K):
         WWy = utils.gen_Weight_k_kappa_t(W,K[0],kappa,T,nS=nS,nT=nT)
         return WWy
 
-    def compute_eigs(Wmy0,K0):
+    def compute_eigs(Wmy0,K0,YYp=YYpmodeled):
 
 #         Wmy0 = opt_param[nP:nP+nQ]
 #         K0 = opt_param[nP+nQ]
         WWy = compute_WW(Wmy0,K0)
 
-        Phi = [np.diag(YYpmodeled[istim,:]) for istim in range(nN)]
+        Phi = [np.diag(YYp[istim,:]) for istim in range(nN)]
 
-        w = np.zeros((nN,nQ*nS*nT))
+        w = np.zeros(YYp.shape)
 
         wlist = [None for _ in range(nN)]
 
         for istim in range(nN):
-            this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(nQ*nS*nT))
+            this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(WWy.shape[0]))
             wlist[istim] = np.real(this_w)[np.newaxis]
             #w[istim,:]
         w = np.concatenate(wlist,axis=0)
@@ -1386,18 +1429,17 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
 #         print((WWx.shape,WWy.shape))
         AA,BB,SS02 = [np.concatenate((x,x),axis=1) for x in [A,B,S02]]
         YY = BB + AA*rate_f(XXhat @ WWx + YYhat @ WWy,SS02) #[:,others]
-        return YY
+        YYp = AA*rate_fprime(XXhat @ WWx + YYhat @ WWy,SS02)
+        return YY,YYp
 
     def Cost(Wx,Wy,K,S02,A,B):
-        YY = compute_YY(Wx,Wy,K,S02,A,B)
+        YY,YYp = compute_YY(Wx,Wy,K,S02,A,B)
         l2_term = np.sum(Wx**2)+np.sum(Wy**2)
-        eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K)[:,-1],big_val)
-        return np.sum((YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term
+        pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
+        eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K,YYp=YYp)[:,-1],big_val)
+        return np.sum((YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term + pc_eig_penalty*pc_eig_term
 
     def Cost_(x):
-#         print(x.shape)
-#         w,v = np.linalg.eig(x[:,np.newaxis]*x[np.newaxis,:])
-#         return w[-1]
         args = utils.parse_thing(x,shapes)
         return Cost(*args)
 
@@ -1410,16 +1452,16 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
     x0 = opt_param.flatten()
 
     Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = utils.parse_thing(x0,shapes)
-    w0 = compute_eigs(Wmy0,K0)
+    w0 = compute_eigs(Wmy0,K0,YYp=YYpmodeled)
+    w0pc = compute_eigs(Wmy0[0:1,0:1],K0[:,0:1],YYp=YYpmodeled[:,0::nQ])
 
-#     print(x0.shape)
-#     print(len(these_bounds))
-#     print(np.sum([np.prod(x) for x in shapes]))
     result = sop.minimize(Cost_,x0,jac=Cost_prime_,method='L-BFGS-B',bounds=these_bounds)
     x1 = result.x
     opt_param = x1
 
-    Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = utils.parse_thing(opt_param,shapes)
-    w1 = compute_eigs(Wmy0,K0)
+    Wmx1,Wmy1,K1,s021,amplitude1,baseline1 = utils.parse_thing(opt_param,shapes)
+    YY,YYp = compute_YY(Wmx1,Wmy1,K1,s021,amplitude1,baseline1)
+    w1 = compute_eigs(Wmy1,K1,YYp=YYp)
+    w1pc = compute_eigs(Wmy1[0:1,0:1],K1[:,0:1],YYp=YYp[:,0::nQ])
 
-    return opt_param,result#,w0,w1
+    return opt_param,result
