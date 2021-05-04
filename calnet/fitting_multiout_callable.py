@@ -20,6 +20,11 @@ def parse_W2(W,opt):
     Ws = utils.parse_thing(W,shapes2)
     return Ws
 
+def sorted_r_eigs(w):
+    drW,prW = np.linalg.eig(w)
+    srtinds = np.argsort(drW)
+    return drW[srtinds],prW[:,srtinds]
+
 def u_fn(XX,YY,Wx,Wy,K,kappa,T,opt,power=True):
     WWx,WWy = [gen_Weight(W,K,kappa,T,opt,power=power) for W in [Wx,Wy]]
     return XX @ WWx + YY @ WWy
@@ -1237,3 +1242,102 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
     XXphat = get_pc_dim(Xpc_list,nN=nN,nPQ=nP,nS=nS,nT=nT,idim=pdim,foldT=foldT)
     YYphat = get_pc_dim(Ypc_list,nN=nN,nPQ=nQ,nS=nS,nT=nT,idim=pdim,foldT=foldT)
     return XXhat,YYhat,XXphat,YYphat
+
+def initialize_params(XXhat,YYhat,opt,wpcpc=5):
+
+    keys = ['nP','nQ','nN','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
+
+    nP,nQ,nN,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
+
+    shapes = [(nP,nQ),(nQ,nQ),(1,nQ),(1,nQ),(1,nQ),(1,nQ)]
+
+    W0x_bounds = 3*np.ones((nP,nQ),dtype=int)
+    W0x_bounds[0,:] = 2 # L4 PCs are excitatory
+    W0x_bounds[0,1] = 0 # SSTs don't receive L4 input
+
+    W0y_bounds = 3*np.ones((nQ,nQ),dtype=int)
+    W0y_bounds[0,:] = 2 # PCs are excitatory
+    W0y_bounds[1:,:] = -2 # all the cell types except PCs are inhibitory
+    W0y_bounds[1,1] = 0 # SSTs don't inhibit themselves
+    # W0y_bounds[3,1] = 0 # PVs are allowed to inhibit SSTs, consistent with Hillel's unpublished results, but not consistent with Pfeffer et al.
+    W0y_bounds[2,0] = 0 # VIPs don't inhibit L2/3 PCs. According to Pfeffer et al., only L5 PCs were found to get VIP inhibition
+    np.fill_diagonal(W0y_bounds,0)
+
+    K0_bounds = 1.5*np.ones((1,nQ))
+
+    # opt_param[is02,iA,iB] = np.zeros((nP+nQ+4,nQ))
+    # opt_cost[is02,iA,iB] = np.zeros((nQ,))
+
+    opt_param = np.zeros((nP+nQ+4,nQ))
+#     opt_cost = np.zeros((nQ,))
+
+    YYmodeled = np.zeros(YYhat.shape)
+    YYpmodeled = np.zeros(YYhat.shape)
+
+    if allow_s02:
+        S02_bounds = 2*np.ones((1,nQ)) # permitting noise as a free parameter #1*np.ones((1,nQ))#
+    else:
+        S02_bounds = 1*np.ones((1,nQ))
+
+    if allow_A:
+        A_bounds = 2*np.ones((1,nQ)) # 1*np.ones((1,nQ))#
+    else:
+        A_bounds = 1*np.ones((1,nQ))
+
+    if allow_B:
+        B_bounds = 3*np.ones((1,nQ))
+    else:
+        B_bounds = 0*np.ones((1,nQ))
+
+    bdlist = [W0x_bounds,W0y_bounds,K0_bounds,S02_bounds,A_bounds,B_bounds]
+
+    lb,ub = [[sgn*np.inf*np.ones(shp) for shp in shapes] for sgn in [-1,1]]
+    lb,ub = utils.set_bounds_by_code(lb,ub,bdlist)
+
+    lb[1][0,0] = wpcpc
+    ub[1][0,0] = wpcpc
+
+    XXstack = np.concatenate((XXhat,XXhat[:,list(nP+np.arange(nP))+list(np.arange(nP))]),axis=0)
+    YYstack = np.concatenate((YYhat,YYhat[:,list(nQ+np.arange(nQ))+list(np.arange(nQ))]),axis=0)
+    l2_penalty = 0#1e-4
+    for itype in [0,1,2,3]:
+        this_lb,this_ub = [np.concatenate([llb[:,itype].flatten() for llb in bb]) for bb in [lb,ub]]
+        these_bounds = list(zip(this_lb,this_ub))
+        shps = [(nP,),(nQ,),(1,),(1,),(1,),(1,)]
+    #     others = np.arange(nS*nQ)
+    #     others = [x for x in others if not x%nQ==itype]
+        def cost(wx,wy,k,s02,a,b):
+            y = compute_y(wx,wy,k,s02,a,b)
+            l2_term = np.sum(wx**2)+np.sum(wy**2)
+            return np.sum((YYstack[:,itype] - y)**2) + l2_penalty*l2_term
+        def compute_y(wx,wy,k,s02,a,b):
+            y = b + a*rate_f(XXstack @ np.concatenate((wx,k*wx)) + YYstack @ np.concatenate((wy,k*wy)),s02) #[:,others]
+            return y
+        def compute_yprime(wx,wy,k,s02,a,b):
+            y = a*rate_fprime(XXstack @ np.concatenate((wx,k*wx)) + YYstack @ np.concatenate((wy,k*wy)),s02) #[:,others]
+            return y
+        def compute_y_(x):
+            y = compute_y(*utils.parse_thing(x,shps))
+            return y
+        def compute_yprime_(x):
+            y = compute_yprime(*utils.parse_thing(x,shps))
+            return y
+        def cost_(x):
+            args = utils.parse_thing(x,shps)
+            return cost(*args)
+        def cost_prime_(x):
+            return grad(cost_)(x)
+        def unparse(*args):
+            return np.concatenate([x.flatten() for x in args])
+        wx0 = np.zeros((nP,))
+        wy0 = np.zeros((nQ,))
+        k0 = np.array((1,))
+        s020 = np.array((1,))
+        a0 = np.array((1,))
+        b0 = np.array((0,))
+        x0 = unparse(wx0,wy0,k0,s020,a0,b0)
+        result = sop.minimize(cost_,x0,jac=cost_prime_,method='L-BFGS-B',bounds=these_bounds)
+        x1 = result.x
+        opt_param[:,itype] = x1
+#         opt_cost[itype] = result.fun
+    return opt_param

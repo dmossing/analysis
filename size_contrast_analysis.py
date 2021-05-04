@@ -720,6 +720,34 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
         plt.xlim((mn-wiggle,mx+wiggle))
         plt.ylim((mn-wiggle,mx+wiggle))
 
+def scatter3d_size_contrast(y1,y2,y3,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None):
+    ax = plt.gcf().add_subplot(projection='3d')
+    ndim = 3
+    if len(y1.shape)==2:
+        nsize,ncontrast = y1.shape
+    z = [y.reshape((nsize,ncontrast)) for y in [y1,y2,y3]]
+    if mn is None:
+        mn = np.minimum(np.nanmin(y1),np.nanmin(y2))
+    if mx is None:
+        mx = np.maximum(np.nanmax(y1),np.nanmax(y2))
+    colors = colormap(np.linspace(0,1,ncontrast))
+    if equate_0:
+        zero = [np.nanmean(z[idim][:,0]) for idim in range(ndim)]
+        zero_color = colors[0:1]
+        z = [z[idim][:,1:] for idim in range(ndim)]
+        colors = colors[1:]
+    if equate_0:
+        ax.scatter(zero[0],zero[1],zero[2],c=zero_color,s=(nsize+1)*dot_scale,alpha=alpha,edgecolors='k',linewidths=1)
+    for s in range(nsize):
+        ax.scatter(z[0][s],z[1][s],z[2][s],c=colors,s=(s+1)*dot_scale,alpha=alpha,edgecolors='k',linewidths=1)
+    if equality_line:
+        ax.plot((mn,mx),(mn,mx),(mn,mx),c='k')
+    if square:
+        wiggle = 0.05*(mx-mn)
+        ax.set_xlim((mn-wiggle,mx+wiggle))
+        ax.set_ylim((mn-wiggle,mx+wiggle))
+        ax.set_zlim((mn-wiggle,mx+wiggle))
+
 def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1):
     def compute_mean_sem(x):
         xmean = np.nanmean(x,0)
