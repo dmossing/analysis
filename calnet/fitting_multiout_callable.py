@@ -1245,9 +1245,9 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
 
 def initialize_params(XXhat,YYhat,opt,wpcpc=5):
 
-    keys = ['nP','nQ','nN','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
+    keys = ['nP','nQ','nN','nS','nT','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
 
-    nP,nQ,nN,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
+    nP,nQ,nN,nS,nT,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
 
     shapes = [(nP,nQ),(nQ,nQ),(1,nQ),(1,nQ),(1,nQ),(1,nQ)]
 
@@ -1374,7 +1374,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
         wlist = [None for _ in range(nN)]
 
         for istim in range(nN):
-            this_w,_ = fmc.sorted_r_eigs(WWy @ Phi[istim] - np.eye(nQ*nS*nT))
+            this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(nQ*nS*nT))
             wlist[istim] = np.real(this_w)[np.newaxis]
             #w[istim,:]
         w = np.concatenate(wlist,axis=0)

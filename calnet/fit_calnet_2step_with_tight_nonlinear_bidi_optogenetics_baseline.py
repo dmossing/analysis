@@ -26,6 +26,7 @@ from importlib import reload
 reload(sim_utils)
 import calnet.utils
 import calnet.fitting_2step_spatial_feature_opto_tight_nonlinear_baseline
+import calnet.fitting_multiout_callable as fmc
 import opto_utils
 import scipy.signal as ssi
 import scipy.optimize as sop
@@ -84,7 +85,7 @@ def initialize_W(Xhat,Yhat,scale_by=0.2,allow_s2=True):
         #Ymatrix_pred[:,itype] = Xmatrix @ Bmatrix
     return scale_by*Wmx0,scale_by*Wmy0
 
-def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False,verbose=True,free_amplitude=False,norm_opto_transforms=False,zero_extra_weights=None,allow_s2=True):
+def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',opto_silencing_data_file='vip_halo_data_for_sim.npy',opto_activation_data_file='vip_chrimson_data_for_sim.npy',constrain_wts=None,allow_var=True,fit_s02=True,constrain_isn=True,tv=False,l2_penalty=0.01,init_noise=0.1,init_W_from_lsq=False,init_W_from_lbfgs=False,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=False,init_Eta_with_s02=False,init_Eta12_with_dYY=False,use_opto_transforms=False,share_residuals=False,stimwise=False,simulate1=True,simulate2=False,help_constrain_isn=True,ignore_halo_vip=False,verbose=True,free_amplitude=False,norm_opto_transforms=False,zero_extra_weights=None,allow_s2=True):
     
     nsize,ncontrast = 6,6
     
@@ -599,6 +600,11 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     #         Wmx,    Wmy,    Wsx,    Wsy,    s02,  k,    kappa,T,   h1, h2
     #XX,            XXp,          Eta,          Xi
 
+    opt = fmc.gen_opt(nS=nS,nT=nT)
+    opt['allow_s02'] = False
+    opt['allow_A'] = False
+    opt['allow_B'] = True
+
     ntries = 1
     nhyper = 1
     dt = 1e-1
@@ -641,7 +647,20 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 W10list[0],W10list[1] = initialize_W(Xhat,Yhat,scale_by=scale_init_by,allow_s2=allow_s2)
                 for ivar in range(0,2):
                     W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
-            if constrain_isn:
+            if init_W_from_lbfgs:
+                opt_param,result = fmc.initialize_params(XXhat,YYhat,opt,wpcpc=5)
+                these_shapes =  [(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(nQ,),(nQ,)]
+                Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = calnet.utils.parse_thing(opt_param,these_shapes)
+                #Wmx0 = opt_param[:nP]
+                #Wmy0 = opt_param[nP:nP+nQ]
+                #K0 = opt_param[nP+nQ]
+                #s020 = opt_param[nP+nQ+1]
+                #amplitude0 = opt_param[nP+nQ+2]
+                #baseline0 = opt_param[nP+nQ+3]
+                W10list[0],W10list[1],W10list[5],W10list[4],W10list[-2] = Wmx0,Wmy0,K0,s020,baseline0
+                for ivar in range(0,2):
+                    W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
+            elif constrain_isn:
                 W10list[1][0,0] = 3 
                 if help_constrain_isn:
                     W10list[1][0,3] = 5 
