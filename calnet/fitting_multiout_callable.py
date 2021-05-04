@@ -1339,5 +1339,87 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=5):
         result = sop.minimize(cost_,x0,jac=cost_prime_,method='L-BFGS-B',bounds=these_bounds)
         x1 = result.x
         opt_param[:,itype] = x1
+
+        YYmodeled[:,itype] = compute_y_(x1)[:nN]
+        YYmodeled[:,nQ+itype] = compute_y_(x1)[nN:]
+        YYpmodeled[:,itype] = compute_yprime_(x1)[:nN]
+        YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
-    return opt_param
+
+    eig_penalty = 0.1
+
+    l2_penalty = 1
+
+    kappa = 1
+    T = np.array(())
+    big_val = 1e5
+
+    lb[1][3,3] = -np.inf
+    ub[1][3,3] = 0
+
+    def compute_WW(W,K):
+        WWy = utils.gen_Weight_k_kappa_t(W,K[0],kappa,T,nS=nS,nT=nT)
+        return WWy
+
+    def compute_eigs(Wmy0,K0):
+
+#         Wmy0 = opt_param[nP:nP+nQ]
+#         K0 = opt_param[nP+nQ]
+        WWy = compute_WW(Wmy0,K0)
+
+        Phi = [np.diag(YYpmodeled[istim,:]) for istim in range(nN)]
+
+        w = np.zeros((nN,nQ*nS*nT))
+
+        wlist = [None for _ in range(nN)]
+
+        for istim in range(nN):
+            this_w,_ = fmc.sorted_r_eigs(WWy @ Phi[istim] - np.eye(nQ*nS*nT))
+            wlist[istim] = np.real(this_w)[np.newaxis]
+            #w[istim,:]
+        w = np.concatenate(wlist,axis=0)
+
+        return w
+
+    def compute_YY(Wx,Wy,K,S02,A,B):
+        WWx,WWy = [compute_WW(W,K) for W in [Wx,Wy]]
+#         print((WWx.shape,WWy.shape))
+        AA,BB,SS02 = [np.concatenate((x,x),axis=1) for x in [A,B,S02]]
+        YY = BB + AA*rate_f(XXhat @ WWx + YYhat @ WWy,SS02) #[:,others]
+        return YY
+
+    def Cost(Wx,Wy,K,S02,A,B):
+        YY = compute_YY(Wx,Wy,K,S02,A,B)
+        l2_term = np.sum(Wx**2)+np.sum(Wy**2)
+        eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K)[:,-1],big_val)
+        return np.sum((YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term
+
+    def Cost_(x):
+#         print(x.shape)
+#         w,v = np.linalg.eig(x[:,np.newaxis]*x[np.newaxis,:])
+#         return w[-1]
+        args = utils.parse_thing(x,shapes)
+        return Cost(*args)
+
+    def Cost_prime_(x):
+        return grad(Cost_)(x)
+
+    this_lb,this_ub = [np.concatenate([llb.flatten() for llb in bb]) for bb in [lb,ub]]
+    these_bounds = list(zip(this_lb,this_ub))
+
+    x0 = opt_param.flatten()
+
+    Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = utils.parse_thing(x0,shapes)
+    w0 = compute_eigs(Wmy0,K0)
+
+#     print(x0.shape)
+#     print(len(these_bounds))
+#     print(np.sum([np.prod(x) for x in shapes]))
+    result = sop.minimize(Cost_,x0,jac=Cost_prime_,method='L-BFGS-B',bounds=these_bounds)
+    x1 = result.x
+    opt_param = x1
+
+    Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = utils.parse_thing(opt_param,shapes)
+    w1 = compute_eigs(Wmy0,K0)
+
+    return opt_param,result#,w0,w1
