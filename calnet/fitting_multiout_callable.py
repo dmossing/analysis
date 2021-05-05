@@ -1245,9 +1245,9 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
 
 def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
-    keys = ['nP','nQ','nN','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
+    keys = ['nP','nQ','nN','nS','nT','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
 
-    nP,nQ,nN,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
+    nP,nQ,nN,nS,nT,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
 
     shapes = [(nP,nQ),(nQ,nQ),(1,nQ),(1,nQ),(1,nQ),(1,nQ)]
 
@@ -1381,8 +1381,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
 
-    eig_penalty = 1e-4
-    pc_eig_penalty = 1e-4
+    eig_penalty = 1e-2
+    pc_eig_penalty = 1e-2
     l2_penalty = 0#1e-4
 
     kappa = 1

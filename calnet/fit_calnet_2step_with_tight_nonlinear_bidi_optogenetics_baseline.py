@@ -651,6 +651,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 opt_param,result = fmc.initialize_params(XXhat,YYhat,opt,wpcpc=5)
                 these_shapes =  [(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(nQ,),(nQ,)]
                 Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = calnet.utils.parse_thing(opt_param,these_shapes)
+                if init_Eta_with_s02:
+                    #assert(True==False)
+                    Eta0 = invert_f_mt_with_s02(YYhat-np.tile(baseline0,nS*nT),s020,nS=nS,nT=nT)
+                    W20list[2] = Eta0.copy()
                 #Wmx0 = opt_param[:nP]
                 #Wmy0 = opt_param[nP:nP+nQ]
                 #K0 = opt_param[nP+nQ]

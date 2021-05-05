@@ -634,16 +634,30 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         W21,loss,gr,hess,result = optimize2(W10,W20,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
     W11,loss,gr,hess,result = optimize1(W10,W21,compute_hessian=compute_hessian,simulate=simulate1,verbose=verbose1)
 
+    #W11,loss,gr,hess,result = optimize1(W10,W20,compute_hessian=compute_hessian,simulate=simulate1,verbose=verbose1)
+    #if stimwise:
+    #    W21,loss,gr,hess,result = optimize2_stimwise(W11,W20,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
+    #else:
+    #    W21,loss,gr,hess,result = optimize2(W11,W20,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
+
     delta = old_loss - loss
     while delta > 0.1:
         old_loss = loss
         #W11,loss,gr,hess,result = optimize1(W10,W20,compute_hessian=compute_hessian,simulate=True)
         #W21,loss,gr,hess,result = optimize2(W11,W20,compute_hessian=compute_hessian,simulate=False)
+
         if stimwise:
             W21,loss,gr,hess,result = optimize2_stimwise(W11,W21,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
         else:
             W21,loss,gr,hess,result = optimize2(W11,W21,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
         W11,loss,gr,hess,result = optimize1(W11,W21,compute_hessian=compute_hessian,simulate=simulate1,verbose=verbose1)
+
+        #W11,loss,gr,hess,result = optimize1(W11,W21,compute_hessian=compute_hessian,simulate=simulate1,verbose=verbose1)
+        #if stimwise:
+        #    W21,loss,gr,hess,result = optimize2_stimwise(W11,W21,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
+        #else:
+        #    W21,loss,gr,hess,result = optimize2(W11,W21,compute_hessian=compute_hessian,simulate=simulate2,verbose=verbose2)
+
         delta = old_loss - loss
 
         
