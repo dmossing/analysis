@@ -1248,6 +1248,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     keys = ['nP','nQ','nN','nS','nT','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
 
     nP,nQ,nN,nS,nT,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
+
     n = 1
     celltype_wt = np.tile(np.array((n,1,1,1)),nS*nT)[np.newaxis]/n
 
@@ -1344,7 +1345,14 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
             y = b + a*rate_f(XXstack @ np.concatenate((wx,k*wx)) + YYstack @ np.concatenate((wy,k*wy)),s02) #[:,others]
             return y
         def compute_yprime(wx,wy,k,s02,a,b):
-            y = a*rate_fprime(XXstack @ np.concatenate((wx,k*wx)) + YYstack @ np.concatenate((wy,k*wy)),s02) #[:,others]
+#             this_B = np.zeros((nQ,))
+#             this_A = np.ones((nQ,))
+            this_type = (np.arange(nQ)==itype)
+            this_B = b*this_type + 0*(~this_type)
+            this_A = a*this_type + 1*(~this_type)
+            this_B = np.tile(this_B,nS*nT)
+            this_A = np.tile(this_A,nS*nT)
+            y = a*rate_fprime(XXstack @ np.concatenate((wx,k*wx)) + ((YYstack-this_B)/this_A) @ np.concatenate((wy,k*wy)),s02) #[:,others]
             return y
         def compute_y_(x):
             y = compute_y(*utils.parse_thing(x,shps))
@@ -1383,8 +1391,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
 
-    eig_penalty = 1e-2#1e-4
-    pc_eig_penalty = 1e-2#1e-4
+    eig_penalty = 1e-2#1e-2
+    pc_eig_penalty = 1e-2#1e-2
     l2_penalty = 0#1e-4
 
     kappa = 1
@@ -1408,22 +1416,21 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
     def compute_eigs(Wmy0,K0,YYp=YYpmodeled):
 
+#         Wmy0 = opt_param[nP:nP+nQ]
+#         K0 = opt_param[nP+nQ]
         WWy = compute_WW(Wmy0,K0)
 
-        #Phi = [np.diag(YYp[istim,:]) for istim in range(nN)]
+        Phi = [np.diag(YYp[istim,:]) for istim in range(nN)]
 
-        #w = np.zeros(YYp.shape)
+        w = np.zeros(YYp.shape)
 
-        #wlist = [None for _ in range(nN)]
+        wlist = [None for _ in range(nN)]
 
-        #for istim in range(nN):
-        #    this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(WWy.shape[0]))
-        #    wlist[istim] = np.real(this_w)[np.newaxis]
-        #    #w[istim,:]
-        #w = np.concatenate(wlist,axis=0)
-        
-        this_w,_ = sorted_r_eigs(WWy - np.eye(WWy.shape[0]))
-        w = np.real(this_w)[np.newaxis]
+        for istim in range(nN):
+            this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(WWy.shape[0]))
+            wlist[istim] = np.real(this_w)[np.newaxis]
+            #w[istim,:]
+        w = np.concatenate(wlist,axis=0)
 
         this_w,_ = sorted_r_eigs(WWy - np.eye(WWy.shape[0]))
         w = np.concatenate((w,np.real(this_w)[np.newaxis]),axis=0)
@@ -1434,7 +1441,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         WWx,WWy = [compute_WW(W,K) for W in [Wx,Wy]]
 #         print((WWx.shape,WWy.shape))
         AA,BB,SS02 = [np.concatenate((x,x),axis=1) for x in [A,B,S02]]
-        YY = BB + AA*rate_f(XXhat @ WWx + YYhat @ WWy,SS02) #[:,others]
+        YY = BB + AA*rate_f(XXhat @ WWx + ((YYhat - BB)/AA) @ WWy,SS02) #[:,others]
         YYp = AA*rate_fprime(XXhat @ WWx + YYhat @ WWy,SS02)
         return YY,YYp
 
@@ -1442,7 +1449,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YY,YYp = compute_YY(Wx,Wy,K,S02,A,B)
         l2_term = np.sum(Wx**2)+np.sum(Wy**2)
         pc_eig_term = utils.minus_sum_log_slope(YYp[:,0]*Wy[0,0]*(1+K[0,0]) - 1,big_val)
-        #pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
+#         pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
         eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K,YYp=YYp)[:,-1],big_val)
         this_cost = np.sum(celltype_wt*(YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term + pc_eig_penalty*pc_eig_term
         if np.isnan(this_cost):
@@ -1482,4 +1489,4 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 #     w1pc = compute_eigs(Wmy1[0:1,0:1],K1[:,0:1],YYp=YYp[:,0::nQ])
     w1pc = (YYp[:,0]*Wmy1[0,0] - 1)[:,np.newaxis]
 
-    return opt_param,result
+    return opt_param,result#,w0,w1,w0pc,w1pc,YY,YYp,x0,Wmy0,K0,YYmodeled,YYpmodeled
