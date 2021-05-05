@@ -16,7 +16,7 @@ opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
 
 ntries = 1
 
-init_noise = 0.3 # 0.1
+init_noise = 0#0.3 # 0.1
 tv = True
 correct_Eta = False
 init_Eta_with_s02 = False

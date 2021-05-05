@@ -626,6 +626,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     for ihyper in range(nhyper):
         for itry in range(ntries):
             #print((ihyper,itry))
+            #[0.(nP,nQ),1.(nQ,nQ),2.(nP,nQ),3.(nQ,nQ),4.(nQ,),5.(nQ*(nS-1),),6.(1,),7.(nQ*(nT-1),),8.(1,),9.(1,),10.(nQ,),11.(nQ*nS*nT,)]
             W10list = [init_noise*(ihyper+1)*np.random.rand(*shp) for shp in shapes1]
             W20list = [init_noise*(ihyper+1)*np.random.rand(*shp) for shp in shapes2]
             #print('size of shapes1: '+str(np.sum([np.prod(shp) for shp in shapes1])))
@@ -638,6 +639,10 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             W10list[5] = np.ones(shapes1[5]) # K
             W10list[6] = np.ones(shapes1[6]) # kappa
             W10list[7] = np.ones(shapes1[7]) # T
+            W10list[8] = np.zeros(shapes1[8]) # h1
+            W10list[9] = np.zeros(shapes1[9]) # h2
+            W10list[10] = np.zeros(shapes1[10]) # baseline
+            W10list[11] = np.ones(shapes1[11]) # amplitude
             W20list[0] = np.concatenate(Xhat,axis=1) #XX
             W20list[1] = np.zeros_like(W20list[1]) #XXp
             W20list[2] = Eta0.copy() #np.zeros(shapes[10]) #Eta
@@ -661,7 +666,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 #s020 = opt_param[nP+nQ+1]
                 #amplitude0 = opt_param[nP+nQ+2]
                 #baseline0 = opt_param[nP+nQ+3]
-                W10list[0],W10list[1],W10list[5],W10list[4],W10list[-2] = Wmx0,Wmy0,K0,s020,baseline0
+                print((Wmx0,Wmy0,K0,s020,np.tile(amplitude0,2),baseline0))
+                W10list[0],W10list[1],W10list[5],W10list[4],W10list[-1],W10list[-2] = Wmx0,Wmy0,K0,s020,np.tile(amplitude0,2),baseline0
                 for ivar in range(0,2):
                     W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
             elif constrain_isn:

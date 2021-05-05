@@ -13,7 +13,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
     
     fudge = 1e-4
     noise = 1
-    big_val = 1e6
+    big_val = 1e5
     
     fprime_m = pop_deriv_fn #utils.fprime_miller_troyer #egrad(pop_rate_fn,0)
     
@@ -344,7 +344,15 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             #print('min Eta: %f'%np.min(Eta[:,0]))
             #print('WEE: %f'%Wmy[0,0])
             #print('min phiE*WEE: %f'%np.min(Phi[:,0]*Wmy[0,0]))
-            log_arg = Phi[:,0]*Wmy[0,0]-1
+            if K.size:
+                k = K[0]
+            else:
+                k = 0
+            if T.size:
+                t = T[0]
+            else:
+                t = 0
+            log_arg = Phi[:,0]*Wmy[0,0]*(1+k)*(1+t) - 1
             cost = utils.minus_sum_log_slope(log_arg,big_val/nN)
             #print('ISN cost: %f'%cost)
             return cost

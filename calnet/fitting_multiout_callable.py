@@ -1334,7 +1334,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
             l2_term = np.sum(wx**2)+np.sum(wy**2)
             if itype == 0:
                 yprime = compute_yprime(wx,wy,k,s02,a,b)
-                eig_term = utils.minus_sum_log_slope(yprime*wy[0],big_val)
+                eig_term = utils.minus_sum_log_slope(yprime*wy[0]*(1+k) - 1,big_val)
             else:
                 eig_term = 0
             return np.sum((YYstack[:,itype] - y)**2) + l2_penalty*l2_term + eig_penalty*eig_term
@@ -1381,8 +1381,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
 
-    eig_penalty = 1e-2
-    pc_eig_penalty = 1e-2
+    eig_penalty = 1e-2#1e-4
+    pc_eig_penalty = 1e-2#1e-4
     l2_penalty = 0#1e-4
 
     kappa = 1
@@ -1406,21 +1406,22 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
     def compute_eigs(Wmy0,K0,YYp=YYpmodeled):
 
-#         Wmy0 = opt_param[nP:nP+nQ]
-#         K0 = opt_param[nP+nQ]
         WWy = compute_WW(Wmy0,K0)
 
-        Phi = [np.diag(YYp[istim,:]) for istim in range(nN)]
+        #Phi = [np.diag(YYp[istim,:]) for istim in range(nN)]
 
-        w = np.zeros(YYp.shape)
+        #w = np.zeros(YYp.shape)
 
-        wlist = [None for _ in range(nN)]
+        #wlist = [None for _ in range(nN)]
 
-        for istim in range(nN):
-            this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(WWy.shape[0]))
-            wlist[istim] = np.real(this_w)[np.newaxis]
-            #w[istim,:]
-        w = np.concatenate(wlist,axis=0)
+        #for istim in range(nN):
+        #    this_w,_ = sorted_r_eigs(WWy @ Phi[istim] - np.eye(WWy.shape[0]))
+        #    wlist[istim] = np.real(this_w)[np.newaxis]
+        #    #w[istim,:]
+        #w = np.concatenate(wlist,axis=0)
+        
+        this_w,_ = sorted_r_eigs(WWy - np.eye(WWy.shape[0]))
+        w = np.real(this_w)[np.newaxis]
 
         return w
 
@@ -1435,7 +1436,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     def Cost(Wx,Wy,K,S02,A,B):
         YY,YYp = compute_YY(Wx,Wy,K,S02,A,B)
         l2_term = np.sum(Wx**2)+np.sum(Wy**2)
-        pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
+        pc_eig_term = utils.minus_sum_log_slope(YYp[:,0]*Wy[0,0]*(1+K[0,0]) - 1,big_val)
+        #pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
         eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K,YYp=YYp)[:,-1],big_val)
         return np.sum((YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term + pc_eig_penalty*pc_eig_term
 
