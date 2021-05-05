@@ -1381,8 +1381,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
 
-    eig_penalty = 1e-4
-    pc_eig_penalty = 1e-4
+    eig_penalty = 1e-3#1e-4
+    pc_eig_penalty = 1e-2#1e-4
     l2_penalty = 0#1e-4
 
     kappa = 1
@@ -1435,7 +1435,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     def Cost(Wx,Wy,K,S02,A,B):
         YY,YYp = compute_YY(Wx,Wy,K,S02,A,B)
         l2_term = np.sum(Wx**2)+np.sum(Wy**2)
-        pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
+        pc_eig_term = utils.minus_sum_log_slope(YYp[:,0]*Wy[0,0] - 1,big_val)
+        #pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
         eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K,YYp=YYp)[:,-1],big_val)
         return np.sum((YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term + pc_eig_penalty*pc_eig_term
 
