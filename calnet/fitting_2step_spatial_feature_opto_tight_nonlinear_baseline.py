@@ -319,7 +319,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             Phi = fprime_m(Eta,compute_var(Xi,s02))
             Phi = np.concatenate((Phi,Phi),axis=0)
             Phi1 = np.array([np.diag(phi) for phi in Phi])
-            coupling = np.array([phi1 @ np.linalg.inv(np.eye(nQ*nS*nT) - WWy @ phi1) for phi1 in Phi1])
+            coupling = np.array([phi1 @ np.linalg.pinv(np.eye(nQ*nS*nT) - WWy @ phi1) for phi1 in Phi1])
             return coupling
 
         def compute_coupling_error(W1,W2,i,j,sgn=-1):
@@ -495,7 +495,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         # need to fix this to reflect addition of kappa argument
         Wsquig = gen_Weight(Wmy,K0,kappa,T0)
         drW,prW = sorted_r_eigs(Wsquig - np.eye(nQ*nS*nT))
-        plW = np.linalg.inv(prW)
+        plW = np.linalg.pinv(prW)
         eig_outer_all = [np.real(np.outer(plW[:,k],prW[k,:])) for k in range(nS*nQ*nT)]
         eig_penalty_size_all = [barrier_wt/np.abs(np.real(drW[k])) for k in range(nS*nQ*nT)]
         eig_penalty_dir_w = [eig_penalty_size*((eig_outer[:nQ,:nQ] + eig_outer[nQ:,nQ:]) + K0[np.newaxis,:]*(eig_outer[:nQ,nQ:] + kappa*eig_outer[nQ:,:nQ])) for eig_outer,eig_penalty_size in zip(eig_outer_all,eig_penalty_size_all)]

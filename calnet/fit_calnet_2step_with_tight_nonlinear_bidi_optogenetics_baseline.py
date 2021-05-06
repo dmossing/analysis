@@ -653,7 +653,8 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                 for ivar in range(0,2):
                     W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
             if init_W_from_lbfgs:
-                opt_param,result = fmc.initialize_params(XXhat,YYhat,opt,wpcpc=5)
+                print(opt)
+                opt_param,result = fmc.initialize_params(XXhat,YYhat,opt,wpcpc=5,wpvpv=-6)
                 these_shapes =  [(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(nQ,),(nQ,)]
                 Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = calnet.utils.parse_thing(opt_param,these_shapes)
                 if init_Eta_with_s02:
