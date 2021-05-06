@@ -1399,6 +1399,9 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     kappa = 1
     T = np.array(())
 
+    lb[0][0,0] = 0
+    ub[0][0,0] = np.inf
+
     lb[1][0,0] = 0
     ub[1][0,0] = np.inf
     lb[1][3,3] = -np.inf
