@@ -1327,7 +1327,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     XXstack = np.concatenate((XXhat,XXhat[:,list(nP+np.arange(nP))+list(np.arange(nP))]),axis=0)
     YYstack = np.concatenate((YYhat,YYhat[:,list(nQ+np.arange(nQ))+list(np.arange(nQ))]),axis=0)
     l2_penalty = 0#1e-4
-    eig_penalty = 1e-2
+    eig_penalty = 0#1e-2
     for itype in [0,1,2,3]:
         this_lb,this_ub = [np.concatenate([llb[:,itype].flatten() for llb in bb]) for bb in [lb,ub]]
         these_bounds = list(zip(this_lb,this_ub))
