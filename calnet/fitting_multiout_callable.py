@@ -714,7 +714,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
             Phi = fprime_m(Eta,compute_var(Xi,s02))
             Phi = np.concatenate((Phi,Phi),axis=0)
             Phi1 = np.array([np.diag(phi) for phi in Phi])
-            coupling = np.array([phi1 @ np.linalg.inv(np.eye(nQ*nS*nT) - WWy @ phi1) for phi1 in Phi1])
+            coupling = np.array([phi1 @ np.linalg.pinv(np.eye(nQ*nS*nT) - WWy @ phi1) for phi1 in Phi1])
             return coupling
 
         def compute_coupling_error(W1,W2,i,j,sgn=-1):
@@ -882,7 +882,7 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         # need to fix this to reflect addition of kappa argument
         Wsquig = gen_Weight(W0y,K0,kappa,T0,power=True)
         drW,prW = sorted_r_eigs(Wsquig - np.eye(nQ*nS*nT))
-        plW = np.linalg.inv(prW)
+        plW = np.linalg.pinv(prW)
         eig_outer_all = [np.real(np.outer(plW[:,k],prW[k,:])) for k in range(nS*nQ*nT)]
         eig_penalty_size_all = [barrier_wt/np.abs(np.real(drW[k])) for k in range(nS*nQ*nT)]
         eig_penalty_dir_w = [eig_penalty_size*((eig_outer[:nQ,:nQ] + eig_outer[nQ:,nQ:]) + K0[np.newaxis,:]*(eig_outer[:nQ,nQ:] + kappa*eig_outer[nQ:,:nQ])) for eig_outer,eig_penalty_size in zip(eig_outer_all,eig_penalty_size_all)]
@@ -1394,6 +1394,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     eig_penalty = 1e-2#1e-2
     pc_eig_penalty = 1e-2#1e-2
     l2_penalty = 0#1e-4
+    ff_penalty = 0.1
 
     kappa = 1
     T = np.array(())
@@ -1445,13 +1446,25 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YYp = AA*rate_fprime(XXhat @ WWx + YYhat @ WWy,SS02)
         return YY,YYp
 
+    def compute_ff_term(Wx,Wy,K,A,YY,YYp):
+        WWx,WWy = [compute_WW(W,K) for W in [Wx,Wy]]
+        dXX = XXhat - np.mean(XXhat,0)[np.newaxis]
+        Phi = np.diag(np.mean(YYp,0)/np.tile(A,(1,2))[0])
+        dYYpred = dXX @ WWx @ np.linalg.pinv(np.eye(nQ*nS*nT) - WWy @ Phi)
+        dYY = (YY - np.mean(YY,0)[np.newaxis])/np.tile(A,(1,2))
+        return np.sum(celltype_wt*(dYY - dYYpred)**2)
+
+
     def Cost(Wx,Wy,K,S02,A,B):
         YY,YYp = compute_YY(Wx,Wy,K,S02,A,B)
         l2_term = np.sum(Wx**2)+np.sum(Wy**2)
-        pc_eig_term = utils.minus_sum_log_slope(YYp[:,0]*Wy[0,0]*(1+K[0,0]) - 1,big_val)
+        ff_term = compute_ff_term(Wx,Wy,K,A,YY,YYp)
+#         print(ff_term)
+        pc_eig_term = utils.minus_sum_log_slope((YYp[:,0]/A[:,0])*Wy[0,0]*(1+K[0,0]) - 1,big_val)
 #         pc_eig_term = utils.minus_sum_log_slope(compute_eigs(Wy[0:1,0:1],K[:,0:1],YYp=YYp[:,0::nQ])[:,-1],big_val)
-        eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K,YYp=YYp)[:,-1],big_val)
-        this_cost = np.sum(celltype_wt*(YYhat - YY)**2) + l2_penalty*l2_term + eig_penalty*eig_term + pc_eig_penalty*pc_eig_term
+        eig_term = utils.minus_sum_log_slope(-compute_eigs(Wy,K,YYp=(YYp/np.tile(A,(1,2))))[:,-1],big_val)
+        this_cost = np.sum(celltype_wt*(YYhat - YY)**2) + l2_penalty*l2_term \
+        + eig_penalty*eig_term + pc_eig_penalty*pc_eig_term + ff_penalty*ff_term
         if np.isnan(this_cost):
             print((pc_eig_term,eig_term))
         return this_cost
@@ -1490,3 +1503,4 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     w1pc = (YYp[:,0]*Wmy1[0,0] - 1)[:,np.newaxis]
 
     return opt_param,result#,w0,w1,w0pc,w1pc,YY,YYp,x0,Wmy0,K0,YYmodeled,YYpmodeled
+
