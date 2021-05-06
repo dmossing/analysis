@@ -1400,9 +1400,9 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
     print(opt_param)
 
-    eig_penalty = 1e-1#1e-2
-    pc_eig_penalty = 1e-1#1e-2
-    l2_penalty = 1e-2#1e-4
+    eig_penalty = 1e-2#1e-2
+    pc_eig_penalty = 1e-2#1e-2
+    l2_penalty = 1e-3#1e-4
     ff_penalty = 1e0#e-1
 
     kappa = 1
