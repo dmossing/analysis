@@ -1294,7 +1294,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     else:
         B_bounds = 0*np.ones((1,nQ))
 
-    big_val = 1e5
+    big_val = 1e4
 
     bdlist = [W0x_bounds,W0y_bounds,K0_bounds,S02_bounds,A_bounds,B_bounds]
 
@@ -1306,14 +1306,16 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     lb[0][0,3] = 0
     ub[0][0,3] = np.inf
 
-    lb[1][0,0] = 0
+    first_bd = 3
+
+    lb[1][0,0] = first_bd
     ub[1][0,0] = np.inf
     lb[1][3,3] = -np.inf
-    ub[1][3,3] = -2
-    lb[1][0,3] = 0
+    ub[1][3,3] = -first_bd
+    lb[1][0,3] = first_bd
     ub[1][0,3] = np.inf
     lb[1][3,0] = -np.inf
-    ub[1][3,0] = 0
+    ub[1][3,0] = -first_bd
 
 #     lb[1][0,0] = wpcpc
 #     ub[1][0,0] = wpcpc
@@ -1326,8 +1328,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
     XXstack = np.concatenate((XXhat,XXhat[:,list(nP+np.arange(nP))+list(np.arange(nP))]),axis=0)
     YYstack = np.concatenate((YYhat,YYhat[:,list(nQ+np.arange(nQ))+list(np.arange(nQ))]),axis=0)
-    l2_penalty = 0#1e-4
-    eig_penalty = 0#1e-2
+    l2_penalty = 1e-1#1e-4
+    eig_penalty = 1e-1#1e-2
     for itype in [0,1,2,3]:
         this_lb,this_ub = [np.concatenate([llb[:,itype].flatten() for llb in bb]) for bb in [lb,ub]]
         these_bounds = list(zip(this_lb,this_ub))
@@ -1398,10 +1400,10 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
     print(opt_param)
 
-    eig_penalty = 1e-2#1e-2
-    pc_eig_penalty = 1e-2#1e-2
-    l2_penalty = 0#1e-1#1e-4
-    ff_penalty = 0.1
+    eig_penalty = 1e-1#1e-2
+    pc_eig_penalty = 1e-1#1e-2
+    l2_penalty = 1e-2#1e-4
+    ff_penalty = 1e0#e-1
 
     kappa = 1
     T = np.array(())
@@ -1443,8 +1445,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
             #w[istim,:]
         w = np.concatenate(wlist,axis=0)
 
-        this_w,_ = sorted_r_eigs(WWy - np.eye(WWy.shape[0]))
-        w = np.concatenate((w,np.real(this_w)[np.newaxis]),axis=0)
+        #this_w,_ = sorted_r_eigs(WWy - np.eye(WWy.shape[0]))
+        #w = np.concatenate((w,np.real(this_w)[np.newaxis]),axis=0)
 
         return w
 
@@ -1460,7 +1462,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         WWx,WWy = [compute_WW(W,K) for W in [Wx,Wy]]
         dXX = XXhat - np.mean(XXhat,0)[np.newaxis]
         Phi = np.diag(np.mean(YYp,0)/np.tile(A,(1,2))[0])
-        dYYpred = dXX @ WWx @ np.linalg.inv(np.eye(nQ*nS*nT) - WWy @ Phi)
+        dYYpred = dXX @ WWx @ np.linalg.pinv(np.eye(nQ*nS*nT) - WWy @ Phi)
         dYY = (YY - np.mean(YY,0)[np.newaxis])/np.tile(A,(1,2))
         return np.sum(celltype_wt*(dYY - dYYpred)**2)
 
@@ -1512,5 +1514,4 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 #     w1pc = compute_eigs(Wmy1[0:1,0:1],K1[:,0:1],YYp=YYp[:,0::nQ])
     w1pc = (YYp[:,0]*Wmy1[0,0]*(1+K1[0,0]) - 1)[:,np.newaxis]
 
-    return opt_param,result#,w0,w1,w0pc,w1pc,YY,YYp,x0,Wmy0,K0,YYmodeled,YYpmodeled
-
+    return opt_param,result,w0,w1,w0pc,w1pc,YY,YYp,x0,Wmy0,K0,YYmodeled,YYpmodeled
