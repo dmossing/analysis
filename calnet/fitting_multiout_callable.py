@@ -1245,6 +1245,8 @@ def load_Rs_mean_cov(ca_data_file=None,fit_running=True,fit_non_running=True,fit
 
 def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
+    #np.random.seed(99)
+
     keys = ['nP','nQ','nN','nS','nT','allow_s02','allow_A','allow_B','pop_rate_fn','pop_deriv_fn']
 
     nP,nQ,nN,nS,nT,allow_s02,allow_A,allow_B,rate_f,rate_fprime = [opt[key] for key in keys]
@@ -1453,7 +1455,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         WWx,WWy = [compute_WW(W,K) for W in [Wx,Wy]]
         dXX = XXhat - np.mean(XXhat,0)[np.newaxis]
         Phi = np.diag(np.mean(YYp,0)/np.tile(A,(1,2))[0])
-        dYYpred = dXX @ WWx @ np.linalg.pinv(np.eye(nQ*nS*nT) - WWy @ Phi)
+        dYYpred = dXX @ WWx @ np.linalg.inv(np.eye(nQ*nS*nT) - WWy @ Phi)
         dYY = (YY - np.mean(YY,0)[np.newaxis])/np.tile(A,(1,2))
         return np.sum(celltype_wt*(dYY - dYYpred)**2)
 
