@@ -1382,6 +1382,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         a0 = np.array((1,))
         b0 = np.array((0,))
         x0 = unparse(wx0,wy0,k0,s020,a0,b0)
+        print(x0)
         result = sop.minimize(cost_,x0,jac=cost_prime_,method='L-BFGS-B',bounds=these_bounds)
 #         print(result)
         x1 = result.x
