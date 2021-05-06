@@ -1292,7 +1292,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     else:
         B_bounds = 0*np.ones((1,nQ))
 
-    big_val = 1e4
+    big_val = 1e5
 
     bdlist = [W0x_bounds,W0y_bounds,K0_bounds,S02_bounds,A_bounds,B_bounds]
 
@@ -1393,7 +1393,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
 
     eig_penalty = 1e-2#1e-2
     pc_eig_penalty = 1e-2#1e-2
-    l2_penalty = 0#1e-4
+    l2_penalty = 1e-1#1e-4
     ff_penalty = 0.1
 
     kappa = 1
@@ -1493,7 +1493,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = utils.parse_thing(x0,shapes)
     w0 = compute_eigs(Wmy0,K0,YYp=YYpmodeled)
 #     w0pc = compute_eigs(Wmy0[0:1,0:1],K0[:,0:1],YYp=YYpmodeled[:,0::nQ])
-    w0pc = (YYpmodeled[:,0]*Wmy0[0,0] - 1)[:,np.newaxis]
+    w0pc = (YYpmodeled[:,0]*Wmy0[0,0]*(1+K0[0,0]) - 1)[:,np.newaxis]
 
     result = sop.minimize(Cost_,x0,method='L-BFGS-B',bounds=these_bounds,jac=Cost_prime_)#,callback=callback)
     x1 = result.x
@@ -1503,7 +1503,7 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
     YY,YYp = compute_YY(Wmx1,Wmy1,K1,s021,amplitude1,baseline1)
     w1 = compute_eigs(Wmy1,K1,YYp=YYp)
 #     w1pc = compute_eigs(Wmy1[0:1,0:1],K1[:,0:1],YYp=YYp[:,0::nQ])
-    w1pc = (YYp[:,0]*Wmy1[0,0] - 1)[:,np.newaxis]
+    w1pc = (YYp[:,0]*Wmy1[0,0]*(1+K1[0,0]) - 1)[:,np.newaxis]
 
     return opt_param,result#,w0,w1,w0pc,w1pc,YY,YYp,x0,Wmy0,K0,YYmodeled,YYpmodeled
 
