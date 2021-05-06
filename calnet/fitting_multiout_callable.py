@@ -1393,6 +1393,8 @@ def initialize_params(XXhat,YYhat,opt,wpcpc=4,wpvpv=-6):
         YYpmodeled[:,nQ+itype] = compute_yprime_(x1)[nN:]
 #         opt_cost[itype] = result.fun
 
+    print(opt_param)
+
     eig_penalty = 1e-2#1e-2
     pc_eig_penalty = 1e-2#1e-2
     l2_penalty = 1e-1#1e-4
