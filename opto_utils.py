@@ -356,6 +356,10 @@ def safe_predict_proba_(logreg,features):
 def compute_slope(x,y,axis=0):
     return (np.nanmean(x*y,axis=axis)/np.nanmean(x**2,axis=axis))[np.newaxis]
 
+def compute_slope_cols(xy,axis=0):
+    x,y = xy[:,0],xy[:,1]
+    return compute_slope(x,y,axis=axis)
+
 def compute_slope_(animal_data,axis=0):
     x = np.nanmean(animal_data[:,:,:,0],0)
     x = np.reshape(x,(x.shape[0]*x.shape[1],-1))
@@ -432,10 +436,22 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
 
-def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84)):
+def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,equal_cond=True,flipxy=False):
     xx = np.linspace(animal_data[:,0].min(),animal_data[:,0].max(),101)
-    stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
-    YY = xx[:,np.newaxis]*stats[0]+stats[1]
+    if flipxy:
+        animal_data = animal_data[:,::-1]
+    if incl_intercept:
+        if equal_cond:
+            stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
+        else:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
+        YY = xx[:,np.newaxis]*stats[0]+stats[1]
+    else:
+        if equal_cond:
+            stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_cols],nreps=nreps)
+        else:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_cols],nreps=nreps)
+        YY = xx[:,np.newaxis]*1/stats[0]
     lb_YY = np.nanpercentile(YY,pct[0],axis=1)
     ub_YY = np.nanpercentile(YY,pct[1],axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)

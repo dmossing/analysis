@@ -1432,38 +1432,25 @@ def align_all_by_neuron(*rs_and_eis):
         rs_aligned[ir][in_each[:,ir]] = rs[ir]
     return rs_aligned,expt_ids,neuron_ids
 
+def compute_Xcouplings(YY_opto,mdls):
+    nfiles,nopto,nN,ntypes = YY_opto.shape
+    nxtypes = mdls[0].WWmx.shape[0]
+    couplings = np.zeros((nfiles,nopto,6,6,nxtypes,ntypes))
+    for iwt,mdl in enumerate(mdls):
+        couplings[iwt] = compute_Xcoupling(YY_opto[iwt],mdl)
+    return couplings
+
+def compute_Xcoupling(YY_opto,mdl):
+    coupling = compute_coupling(YY_opto,mdl)
+    Xcoupling = mdl.WWmx @ coupling
+    return Xcoupling
+
 def compute_couplings(YY_opto,mdls):
     nfiles,nopto,nN,ntypes = YY_opto.shape
     couplings = np.zeros((nfiles,nopto,6,6,ntypes,ntypes))
     #phis = np.zeros((nfiles,nopto,6,6,ntypes))
     for iwt,mdl in enumerate(mdls):
         couplings[iwt] = compute_coupling(YY_opto[iwt],mdl)
-        #try:
-        #    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
-        #    amp = np.ones((ntypes,))
-        #except:
-        #    Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl,amp = mdl.as_list
-        ##nN = Eta.shape[0]
-        #nQ = Wmy.shape[1]
-        #if len(K)==nQ:
-        #    nS = 2
-        #elif len(K)==0:
-        #    nS = 1
-        #if len(T)==nQ:
-        #    nT = 2
-        #elif len(T)==0:
-        #    nT = 1
-        #WWmy = gen_Weight_k_kappa_t(Wmy,K,kappa,T,nS=nS,nT=nT)
-        #WWmx = gen_Weight_k_kappa_t(Wmx,K,kappa,T,nS=nS,nT=nT)
-        #tiled_s02 = np.tile(s02,nS*nT)
-        #bltile = np.tile(bl,nS*nT)
-        #for ilight in range(YY_opto.shape[1]):
-        #    this_YY = 1/amp[np.newaxis,:]*(YY_opto[iwt,ilight].reshape((nN,ntypes)) - bltile[np.newaxis,:])
-        #    phis = mdls[iwt].fprimeXY(mdls[iwt].XX,this_YY).reshape((6,6,ntypes))
-        #    for istim in range(nN):
-        #        iistim,jjstim = np.unravel_index(istim,(6,6))
-        #        Phi = np.diag(phis[iistim,jjstim])
-        #        couplings[iwt,ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
     return couplings
 
 def compute_coupling(YY_opto,mdl):
