@@ -1786,7 +1786,7 @@ def select_trials(trial_info,selector,training_frac,include_all=False,seed=0):
 
     return train_test
 
-def compute_tuning_df(df,trial_info,selector,include=None):
+def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
@@ -1821,7 +1821,7 @@ def compute_tuning_df(df,trial_info,selector,include=None):
             for iflat in range(np.prod(nconds)):
                 coords = np.unravel_index(iflat,tuple(nconds))
                 lkat = k_and(include[expt][ipart],*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
-                tip[(slice(None),)+coords] = np.nanmean(trialwise.loc[:,lkat],-1)
+                tip[(slice(None),)+coords] = fn(trialwise.loc[:,lkat],axis=-1)
             shp = [np.arange(s) for s in tip.shape[1:]]
             column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
             index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])

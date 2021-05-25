@@ -151,7 +151,7 @@ def evaluate_output_amplitude(this_response,theta0,fn=None,lpoisson=0,nub_var=nu
         return ((norm_response - ypred)**2*(1+lpoisson/(ypred+norm_response+fudge))).sum()
     return minusL(theta)
 
-def fit_output_amplitude_offset(this_response,fn=None,theta0=None,lpoisson=0,nub_var=nubs_active,bounds=None,lam=0): # ,land=0
+def fit_output_amplitude_offset(this_response,fn=None,theta0=None,lpoisson=0,nub_var=nubs_active,bounds=None,lam=0,allow_amplitude=True): # ,land=0
     scaleby = 1
     amplitude = np.sqrt((this_response**2).sum())/scaleby
     norm_response = this_response/amplitude
@@ -176,11 +176,15 @@ def fit_output_amplitude_offset(this_response,fn=None,theta0=None,lpoisson=0,nub
     #theta0 = 1+np.concatenate((this_response[[16,8,4,2,1]],(1,)))
     #thetastar_temp = fit_output_amplitude_fixed_rf(this_response,fn=fn,theta0=theta0,nub_var=nub_var)
     if bounds is None:
-        bounds = [(-np.inf,np.inf) for x in range(theta0.size-2)] + [(0,1),(-np.inf,np.inf)]
+        if allow_amplitude:
+            bounds = [(-np.inf,np.inf) for x in range(theta0.size-2)] + [(0,1),(-np.inf,np.inf)]
+        else:
+            bounds = [(-np.inf,np.inf) for x in range(theta0.size-2)] + [(1,1),(-np.inf,np.inf)]
     #if nub_var.shape[1]==9:
     #    bounds[5:9] = [(0,0) for x in range(4)]
     thetastar = sop.fmin_l_bfgs_b(minusL,theta0,fprime=minusdLdtheta,bounds=bounds)
-    thetastar[0][nub_var.shape[1]+1] = thetastar[0][nub_var.shape[1]+1]*amplitude
+    #thetastar[0][nub_var.shape[1]+1] = thetastar[0][nub_var.shape[1]+1]*amplitude
+    thetastar[0][nub_var.shape[1]+1:] = thetastar[0][nub_var.shape[1]+1:]*amplitude
     return thetastar
 
 def evaluate_output_amplitude_offset(this_response,theta0,fn=None,lpoisson=0,nub_var=nubs_active):
@@ -1200,7 +1204,6 @@ def test_validity_of_linear_pred(test_norm_response,linear_pred):
 def show_evan_style(train_response,test_response,ht=6,cmap=parula,line=True,draw_stim_ordering=True):
     sorteach = np.argsort(train_response[:,evan_order_actual],1)[:,::-1]
     sortind = np.arange(train_response.shape[0])
-#    fig = plt.figure()
     for n in [0]:
         new_indexing = np.argsort(sorteach[:,n],kind='mergesort')
         sortind = sortind[new_indexing]
@@ -1231,9 +1234,4 @@ def show_evan_style(train_response,test_response,ht=6,cmap=parula,line=True,draw
         plt.text(lbl_locs[inub],5*ht+1,this_nub_no)
     if line:
         plt.plot((0.5,31.5),(5*ht,0),c='k')
-#         cbaxes = fig.add_axes([0.12, 0.28, 0.03, 0.52]) 
-#         cb = plt.colorbar(img,cax=cbaxes)
-#         cbaxes.yaxis.set_ticks_position('left')
-#         cb.set_label('Normalized Response')
-#         cbaxes.yaxis.set_label_position('left')
         plt.tight_layout(pad=7)

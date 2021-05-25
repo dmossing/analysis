@@ -258,16 +258,45 @@ def weibull(c,params,ncells):
 def weibull_one_size(c,*params):
     return weibull(c,np.array(params),1)[0]
 
+def two_asymptote_fn(x,*params):
+    x0,a1,b1,a2,b2,lam = params
+    as1 = a1*x + b1
+    as2 = a2*x + b2
+    factor = 1/(1+np.exp((x-x0)/lam))
+    return factor*as1 + (1-factor)*as2
+
+def fit_opt_params_two_asymptote_fn(x,R):
+    nsizes = R.shape[0]
+    x0_0 = np.nanmean(x)*np.ones((nsizes,))
+    a1_0 = (R[:,1]-R[:,0])/(x[1]-x[0])
+    b1_0 = R[:,0] - a1_0[:]*x[0]
+    a2_0 = (R[:,-1]-R[:,-2])/(x[-1]-x[-2])
+    b2_0 = R[:,-1] - a2_0[:]*x[-1]
+    lam_0 = np.ones((nsizes,))
+    bds = [(-np.inf,np.inf) for _ in range(5)] + [(0,np.inf)]
+    bds = zip_pairs(bds)
+    params_0 = np.concatenate([z[:,np.newaxis] for z in (x0_0,a1_0,b1_0,a2_0,b2_0,lam_0)],axis=1)
+
+    nvar = 6
+    popt = np.nan*np.ones((nsizes,nvar))
+    pcov = np.nan*np.ones((nsizes,nvar,nvar))
+    for isize in range(nsizes):
+        try:
+            popt[isize],pcov[isize] = sop.curve_fit(two_asymptote_fn,x,R[isize],p0=params_0[isize],bounds=bds)
+        except:
+            print('did not work for %d'%isize)
+    return popt,pcov
+
 def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen=10):
-	ncells = mn.shape[0]
-	nsizes = mn.shape[1]
-	nrows = int(np.ceil(ncells/rowlen))
-	for k in range(ncells):
-		plt.subplot(nrows,rowlen,k+1)
-		r = mn[k]
-		colors = plt.cm.viridis(np.linspace(0,1,nsizes))
-		sim = fit_fn(c,popt[k],ncells)
-		for s in range(r.shape[0]):
-		    plot_errorbar(c,r[s],lb[k,s],ub[k,s],color=colors[s])
-		    plt.plot(c,sim[s],c=colors[s],linestyle='dashed')
-		    plt.axis('off')
+    ncells = mn.shape[0]
+    nsizes = mn.shape[1]
+    nrows = int(np.ceil(ncells/rowlen))
+    for k in range(ncells):
+    	plt.subplot(nrows,rowlen,k+1)
+    	r = mn[k]
+    	colors = plt.cm.viridis(np.linspace(0,1,nsizes))
+    	sim = fit_fn(c,popt[k],ncells)
+    	for s in range(r.shape[0]):
+    	    plot_errorbar(c,r[s],lb[k,s],ub[k,s],color=colors[s])
+    	    plt.plot(c,sim[s],c=colors[s],linestyle='dashed')
+    	    plt.axis('off')

@@ -434,7 +434,10 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
 
 def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84)):
     xx = np.linspace(animal_data[:,0].min(),animal_data[:,0].max(),101)
-    stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
+    if incl_intercept:
+        stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
+    else:
+        stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_cols],nreps=nreps)
     YY = xx[:,np.newaxis]*stats[0]+stats[1]
     lb_YY = np.nanpercentile(YY,pct[0],axis=1)
     ub_YY = np.nanpercentile(YY,pct[1],axis=1)
