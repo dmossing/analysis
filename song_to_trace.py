@@ -11,6 +11,7 @@ import pyute as ut
 import scipy.interpolate as sip
 import song_conversion_script as scs
 import glob
+import sys
 
 def run_fitting(wavfile):
     print('running trace3d fit...')
@@ -84,3 +85,6 @@ def run_on_fold(folder):
         trace,fsigma = run_fitting(wavfile)
         np.save(wavfile.replace(".wav","_trace3d.npy"),{'trace':trace,'fsigma':fsigma},allow_pickle=True)
 
+if __name__ == "__main__":
+    foldname = sys.argv[1]
+    run_on_fold(foldname)
