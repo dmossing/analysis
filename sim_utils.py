@@ -604,7 +604,7 @@ def assign_from_uparam(modal,modal_uparam,this,this_uparam):
 def gen_size_tuning(sc):
     # sc: (nroi,nsize,ncontrast)
     # add 0% contrast stimulus as if it were a 0 degree size
-    gray = np.tile(sc[:,:,0].mean(1)[:,np.newaxis,np.newaxis],(1,1,sc.shape[2]))
+    gray = np.tile(np.nanmean(sc[:,:,0],1)[:,np.newaxis,np.newaxis],(1,1,sc.shape[2]))
     to_plot = np.concatenate((gray,sc),axis=1)
     print(to_plot.shape)
     return to_plot

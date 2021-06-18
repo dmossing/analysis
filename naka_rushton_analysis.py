@@ -1,7 +1,9 @@
 #!/usr/bin/env python
-import numpy as np
+import autograd.numpy as np
+from autograd import grad,elementwise_grad,jacobian
 import scipy.optimize as sop
 import matplotlib.pyplot as plt
+import nub_utils
 
 # fit models of the form (a*(c/c50)^n + b)/((c/c50)^n + 1), where subsets of a, b, and c50 are allowed to vary for each size
 
@@ -272,19 +274,34 @@ def fit_opt_params_two_asymptote_fn(x,R):
     b1_0 = R[:,0] - a1_0[:]*x[0]
     a2_0 = (R[:,-1]-R[:,-2])/(x[-1]-x[-2])
     b2_0 = R[:,-1] - a2_0[:]*x[-1]
-    lam_0 = np.ones((nsizes,))
+    lam_0 = 0.25*(x[-1]-x[0])*np.ones((nsizes,))
     bds = [(-np.inf,np.inf) for _ in range(5)] + [(0,np.inf)]
-    bds = zip_pairs(bds)
+    #bds = zip_pairs(bds)
     params_0 = np.concatenate([z[:,np.newaxis] for z in (x0_0,a1_0,b1_0,a2_0,b2_0,lam_0)],axis=1)
 
     nvar = 6
     popt = np.nan*np.ones((nsizes,nvar))
     pcov = np.nan*np.ones((nsizes,nvar,nvar))
+    def f(*params):
+        return two_asymptote_fn(x,*params) 
+    def fprime(x,*params):
+        return grad(f)(x,*params)
     for isize in range(nsizes):
-        try:
-            popt[isize],pcov[isize] = sop.curve_fit(two_asymptote_fn,x,R[isize],p0=params_0[isize],bounds=bds)
-        except:
+        def cost(params):
+            return np.sum((R[isize] - f(*params))**2)
+        def costprime(params):
+            return grad(cost)(params)
+        res = sop.minimize(cost,x0=params_0[isize],bounds=bds,method='L-BFGS-B',jac=costprime)
+        popt[isize] = res.x
+        pcov[isize] = res.jac
+        if not res.success:
             print('did not work for %d'%isize)
+        #popt[isize],pcov[isize] = sop.curve_fit(two_asymptote_fn,x,R[isize],p0=params_0[isize],bounds=bds)
+        #try:
+        #    popt[isize],pcov[isize] = sop.curve_fit(two_asymptote_fn,x,R[isize],p0=params_0[isize],bounds=bds)
+        #except:
+        #    print('did not work for %d'%isize)
+        #    popt[isize] = params_0[isize]
     return popt,pcov
 
 def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen=10):
@@ -300,3 +317,63 @@ def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen
     	    plot_errorbar(c,r[s],lb[k,s],ub[k,s],color=colors[s])
     	    plt.plot(c,sim[s],c=colors[s],linestyle='dashed')
     	    plt.axis('off')
+
+class ayaz_model(object):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None):
+        self.data = data
+        self.usize = usize        
+        self.ucontrast = ucontrast
+        self.norm_top = norm_top
+        self.norm_bottom = norm_bottom
+        self.base_fn = nub_utils.ayaz_model_div_ind_n_offset
+        if len(data.shape)==2:
+            self.data = self.data[np.newaxis]
+        assert(self.data.shape[1]==len(usize))
+        assert(self.data.shape[2]==len(ucontrast))
+        self.fit(theta0=theta0)
+    def fit(self,theta0=None):
+        r0 = np.nanmin(self.data)
+        rd = 100
+        rs = 100
+        sd = 10
+        ss = 60
+        m = 1
+        n = 2
+        delta = 0
+        mmin = 0.5
+        mmax = 5
+        smax = 180
+            
+        def cost(theta):
+            modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,theta,fn=self.base_fn)
+            non_nan = ~np.isnan(self.data)
+            return np.sum((modeled[np.newaxis] - self.data)[non_nan]**2)
+        
+        if theta0 is None:
+            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
+        bds = sop.Bounds(np.zeros_like(theta0),np.inf*np.ones_like(theta0))
+#         bds.ub[4] = 0
+        bds.lb[-4:-1] = mmin
+        bds.ub[-4:-1] = mmax
+        bds.ub[-8:-4] = smax
+        bds.ub[4] = 0
+        
+        if not self.norm_top:
+            bds.ub[3] = 0
+            theta0[3] = 0
+        
+        if not self.norm_bottom:
+            bds.ub[6] = 0
+            theta0[6] = 0
+            
+        res = sop.minimize(cost,theta0,method='L-BFGS-B',bounds=bds,jac=grad(cost))
+        if res.success:
+            self.theta = res.x
+            self.cost = res.fun
+            self.modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
+            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+            self.c50 = self.theta[5]**(-1/self.theta[-3])
+            self.c50top = self.theta[3]**(-1/self.theta[-3])
+            self.c50bottom = self.theta[6]**(-1/self.theta[-3])
+        else:
+            print(str((itype,iexpt))+' unsuccessful')

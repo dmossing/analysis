@@ -766,7 +766,7 @@ def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=F
     else:
         xmean,xsem = compute_mean_sem(x)
         ymean,ysem = compute_mean_sem(y)
-    plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1)
+    plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1,alpha=alpha)
     scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx,alpha=alpha)
 
 def scatter_size_contrast_pct_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1):

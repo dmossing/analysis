@@ -164,7 +164,7 @@ def bootstat_equal_cond(arr,fns,nreps=1000,pct=(2.5,97.5),axis_equal_cond=0):
     N,k = arr.shape
     axis = 0
     uvals = np.unique(arr[:,axis_equal_cond])
-    print(uvals)
+    #print(uvals)
     nvals = len(uvals)
     Nthese = np.zeros((nvals,),dtype='int')
     for ival in range(nvals):
@@ -174,11 +174,11 @@ def bootstat_equal_cond(arr,fns,nreps=1000,pct=(2.5,97.5),axis_equal_cond=0):
     for val in uvals:
         these_inds = np.where(arr[:,axis_equal_cond]==val)[0]
         c = np.concatenate((c,np.random.choice(these_inds,size=(Nmin,nreps))),axis=0)
-    print(c)
+    #print(c)
     L = len(arr.shape)
     resamp = np.rollaxis(arr,axis,0)
     resamp = resamp[c] # now (Nmin,nreps,k)
-    print(resamp.shape)
+    #print(resamp.shape)
     resamp = np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
     resamp = np.rollaxis(resamp,0,L+1)
     stat = [fn(resamp,axis=axis) for fn in fns]
@@ -1018,6 +1018,7 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
         opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
         c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
 
+    print('linewidth: %d'%linewidth)
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
@@ -1026,8 +1027,11 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
     #else:
     #    cc = c
     cc = c.copy()
-    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
-    plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
+    #plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
+    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle='none',alpha=alpha) #,fmt=None)
+    if linewidth>0:
+        print('plotting')
+        plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
     plt.scatter(x,mn_tgt,c=cc,s=markersize,alpha=alpha)
 
 def get_dict_ind(opt,i):
@@ -1824,6 +1828,53 @@ def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
                 tip[(slice(None),)+coords] = fn(trialwise.loc[:,lkat],axis=-1)
             shp = [np.arange(s) for s in tip.shape[1:]]
             column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
+            index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
+            tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
+            tuning = tuning.append(tip_df)
+    return tuning
+
+def compute_tuning_trialwise_df(df,trial_info,selector,include=None):
+    params = list(selector.keys())
+#     expts = list(trial_info.keys())
+    expts = df.session_id.unique()
+    nexpt = len(expts)
+    tuning = pd.DataFrame()
+    if include is None:
+        include = {expt:None for expt in expts}
+    for iexpt,expt in enumerate(expts):
+        in_this_expt = (df.session_id == expt)
+        trialwise = df.loc[in_this_expt].pivot(values='data',index='roi_index',columns='trial_index')
+        nroi = trialwise.shape[0]
+        ntrial = trialwise.shape[1]
+        if include[expt] is None:
+            print('including all trials in one partition')
+            include[expt] = np.ones((ntrial,),dtype='bool')
+        if not isinstance(include[expt],list):
+            include[expt] = [include[expt]]
+        npart = len(include[expt])
+#         if isinstance(include[expt],list):
+#             tuning[iexpt] = [None for ipart in range(npart)]
+        #condition_list = []
+        # args to gen_condition_list
+        # ti
+# selector: dict where each key is a param in ti.keys(), and each value is either a callable returning a boolean,
+# to be applied to ti[param], or an input to the function filter_selector
+# filter selector: if filter_selector(selector[param]), the tuning curve will be separated into the unique elements of ti[param]. 
+        condition_list,_ = gen_condition_list(trial_info[expt],selector,filter_selector=np.logical_not)
+        iconds,uconds = zip(*[pd.factorize(c,sort=True) for c in condition_list])
+        nconds = [len(u) for u in uconds]
+        for ipart in range(npart):
+            nreps = np.sum(k_and(*[(iconds[ic] == 1) for ic in range(len(condition_list))]))
+            print(nconds + [nreps])
+            tip = np.zeros((nroi,)+tuple(nconds)+(nreps,))
+            for iflat in range(np.prod(nconds)):
+                coords = np.unravel_index(iflat,tuple(nconds))
+                lkat = k_and(*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
+                to_include = np.in1d(np.where(lkat)[0],np.where(include[expt][ipart])[0])
+                tip[(slice(None),)+coords+(slice(None),)] = trialwise.loc[:,lkat]
+                tip[(slice(None),)+coords+(~to_include,)] = np.nan 
+            shp = [np.arange(s) for s in tip.shape[1:]]
+            column_labels = pd.MultiIndex.from_product(shp,names=params[1:]+['trial#'])
             index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
             tuning = tuning.append(tip_df)

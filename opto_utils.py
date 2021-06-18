@@ -356,6 +356,10 @@ def safe_predict_proba_(logreg,features):
 def compute_slope(x,y,axis=0):
     return (np.nanmean(x*y,axis=axis)/np.nanmean(x**2,axis=axis))[np.newaxis]
 
+def compute_slope_cols(xy,axis=0):
+    x,y = xy[:,0].flatten(),xy[:,1].flatten()
+    return compute_slope(x,y,axis=axis)
+
 def compute_slope_(animal_data,axis=0):
     x = np.nanmean(animal_data[:,:,:,0],0)
     x = np.reshape(x,(x.shape[0]*x.shape[1],-1))
@@ -402,13 +406,18 @@ def compute_intercept_(animal_data,axis=0):
     y = np.reshape(y,(y.shape[0]*y.shape[1],-1))
     return compute_intercept(x,y,axis=axis)
 
-def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1):
+def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1,equate_0=False):
     if xlabel is None:
         xlabel = 'PC event rate, light off'
     if ylabel is None:
         ylabel = 'PC event rate, light on'
-    lb,ub,mn = ut.bootstrap(animal_data,pct=pct+(50,),fn=np.nanmean,axis=0)
-    stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_,compute_intercept_])
+    if equate_0:
+        this_animal_data = animal_data.copy()
+        this_animal_data[:,:,0] = animal_data[:,:,0].mean(1)[:,np.newaxis]
+    lb,ub,mn = ut.bootstrap(this_animal_data,pct=pct+(50,),fn=np.nanmean,axis=0)
+    stats = ut.bootstat(this_animal_data,fns=[compute_slope_w_intercept_,compute_intercept_])
+    #print('animal data shape: '+str(this_animal_data.shape))
+    #print('stats shape: '+str([s.shape for s in stats]))
     npt = mn[:,:,0].size
     xerr = np.zeros((2,npt))
     xerr[0] = mn[:,:,0].flatten()-lb[:,:,0].flatten()
@@ -421,6 +430,7 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     if mn_plot is None:
         mn_plot = np.nanmin(mn)
     xx = np.linspace(mn_plot,mx_plot,100)[:,np.newaxis]
+    #print([s.shape for s in stats])
     YY = xx*stats[0]+stats[1]
     lb_YY = np.nanpercentile(YY,16,axis=1)
     ub_YY = np.nanpercentile(YY,84,axis=1)
@@ -428,22 +438,43 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     plt.fill_between(xx[:,0],lb_YY,ub_YY,alpha=0.5*alpha,facecolor=opto_color)
     plt.plot(xx[:,0],mn_YY,c=opto_color,alpha=alpha)
     plt.errorbar(mn[:,:,0].flatten(),mn[:,:,1].flatten(),xerr=xerr,yerr=yerr,fmt='none',zorder=1,c='k',alpha=0.5*alpha)
-    sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha)
+    sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha,equate_0=equate_0)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
 
-def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84)):
-    xx = np.linspace(animal_data[:,0].min(),animal_data[:,0].max(),101)
+def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,flipxy=False,xmin=None,xmax=None):
+    if xmin is None:
+        xmin = animal_data.transpose()[0].min()
+    if xmax is None:
+        xmax = animal_data.transpose()[0].max()
+    xx = np.linspace(xmin,xmax,101)
     if incl_intercept:
-        stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)
+        stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_,compute_intercept_],nreps=nreps)#,nreps=nreps)#_equal_cond
+        #print('animal data shape: '+str(animal_data.shape))
+        #print('stats shape: '+str([s.shape for s in stats]))
+        #print(stats)
+        YY = xx[:,np.newaxis]*stats[0]+stats[1]
     else:
-        stats = ut.bootstat_equal_cond(animal_data,fns=[compute_slope_cols],nreps=nreps)
-    YY = xx[:,np.newaxis]*stats[0]+stats[1]
+        stats = ut.bootstat(animal_data,fns=[compute_slope_],nreps=nreps)#_equal_cond
+        if flipxy:
+            YY = xx[:,np.newaxis]*1/stats[0]
+        else:
+            YY = xx[:,np.newaxis]*stats[0]
+    #print(YY.shape)
     lb_YY = np.nanpercentile(YY,pct[0],axis=1)
     ub_YY = np.nanpercentile(YY,pct[1],axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
+    #print((np.nanmean(lb_YY),np.nanmean(ub_YY)))
     plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
     plt.plot(xx,mn_YY,c=c,alpha=alpha)
+    #if flipxy:
+    #else:
+    #    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
+
+def zip_pairs(list_of_pairs):
+    lb = [lp[0] for lp in list_of_pairs]
+    ub = [lp[1] for lp in list_of_pairs]
+    return (lb,ub)    #    plt.plot(xx,mn_YY,c=c,alpha=alpha)
     return stats
     
 def scatter_size_contrast_x_dx_errorbar(animal_data,pct=(16,84),opto_color='b',xlabel=None,ylabel=None,mn_plot=None,mx_plot=None,alpha=1):
