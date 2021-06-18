@@ -12,7 +12,7 @@ import scipy.stats as sst
 
 calnet_base = '/home/dan/calnet_data/'
 Niter = int(1e3)
-opto_levels = 1*np.linspace(0,1,11)
+opto_levels = 1*np.linspace(0,1,21)
 #opto_levels = np.array((0,0.5))
 dt = 1e-1
 sim_options = {}
@@ -139,10 +139,15 @@ def build_models_and_simulate_opto_effects(weights_files,target_file,sim_options
     to_save['XX_opto'] = XX_opto
     np.save(target_file,to_save)
 
-def run(fit_lbl,calnet_base=calnet_base,sim_options=sim_options,pool_size=1):
+def run(fit_lbl,calnet_base=calnet_base,sim_options=sim_options,pool_size=1,lcutoff=10):
     weights_fold = calnet_base + 'weights/weights_%s/'%fit_lbl
     weights_files = glob.glob(weights_fold+'*.npy')
     weights_files.sort()
+    losses = np.zeros((len(weights_files),))
+    for iwt in range(len(weights_files)):
+        Wstar_dict = np.load(weights_files[iwt],allow_pickle=True)[()]
+        losses[iwt] = Wstar_dict['loss']
+    weights_files = [wf for wf,l in zip(weights_files,losses) if l < np.nanpercentile(losses,lcutoff)]
     target_file = calnet_base + 'dynamics/vip_chrimson_l4_opto_tavg_connection_deletion_%s.npy'%fit_lbl
     build_models_and_simulate_opto_effects(weights_files,target_file,sim_options=sim_options,pool_size=pool_size)
 

@@ -61,7 +61,7 @@ class Model(object):
     def u_fn_s(self,XX,YY):
         return self.u_fn(XX,YY,self.WWsx,self.WWsy)
         
-    def fXY(self,XX,YY,istim=None,res_factor=1.,current_inj=None):
+    def fXY(self,XX,YY,istim=None,res_factor=1.,current_inj=None,current_var=None):
         if istim is None:
             Eta = res_factor*self.resEta + self.u_fn_m(XX,YY)
             Xi = res_factor*self.resXi + self.u_fn_s(XX,YY)
@@ -70,6 +70,8 @@ class Model(object):
             Xi = res_factor*self.resXi[istim] + self.u_fn_s(XX,YY)
         if not current_inj is None:
             Eta = Eta + current_inj
+        if not current_var is None:
+            Xi = Xi + current_var
         return self.compute_f_(Eta,Xi,self.s02)
 
     def fprimeXY(self,XX,YY,istim=None,res_factor=1.,current_inj=None):

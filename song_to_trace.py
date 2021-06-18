@@ -75,12 +75,26 @@ def run_fitting(wavfile):
     trace,fsigma = parse_trace(res.x)
     return trace,fsigma
 
+def run_on_file(filename):
+    print(filename)
+    wavfile = scs.run(filename.split('.mp3')[0])
+    trace,fsigma = run_fitting(wavfile)
+    np.save(wavfile.replace(".wav","_trace3d.npy"),{'trace':trace,'fsigma':fsigma},allow_pickle=True)
+
 def run_on_fold(folder):
     file_list = glob.glob(folder+'/*.mp3')
     file_list.sort()
-    for filename in file_list:
-        print(filename)
-        wavfile = scs.run(filename.split('.mp3')[0])
-        trace,fsigma = run_fitting(wavfile)
-        np.save(wavfile.replace(".wav","_trace3d.npy"),{'trace':trace,'fsigma':fsigma},allow_pickle=True)
+    if nprocesses > 1:
+        with mp.Pool(processes=nprocesses) as p:
+            p.map(run_on_file,file_list)
+    else:
+        for filename in file_list:
+            run_on_file(filename)
 
+if __name__ == "__main__":
+    foldname = sys.argv[1]
+    if len(sys.argv)>2:
+        nprocesses = int(sys.argv[2])
+    else:
+        nprocesses = 1
+    run_on_fold(foldname)

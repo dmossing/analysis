@@ -5,9 +5,9 @@ import autograd.numpy as np
 
 # dynamics fns
 
-def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=None,stim_vals=None,dt=1e-1,sim_type='fix',inj_mag=np.array((0,)),residuals_on=True):
-    desired = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','XX','XXp','Eta','Xi']
-    Wmx,Wmy,Wsx,Wsy,s02,k,kappa,XX,XXp,Eta,Xi = [getattr(Model,key) for key in desired]
+def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=None,stim_vals=None,dt=1e-1,sim_type='fix',inj_mag=np.array((0,)),residuals_on=True,l4_coupled=False,l4_factor=0.25,inj_var=False,var_factor=1):
+    desired = ['Wmx','Wmy','Wsx','Wsy','s02','K','kappa','XX','XXp','Eta','Xi','nP','nQ']
+    Wmx,Wmy,Wsx,Wsy,s02,k,kappa,XX,XXp,Eta,Xi,nP,nQ = [getattr(Model,key) for key in desired]
     
     if fix_dim is None:
         fix_dim = [None]
@@ -35,41 +35,65 @@ def compute_steady_state_Model(Model,Niter=int(3e3),max_val=2.5,Ny=50,fix_dim=No
     
     yvals = np.linspace(0,max_val,Ny)
     
-    def fY(XX,YY,stim_val,current_inj=None):
-        return Model.fXY(XX,YY,istim=stim_val,current_inj=current_inj,res_factor=res_factor)
+    def fY(XX,YY,stim_val,current_inj=None,current_var=None):
+        return Model.fXY(XX,YY,istim=stim_val,current_inj=current_inj,res_factor=res_factor,current_var=current_var)
     
     def predict_YY_fix_dim(XX,YY0,stim_val,dt=dt,fix_dim=0,run_backward=False):
         def dYYdt(YY):
             return -YY + fY(XX,YY,stim_val)
+        def dYYdt_coupled(xx,YY):
+            return -YY + fY(xx,YY,stim_val)
         YY = np.zeros((Niter+1,YY0.shape[0]))
         YY[0] = YY0.copy() #np.zeros((nN,nS*nQ))
+        if l4_coupled:
+            this_XX = XX.copy()
         dYY = np.zeros_like(YY[0])
         iiter = 0
         while iiter < Niter: #np.abs(dYY).sum()>1e-8*np.abs(YY).sum():
-            dYY = dt*dYYdt(YY[iiter])
+            if l4_coupled:
+                dYY = dt*dYYdt_coupled(this_XX,YY[iiter])
+            else:
+                dYY = dt*dYYdt(YY[iiter])
             if not fix_dim is None:
                 dYY[fix_dim] = 0
             if run_backward:
                 dYY = -dYY
             YY[iiter+1] = YY[iiter] + dYY
+            if l4_coupled:
+                this_XX[0::nP] = this_XX[0::nP] + l4_factor*dYY[0::nQ]
             iiter = iiter+1
         return YY
     
     def predict_YY_current_injection(XX,YY0,stim_val,dt=dt,inj_dim=0,run_backward=False,inj_mag=0):
-        def dYYdt(YY,current_inj=None):
-            return -YY + fY(XX,YY,stim_val,current_inj=current_inj)
+        def dYYdt(YY,current_inj=None,current_var=None):
+            return -YY + fY(XX,YY,stim_val,current_inj=current_inj,current_var=current_var)
+        def dYYdt_coupled(xx,YY,current_inj=None,current_var=None):
+            return -YY + fY(xx,YY,stim_val,current_inj=current_inj,current_var=current_var)
         YY = np.zeros((Niter+1,YY0.shape[0]))
         YY[0] = YY0.copy() #np.zeros((nN,nS*nQ))
+        if l4_coupled:
+            this_XX = XX.copy()
         dYY = np.zeros_like(YY[0])
         iiter = 0
         current_inj = np.zeros((YY0.shape[0],))
         if not inj_dim is None:
             current_inj[inj_dim] = inj_mag
+        if inj_var:
+            current_var = np.zeros((YY0.shape[0],))
+            if not inj_dim is None:
+                current_var[inj_dim] = var_factor*inj_mag
+        else:
+            current_var = None
         while iiter < Niter: #np.abs(dYY).sum()>1e-8*np.abs(YY).sum():
-            dYY = dt*dYYdt(YY[iiter],current_inj=current_inj)
+            if l4_coupled:
+                dYY = dt*dYYdt_coupled(this_XX,YY[iiter],current_inj=current_inj,current_var=current_var)
+            else:
+                dYY = dt*dYYdt(YY[iiter],current_inj=current_inj,current_var=current_var)
             if run_backward:
                 dYY = -dYY
             YY[iiter+1] = YY[iiter] + dYY
+            if l4_coupled:
+                this_XX[0::nP] = this_XX[0::nP] + l4_factor*dYY[0::nQ]
             iiter = iiter+1
         return YY
     
@@ -200,7 +224,8 @@ def compute_steady_state_Model_multi_inj(Model,Niter=int(3e3),max_val=2.5,Ny=50,
         elif sim_type=='inj':
             for ifix in range(Nfix):
                 yy0 = YY0[stim_val] #+np.random.randn(yy0.shape)
-                YY_ss[ifix,istim] = predict_YY_current_injection(XX[stim_val],yy0,stim_val,inj_dim=fix_dim,dt=dt,inj_mag=[inj_mag[0][ifix]]+inj_mag[1:])
+                #YY_ss[ifix,istim] = predict_YY_current_injection(XX[stim_val],yy0,stim_val,inj_dim=fix_dim,dt=dt,inj_mag=[inj_mag[0][ifix]]+inj_mag[1:])
+                YY_ss[ifix,istim] = predict_YY_current_injection(XX[stim_val],yy0,stim_val,inj_dim=fix_dim,dt=dt,inj_mag=[im[ifix] for im in inj_mag])
         elif sim_type=='layer4':
             for ifix in range(Nfix):
                 yy0 = YY0[stim_val] #+np.random.randn(yy0.shape)

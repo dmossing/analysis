@@ -553,7 +553,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict = {}
     wt_dict['X'] = 3 #1
     wt_dict['Y'] = 3
-    wt_dict['Eta'] = 3 # 1 # 
+    #wt_dict['Eta'] = 3 # 1 # 
     wt_dict['Xi'] = 0.1
     wt_dict['stims'] = np.ones((nN,1)) #(np.arange(30)/30)[:,np.newaxis]**1 #
     wt_dict['barrier'] = 0. #30.0 #0.1
@@ -584,7 +584,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
     wt_dict['isn'] = 0.1
     wt_dict['tv'] = 0.1
     wt_dict['X'] = 3
-    wt_dict['Eta'] = 30#3 # 1 # 
+    wt_dict['Eta'] = 10#3 # 1 # 
 
     ## temporary opto from no_opto
     #wt_dict['opto'] = 0.01
@@ -654,7 +654,7 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
                     W10list[ivar] = W10list[ivar] + init_noise*np.random.randn(*W10list[ivar].shape)
             if init_W_from_lbfgs:
                 print(opt)
-                opt_param,result = fmc.initialize_params(XXhat,YYhat,opt,wpcpc=5,wpvpv=-6)
+                opt_param,result,_,_,_,_,_,_,_,_,_,_,_ = fmc.initialize_params(XXhat,YYhat,opt,wpcpc=5,wpvpv=-6)
                 these_shapes =  [(nP,nQ),(nQ,nQ),(nQ,),(nQ,),(nQ,),(nQ,)]
                 Wmx0,Wmy0,K0,s020,amplitude0,baseline0 = calnet.utils.parse_thing(opt_param,these_shapes)
                 if init_Eta_with_s02:

@@ -52,7 +52,7 @@ weights_files = weights_files + [weights_base+fit+'.npy' for fit in good_fits]
 init_files = weights_files
 ntries = len(init_files)
 
-init_noise = 0.3 # 0.1
+init_noise = 0.1 # 0.3 # 0.1
 tv = True
 correct_Eta = False
 init_Eta_with_s02 = False
@@ -65,6 +65,7 @@ simulate1 = True
 simulate2 = True
 verbose = True
 free_amplitude = False
+fit_s02 = False
 
 zero_extra_weights = [np.zeros((2,4),dtype='bool'),np.zeros((4,4),dtype='bool')]
 #zero_extra_weights[1][2,1] = True # temporarily constraining VIP->SST weight to be 0
@@ -74,7 +75,7 @@ def run_fitting(init_file,target_name,seed=None):
     print('running %s -> %s'%(init_file,target_name))
     if not seed is None:
         np.random.seed(seed=seed)
-    fcowo.fit_weights_and_save(target_name,ca_data_file=ca_data_file,opto_silencing_data_file=opto_silencing_data_file,opto_activation_data_file=opto_activation_data_file,allow_var=False,fit_s02=True,constrain_isn=True,tv=tv,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=True,scale_init_by=1,init_W_from_file=True,init_file=init_file,correct_Eta=correct_Eta,init_Eta_with_s02=init_Eta_with_s02,init_Eta12_with_dYY=init_Eta12_with_dYY,use_opto_transforms=use_opto_transforms,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2,verbose=verbose,free_amplitude=free_amplitude,norm_opto_transforms=norm_opto_transforms,zero_extra_weights=zero_extra_weights)
+    fcowo.fit_weights_and_save(target_name,ca_data_file=ca_data_file,opto_silencing_data_file=opto_silencing_data_file,opto_activation_data_file=opto_activation_data_file,allow_var=False,fit_s02=fit_s02,constrain_isn=True,tv=tv,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=True,scale_init_by=1,init_W_from_file=True,init_file=init_file,correct_Eta=correct_Eta,init_Eta_with_s02=init_Eta_with_s02,init_Eta12_with_dYY=init_Eta12_with_dYY,use_opto_transforms=use_opto_transforms,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2,verbose=verbose,free_amplitude=free_amplitude,norm_opto_transforms=norm_opto_transforms,zero_extra_weights=zero_extra_weights)
 
 def run_fitting_one_arg(inp):
     init_file,target_name,seed = inp
@@ -121,7 +122,7 @@ if __name__=="__main__":
     #print(losses)
     #print(np.nanpercentile(losses,pctile_cutoff))
 
-    weights_files = [wf for (wf,loss) in zip(weights_files,losses) if loss<np.nanpercentile(losses,pctile_cutoff)]
+    weights_files = [wf for (wf,loss) in zip(weights_files,losses) if loss<=np.nanpercentile(losses,pctile_cutoff)]
     print(weights_files)
 
     #if not weights_files_base is None:

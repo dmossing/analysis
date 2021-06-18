@@ -412,15 +412,18 @@ def fit_W_sim(Xhat,Xpc_list,Yhat,Ypc_list,dYY,pop_rate_fn=None,pop_deriv_fn=None
         # returns value float
         #Optoterm = compute_opto_error_nonlinear(W) #testing out 8/20/20
         opto_wt = np.concatenate([wtStimOpto*wtCellOpto*w for w in wtDirOpto],axis=0)
-        if use_opto_transforms:
-            dYYterm = compute_opto_error_nonlinear_transform(amp*fval+bltile,amp*fval12+bltile,opto_wt)
-        else:
-            dYYterm = compute_opto_error_nonlinear(amp*fval+bltile,amp*fval12+bltile,opto_wt)
         if wtSMI != 0:
             SMIhaloterm,SMIchrimsonterm,SMIbaselineterm = compute_smi_error(fval,fval12,halo_mult=1,chrimson_mult=1)
         else:
             SMIhaloterm,SMIchrimsonterm,SMIbaselineterm = 0,0,0
-        Optoterm = wtdYY*dYYterm
+        if wtdYY != 0:
+            if use_opto_transforms:
+                dYYterm = compute_opto_error_nonlinear_transform(amp*fval+bltile,amp*fval12+bltile,opto_wt)
+            else:
+                dYYterm = compute_opto_error_nonlinear(amp*fval+bltile,amp*fval12+bltile,opto_wt)
+            Optoterm = wtdYY*dYYterm
+        else:
+            Optoterm = 0
         cost = wtX*Xterm + wtY*Yterm + wtEta*Etaterm + wtXi*Xiterm + wtOpto*Optoterm + wtSMIhalo*SMIhaloterm + wtSMIchrimson*SMIchrimsonterm + wtSMI*SMIbaselineterm# + wtEtaTV*EtaTVterm 
         if constrain_isn:
             ISNterm = compute_isn_error(W1,W2)
