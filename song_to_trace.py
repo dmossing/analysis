@@ -11,6 +11,7 @@ import pyute as ut
 import scipy.interpolate as sip
 import song_conversion_script as scs
 import glob
+import sys
 
 def run_fitting(wavfile):
     print('running trace3d fit...')
