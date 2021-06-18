@@ -12,6 +12,7 @@ import scipy.interpolate as sip
 import song_conversion_script as scs
 import glob
 import sys
+import multiprocessing as mp
 
 def run_fitting(wavfile):
     print('running trace3d fit...')
@@ -78,6 +79,9 @@ def run_fitting(wavfile):
 
 def run_on_file(filename):
     print(filename)
+    new_filename = filename.replace("'","")
+    os.rename(filename,new_filename)
+    filename = new_filename
     wavfile = scs.run(filename.split('.mp3')[0])
     trace,fsigma = run_fitting(wavfile)
     np.save(wavfile.replace(".wav","_trace3d.npy"),{'trace':trace,'fsigma':fsigma},allow_pickle=True)

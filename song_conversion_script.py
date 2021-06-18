@@ -4,7 +4,8 @@ import sys
 
 def run(number):
     print('converting to WAV...')
-    os.system('ffmpeg -i %s.mp3 -vn -acodec pcm_s16le -ac 1 -ar 44100 -f wav %s.wav'%(number,number))
+    number = number.replace("'","\'")
+    os.system('ffmpeg -y -i %s.mp3 -vn -acodec pcm_s16le -ac 1 -ar 44100 -f wav %s.wav'%(number,number))
     #os.system('cp %s.wav ~/Documents/data/birbs/birdsong/'%number)
     return number+'.wav'
 
