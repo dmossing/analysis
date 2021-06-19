@@ -37,6 +37,19 @@ def get_hierarchy_strings(cur,name_list):
             print('could not do %s'%this_name)
     return found_vernaculars,found_hierarchies
 
+def sci_plus_common_string_lists_to_dicts(cur,sci_names,vernaculars,hierarchies):
+    tsn_dicti = {}
+    tree_dicti = {}
+    for this_sn,this_name,this_hierarchy_str in zip(sci_names,vernaculars,hierarchies):
+        this_hierarchy = [int(s) for s in this_hierarchy_str.split('-')]
+        for th in this_hierarchy[:-1]:
+            for row in cur.execute('SELECT complete_name FROM taxonomic_units WHERE tsn=%d'%th):
+                tsn_dicti[th] = row[0]
+        th = this_hierarchy[-1]
+        tsn_dicti[th] = '%s\n%s'%(this_sn,this_name)
+        add_list_to_dict(this_hierarchy,tree_dicti)
+    return tsn_dicti,tree_dicti
+
 def string_lists_to_dicts(cur,vernaculars,hierarchies):
     tsn_dicti = {}
     tree_dicti = {}
@@ -61,6 +74,96 @@ def common_names_to_dicts(sqlite_filename,common_names):
     found_vernaculars,found_hierarchies = get_hierarchy_strings(cur,common_names)
     tsn_dicti,tree_dicti = string_lists_to_dicts(cur,found_vernaculars,found_hierarchies)
     return found_vernaculars,found_hierarchies,tsn_dicti,tree_dicti
+
+def gen_name_dict(sci_names,com_names):
+    name_dict = {}
+    for sn,cn in zip(sci_names,com_names):
+        if not ' x ' in sn and not 'sp.' in sn:
+            sn = ' '.join(sn.split(' ')[:2])
+            if not sn in name_dict:
+                name_dict[sn] = [cn]
+            else:
+                name_dict[sn] += [cn]
+    for sn in name_dict:
+        name_dict[sn] = list(set(name_dict[sn]))
+    return name_dict
+
+def look_up_tsns_and_hierarchies(cur,name_dict):
+    simple_list = list(name_dict.keys())
+    simple_list.sort()
+    found_sci_names,found_tsns,found_hierarchies = [[] for _ in range(3)]
+    for iname,name in enumerate(simple_list):
+        candidates = []
+        for row in cur.execute('SELECT tsn FROM taxonomic_units WHERE complete_name="%s"'%name):
+            candidates += [row[0]]
+        if not candidates:
+            for row in cur.execute('SELECT tsn FROM vernaculars WHERE vernacular_name="%s" AND language="English"'%name_dict[name][0].replace("'","\'")):
+                candidates += [row[0]]
+        if candidates:
+            for cand in candidates:
+                found_vernacular = False
+                found_hierarchy = False
+                for row in cur.execute('SELECT vernacular_name FROM vernaculars WHERE tsn=%d AND language="English"'%cand):
+                    found_vernacular = True
+                for row in cur.execute('SELECT hierarchy_string FROM hierarchy WHERE tsn=%d'%cand):
+                    found_hierarchy = True
+                    this_hierarchy = row[0]
+                found_both = (found_vernacular and found_hierarchy)
+                if found_both:
+                    found_tsns += [cand]
+                    found_sci_names += [name]
+                    found_hierarchies += [this_hierarchy]
+                    # add to found_hierarchy
+                    break
+            if not found_both:
+                print('could not find in vernacular and hierarchy: %s'%name)
+        else:
+            print('could not find in tax: %s'%name)
+    return found_sci_names,found_tsns,found_hierarchies
+
+def look_up_vernaculars(cur,name_dict,found_sci_names,found_tsns):
+    found_vernaculars = []
+    for name,tsn in zip(found_sci_names,found_tsns):
+        candidates = []
+        for row in cur.execute('SELECT vernacular_name FROM vernaculars WHERE tsn=%d AND language="English"'%tsn):
+            candidates += [row[0]]
+        if len(candidates)>1:
+            print('found extra for %s:'%name)
+            for c in candidates:
+                print(c)
+            in_dict = [c for c in candidates if c in name_dict[name]]
+            if in_dict:
+                pick = in_dict[0]
+            else:
+                pick = candidates[0]
+            print('picked '+str(pick))
+            found_vernaculars += [pick]
+            print('\n')
+        elif len(candidates)==1:
+            found_vernaculars += candidates
+        elif not candidates:
+            found_vernaculars += [None]
+            print('could not do '+name)
+            print('\n')
+    return found_vernaculars
+
+def get_sqlite_tax_info(sqlite_filename,name_dict):
+    con = sqlite3.connect(sqlite_filename)
+    cur = con.cursor()
+    found_sci_names,found_tsns,found_hierarchies = look_up_tsns_and_hierarchies(cur,name_dict)
+    found_vernaculars = look_up_vernaculars(cur,name_dict,found_sci_names,found_tsns)
+
+    found_sci_names = [fsn for fsn,fv in zip(found_sci_names,found_vernaculars) if not fv is None]
+    found_tsns = [fsn for fsn,fv in zip(found_tsns,found_vernaculars) if not fv is None]
+    found_vernaculars = [fv for fv in found_vernaculars if not fv is None]
+
+    return found_sci_names,found_vernaculars,found_tsns,found_hierarchies,cur
+
+def sci_plus_common_names_to_dicts(sqlite_filename,sci_names,com_names):
+    name_dict = gen_name_dict(sci_names,com_names)
+    found_sci_names,found_vernaculars,found_tsns,found_hierarchies,cur = get_sqlite_tax_info(sqlite_filename,name_dict)
+    tsn_dicti,tree_dicti = sci_plus_common_string_lists_to_dicts(cur,found_sci_names,found_vernaculars,found_hierarchies)
+    return found_sci_names,found_vernaculars,found_hierarchies,tsn_dicti,tree_dicti
 
 def dict_to_newick(dicti,root=None):
     if len(dicti[root][1])==0:
