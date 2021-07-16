@@ -14,6 +14,12 @@ import glob
 import sys
 import multiprocessing as mp
 
+def find_loud_window(spec,minpad=1000,maxlen=2000):
+    npad = minpad + np.argmax(ssi.convolve(np.sum(spec[:,minpad:],0),np.ones((maxlen,)),mode='valid'))
+    endat = npad+maxlen#np.minimum(npad+maxlen,nt-npad)
+    return npad,endat
+    
+
 def run_fitting(wavfile):
     print('running trace3d fit...')
     fs,data = siw.read(wavfile)
@@ -22,8 +28,9 @@ def run_fitting(wavfile):
     spec = spec/np.max(np.mean(spec,axis=0))
     minpad = 1000
     maxlen = 2000
-    npad = minpad + np.argmax(ssi.convolve(np.sum(spec[:,minpad:],0),np.ones((maxlen,)),mode='valid'))
-    endat = npad+maxlen#np.minimum(npad+maxlen,nt-npad)
+    #npad = minpad + np.argmax(ssi.convolve(np.sum(spec[:,minpad:],0),np.ones((maxlen,)),mode='valid'))
+    #endat = npad+maxlen#np.minimum(npad+maxlen,nt-npad)
+    npad,endat = find_loud_window(spec,minpad=minpad,maxlen=maxlen)
     rg = slice(npad,endat)
     ntpad = endat-npad
     freq_min = 5

@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import autograd.scipy.special as ssp
 import scipy.stats as sst
 from matplotlib.colors import ListedColormap
+import von_mises_analysis as vma
 
 # visual stim ordering convention
 nub_locs = np.array([(0,0),(1,0),(0,1),(-1,0),(0,-1)])
@@ -280,7 +281,7 @@ def show_gaussian_fit(theta,bd=1.75,cbd=2):
     plt.xlim((-bd,bd))
     plt.ylim((-bd,bd))
 
-def show_fit(theta,bd=1.75,cbd=1,nub_order=np.array([0,1,2,3,4])):
+def show_fit(theta,bd=1.75,cbd=1,nub_order=np.array([0,1,2,3,4]),add_1=False,nub_lbls=None):
     x = np.linspace(-bd,bd,100)
     y = np.linspace(bd,-bd,100)
     xx,yy = np.meshgrid(x,y)
@@ -298,7 +299,11 @@ def show_fit(theta,bd=1.75,cbd=1,nub_order=np.array([0,1,2,3,4])):
     pc = PatchCollection(rects, alpha=1, facecolor=facecolors, edgecolor='k')
     plt.gca().add_collection(pc)
     #plt.scatter(nub_locs[:,0],nub_locs[:,1],c='g',marker='+')
-    nub_lbls = [str(n) for n in range(nub_locs.shape[0])]
+    if nub_lbls is None:
+        if add_1:
+            nub_lbls = [str(n+1) for n in range(nub_locs.shape[0])]
+        else:
+            nub_lbls = [str(n) for n in range(nub_locs.shape[0])]
     for inub in range(this_nub_locs.shape[0]):
         plt.text(this_nub_locs[inub,0],this_nub_locs[inub,1],nub_lbls[inub],c='k',horizontalalignment='center',verticalalignment='center')
     #plt.text(nub_locs[:,0],nub_locs[:,1],nub_lbls,c='g')
@@ -1309,6 +1314,12 @@ def ayaz_model_sub_ind_n_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,n
     rate = r0 + compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta) - compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
     return rate
 
+def ayaz_model_sub_ind_n_one_ss_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #am = 0
+    #rate = r0 + compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta) - compute_norm_model(c,d,0,rdm,rsp,sdm,ssp,m,nmm,npp,delta)
+    rate = r0 + compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,nmm,delta) - compute_norm_model(c,d,0,rdm,rsp,sdm,ssp,m,nmm,nmm,delta)
+    return rate
+
 def compute_norm_model(c,d,a,rd,rs,sd,ss,m,nd,ns,delta):
     D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
     S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
@@ -1331,5 +1342,21 @@ def ayaz_model_div_ind_n_one_ss_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,
     #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,npp,npp,delta)
     pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,sdm,m,npp,npp,delta)
     dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,sdm,m,npp,npp,delta)
+    rate = r0 + pterm/(1 + dterm)
+    return rate
+
+def ayaz_model_div_ind_n_pm_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #ap,am = 0,0
+    pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    #pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,sdm,m,npp,npp,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,sdm,m,npp,npp,delta)
+    rate = r0 + pterm/(1 + dterm)
+    return rate
+
+def ayaz_model_div_ind_n_offset_with_vm(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta)
+    dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,npp,npp,delta)
     rate = r0 + pterm/(1 + dterm)
     return rate

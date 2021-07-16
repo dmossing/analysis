@@ -4,6 +4,9 @@ from autograd import grad,elementwise_grad,jacobian
 import scipy.optimize as sop
 import matplotlib.pyplot as plt
 import nub_utils
+import pyute as ut
+import sim_utils
+import size_contrast_analysis as sca
 
 # fit models of the form (a*(c/c50)^n + b)/((c/c50)^n + 1), where subsets of a, b, and c50 are allowed to vary for each size
 
@@ -319,27 +322,37 @@ def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen
     	    plt.axis('off')
 
 class ayaz_model(object):
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None):
+    # runs fitting if theta is None
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False):
         self.data = data
         self.usize = usize        
         self.ucontrast = ucontrast
         self.norm_top = norm_top
         self.norm_bottom = norm_bottom
-        self.base_fn = nub_utils.ayaz_model_div_ind_n_offset
+        if not two_n:
+            self.base_fn = nub_utils.ayaz_model_div_ind_n_offset
+        elif sub:
+            self.base_fn = nub_utils.ayaz_model_sub_ind_n_offset
+        else:
+            self.base_fn = nub_utils.ayaz_model_div_ind_n_pm_offset
         if len(data.shape)==2:
             self.data = self.data[np.newaxis]
         assert(self.data.shape[1]==len(usize))
         assert(self.data.shape[2]==len(ucontrast))
-        self.fit(theta0=theta0)
-    def fit(self,theta0=None):
+        if theta is None:
+            self.fit(theta0=theta0,delta0=delta0)
+        else:
+            self.theta = theta
+            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+    def fit(self,theta0=None,delta0=0):
         r0 = np.nanmin(self.data)
         rd = 100
         rs = 100
         sd = 10
         ss = 60
         m = 1
-        n = 2
-        delta = 0
+        n = 1#2
+        delta = delta0
         mmin = 0.5
         mmax = 5
         smax = 180
@@ -350,7 +363,8 @@ class ayaz_model(object):
             return np.sum((modeled[np.newaxis] - self.data)[non_nan]**2)
         
         if theta0 is None:
-            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
+            #theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
+            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
         bds = sop.Bounds(np.zeros_like(theta0),np.inf*np.ones_like(theta0))
 #         bds.ub[4] = 0
         bds.lb[-4:-1] = mmin
@@ -377,3 +391,204 @@ class ayaz_model(object):
             self.c50bottom = self.theta[6]**(-1/self.theta[-3])
         else:
             print(str((itype,iexpt))+' unsuccessful')
+
+class ayaz_ori_model(object):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
+        self.data = data
+        self.usize = usize        
+        self.ucontrast = ucontrast
+        self.uangle = uangle
+        self.norm_top = norm_top
+        self.norm_bottom = norm_bottom
+        if not two_n:
+            self.base_fn = nub_utils.ayaz_model_div_ind_n_offset
+        else:
+            self.base_fn = nub_utils.ayaz_model_div_ind_n_pm_offset
+        if len(data.shape)==2:
+            self.data = self.data[np.newaxis]
+        assert(self.data.shape[1]==len(usize))
+        assert(self.data.shape[2]==len(ucontrast))
+        if theta is None:
+            self.fit(theta0=theta0,delta0=delta0)
+        else:
+            self.theta = theta
+            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+    def fit(self,theta0=None,delta0=0):
+        r0 = np.nanmin(self.data)
+        rd = 100
+        rs = 100
+        sd = 10
+        ss = 60
+        m = 1
+        n = 1#2
+        delta = delta0
+        mmin = 0.5
+        mmax = 5
+        smax = 180
+            
+        def cost(theta):
+            modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,theta,fn=self.base_fn)
+            non_nan = ~np.isnan(self.data)
+            return np.sum((modeled[np.newaxis] - self.data)[non_nan]**2)
+        
+        if theta0 is None:
+            #theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
+            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
+        bds = sop.Bounds(np.zeros_like(theta0),np.inf*np.ones_like(theta0))
+#         bds.ub[4] = 0
+        bds.lb[-4:-1] = mmin
+        bds.ub[-4:-1] = mmax
+        bds.ub[-8:-4] = smax
+        bds.ub[4] = 0
+        
+        if not self.norm_top:
+            bds.ub[3] = 0
+            theta0[3] = 0
+        
+        if not self.norm_bottom:
+            bds.ub[6] = 0
+            theta0[6] = 0
+            
+        res = sop.minimize(cost,theta0,method='L-BFGS-B',bounds=bds,jac=grad(cost))
+        if res.success:
+            self.theta = res.x
+            self.cost = res.fun
+            self.modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
+            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+            self.c50 = self.theta[5]**(-1/self.theta[-3])
+            self.c50top = self.theta[3]**(-1/self.theta[-3])
+            self.c50bottom = self.theta[6]**(-1/self.theta[-3])
+        else:
+            print(str((itype,iexpt))+' unsuccessful')
+
+def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,deriv=False,deriv_axis=2):
+    ucontrast_interp = np.linspace(0,1,ninterp)
+    this_nsize = len(these_sizes)
+    this_ucontrast = ucontrast_interp
+
+    if ams is None:
+        #assert(not data is None and not theta is None)
+        assert(not data is None)
+        ams = ayaz_model(data,usize=usize,ucontrast=ucontrast,theta=theta)
+    this_usize = np.array([ams.usize[i] for i in these_sizes])
+    this_theta = ams.theta
+    fn = ams.fn
+
+    this_data = ams.data
+    ind0 = 2
+    cinds = np.concatenate(((5+np.log2(ucontrast_interp[ind0]),),np.arange(1,6)))
+    if deriv:
+        if deriv_axis==1:
+            this_data = sca.compute_slope_avg(usize,this_data,axis=deriv_axis)
+        elif deriv_axis==2:
+            this_data = sca.compute_slope_avg(ucontrast,this_data,axis=deriv_axis)
+        this_modeled = np.zeros((this_nsize,ninterp))
+        for isize in range(this_nsize):
+            if deriv_axis==2:
+                crf = lambda c: ams.fn(np.array((c,)),np.array((this_usize[isize],)))[0,0]
+                cslope = np.array([grad(crf)(cc) for cc in this_ucontrast])
+                this_modeled[isize] = cslope
+                #print(cslope)
+            elif deriv_axis==1:
+                for icontrast,cc in enumerate(this_ucontrast):
+                    srf = lambda d: ams.fn(np.array((cc,)),np.array((d,)))[0,0]
+                    sslope = grad(srf)(this_usize[isize])
+                    this_modeled[isize,icontrast] = sslope
+    else:
+        #this_modeled = nub_utils.ayaz_like_theta(this_ucontrast,this_usize,this_theta,fn=fn)
+        this_modeled = ams.fn(this_ucontrast,this_usize)
+    ut.plot_bootstrapped_errorbars_hillel(cinds,this_data[:,these_sizes,:].transpose((0,1,2)),linewidth=0,colors=colors)
+    for isize in range(this_nsize):
+        plt.plot(5+np.log2(ucontrast_interp[ind0:]),this_modeled[isize,ind0:],c=colors[isize])
+    plt.xticks(cinds,(100*ucontrast).astype('int'))
+    ut.erase_top_right()
+    plt.xlabel('contrast (%)')
+    plt.ylabel('event rate/mean')
+    if not deriv:
+        plt.gca().set_ylim(bottom=0)
+    plt.tight_layout()
+
+def plot_interp_size_tuning(ams=None,data=None,theta=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
+    usize_interp = np.linspace(0,usize[-1],ninterp)
+    this_ncontrast = len(these_contrasts)
+    this_usize = usize_interp
+    this_ucontrast = ucontrast
+
+    if ams is None:
+        #assert(not data is None and not theta is None)
+        assert(not data is None)
+        ams = ayaz_model(data,usize=usize,ucontrast=ucontrast,theta=theta,sub=sub,two_n=two_n)
+    this_ucontrast = np.array([ams.ucontrast[i] for i in these_contrasts])
+    this_theta = ams.theta
+    fn = ams.fn
+
+    usize0 = np.concatenate(((0,),usize))
+    this_data = sim_utils.gen_size_tuning(ams.data)
+
+    if deriv:
+        if deriv_axis==1:
+            this_data = sca.compute_slope_avg(usize0,this_data,axis=deriv_axis)
+        elif deriv_axis==2:
+            this_data = sca.compute_slope_avg(ucontrast,this_data,axis=deriv_axis)
+        this_modeled = np.zeros((ninterp,this_ncontrast))
+        for icontrast in range(this_ncontrast):
+            if deriv_axis==1:
+                srf = lambda d: ams.fn(np.array((this_ucontrast[icontrast],)),np.array((d,)))[0,0]
+                sslope = np.array([grad(srf)(ss) for ss in this_usize])
+                this_modeled[:,icontrast] = sslope
+            elif deriv_axis==2:
+                for isize,ss in enumerate(this_usize):
+                    crf = lambda c: ams.fn(np.array((c,)),np.array((ss,)))[0,0]
+                    sslope = grad(crf)(this_ucontrast[icontrast])
+                    this_modeled[isize,icontrast] = sslope
+    else:
+        this_modeled = ams.fn(this_ucontrast,this_usize)
+
+    if True:
+        if error_type=='bs':
+            ut.plot_bootstrapped_errorbars_hillel(usize0,this_data[:,:,these_contrasts].transpose((0,2,1)),linewidth=0,colors=colors)
+        elif error_type=='pct':
+            ut.plot_pct_errorbars_hillel(usize0,this_data[:,:,these_contrasts].transpose((0,2,1)),linewidth=0,colors=colors,pct=(16,84))
+        for icontrast in range(this_ncontrast):
+            plt.plot(usize_interp,this_modeled[:,icontrast],c=colors[icontrast])
+        #plt.xticks(cinds,(100*ucontrast).astype('int'))
+    ut.erase_top_right()
+    plt.xlabel('size ($^o$)')
+    plt.ylabel('event rate/mean')
+    if not deriv:
+        plt.gca().set_ylim(bottom=0)
+    plt.tight_layout()
+
+def compute_pseudo_c50(ams_sst,slope_thresh=0.5):
+    cinterp = cinterp = np.linspace(0,1,501)
+    nexpt = len(ams_sst)
+    nlight = len(ams_sst[0])
+    nsize = len(ams_sst[0][0].usize)
+    usize = ams_sst[0][0].usize
+    pseudo_c50sst = np.nan*np.ones((nexpt,nsize,nlight))
+    for iexpt in range(nexpt):
+        if not ams_sst[iexpt][0] is None:
+            #plt.figure(figsize=(5,2.5))
+            for ilight in range(nlight):
+                #plt.subplot(1,2,ilight+1)
+                for isize in range(nsize):
+                    crf = lambda c: ams_sst[iexpt][ilight].fn(np.array((c,)),np.array((usize[isize],)))[0,0]
+                    cslope = np.array([grad(crf)(cc) for cc in cinterp])
+                    cmin = np.nanargmin(cslope)
+                    cmax = np.nanargmax(cslope)
+        #             cinfl = cmax+np.where((cslope[cmax:]-cslope[cmin])<0.5*(cslope[cmax]-cslope[cmin]))[0]
+                    cinfl = cmax+np.where((cslope[cmax:])<slope_thresh*(cslope[cmax]))[0]
+                    if cinfl.size:
+                        cinfl = cinfl[0]
+                        pseudo_c50sst[iexpt,isize,ilight] = cinterp[cinfl]
+#                         plt.scatter(100*cinterp[cinfl],cslope[cinfl],c=csize[isize])
+                    else:
+                        print('could not do: ')
+                        print((iexpt,ilight,isize,cmax))
+                        print(cslope[cmax])
+                    if False: # True:
+                        plt.plot(100*cinterp,cslope,c=csize[isize])
+                        plt.axhline(0.5*cslope[cmax],c=csize[isize],linestyle='dashed')
+                        if cinfl.size:
+                            plt.scatter(100*cinterp[cinfl],cslope[cinfl],c=csize[isize])
+    return pseudo_c50sst

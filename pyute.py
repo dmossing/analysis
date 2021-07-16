@@ -921,7 +921,7 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,alpha=1):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
@@ -954,7 +954,7 @@ def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,n
         plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
     return mn_tgt,std_tgt
 
-def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,delta=0,alpha=1):
+def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,delta=0,alpha=1):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanpercentile(arr,50,axis=0)
@@ -1711,15 +1711,15 @@ def pca_denoise(arr,Npc):
     u,s,vh = np.linalg.svd(arr.T,full_matrices=False)
     return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
 
-def bar_pdf(data,bins=None,alpha=1):
+def bar_pdf(data,bins=None,alpha=1,**kwargs):
     # probability density function bar plot
     h,_ = np.histogram(data,bins=bins)
-    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha)
+    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha,**kwargs)
 
-def line_pdf(data,bins=None):
+def line_pdf(data,bins=None,**kwargs):
     # probability density function line plot
     h,_ = np.histogram(data,bins=bins)
-    plt.plot(0.5*(bins[:-1]+bins[1:]),h/h.sum())
+    plt.plot(0.5*(bins[:-1]+bins[1:]),h/h.sum(),**kwargs)
 
 def line_cdf(data,bins=None):
     # cumulative density function line plot
@@ -1865,7 +1865,7 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None):
         nconds = [len(u) for u in uconds]
         for ipart in range(npart):
             nreps = np.sum(k_and(*[(iconds[ic] == 1) for ic in range(len(condition_list))]))
-            print(nconds + [nreps])
+            #print(nconds + [nreps])
             tip = np.zeros((nroi,)+tuple(nconds)+(nreps,))
             for iflat in range(np.prod(nconds)):
                 coords = np.unravel_index(iflat,tuple(nconds))
@@ -1938,7 +1938,7 @@ def erase_top_right():
 
 def compute_osi(arr,ori=np.arange(0,360,45)):
     # ori axis must be second to last
-    trialno = ori.shape[0]
+    #trialno = ori.shape[0]
     th = np.deg2rad(np.mod(ori,180))
     sinterm = np.sin(2*th).dot(arr)
     costerm = np.cos(2*th).dot(arr)

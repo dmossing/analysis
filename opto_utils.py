@@ -49,14 +49,14 @@ def compute_tuning(dsfile,running=True,center=True,fieldname='decon',keylist=Non
                 print('could not do '+keylist[ikey])
     return tuning,cell_criteria,uparam
 
-def extract_fit_displacement(dsfile):
+def extract_fit_displacement(dsfile,expttype='size_contrast_opto_0'):
     displacement = {}
     with ut.hdf5read(dsfile) as f:
         keylist = [key for key in f.keys()]
         for ikey in range(len(keylist)):
             session = f[keylist[ikey]]
-            if 'size_contrast_opto_0' in session:
-                sc0 = session['size_contrast_opto_0']
+            if expttype in session:
+                sc0 = session[expttype]
                 if 'rf_displacement_deg' in sc0:
                     pval = sc0['rf_mapping_pval'][:]
                     sigma = session['retinotopy_0']['rf_sigma'][:]

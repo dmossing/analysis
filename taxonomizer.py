@@ -1,5 +1,6 @@
 #!/usr/bin/env python 
 import sqlite3
+import numpy as np
 
 def add_list_to_dict(this_hierarchy,dicti):
     parent_node = None
@@ -177,6 +178,7 @@ def dict_to_newick(dicti,root=None):
             return '%s%d'%(child_newick,root)
 
 def dicts_to_qnewick(tree_dicti,tsn_dicti,root=None):
+    # starting from node root, form a qnewick format tree
     if len(tree_dicti[root][1])==0:
         return '"%s"'%tsn_dicti[root]
     else:
@@ -186,3 +188,27 @@ def dicts_to_qnewick(tree_dicti,tsn_dicti,root=None):
             return '%s;'%child_newick
         else:
             return '%s"%s"'%(child_newick,tsn_dicti[root])
+
+def dicts_to_ordered_qnewick(tree_dicti,tsn_dicti,order_dicti,root=None):
+    # starting from node root, form a qnewick format tree
+    if len(tree_dicti[root][1])==0:
+        common_name = tsn_dicti[root].split(', ')[-1]
+        if common_name in order_dicti:
+            order_val = order_dicti[common_name]
+        else:
+            order_val = np.nan
+        return '"%s"'%tsn_dicti[root],order_val
+    else:
+        qstrs = []
+        order_vals = []
+        for child in tree_dicti[root][1]:
+            qstr,order_val = dicts_to_ordered_qnewick(tree_dicti,tsn_dicti,order_dicti,root=child)
+            qstrs += [qstr]
+            order_vals += [order_val]
+        child_newick_list = [x for _,x in sorted(zip(order_vals,qstrs))]
+        mean_order_val = np.nanmean(order_vals)
+        child_newick = '(%s)'%(','.join(child_newick_list))
+        if root is None:
+            return '%s;'%child_newick,mean_order_val
+        else:
+            return '%s"%s"'%(child_newick,tsn_dicti[root]),mean_order_val
