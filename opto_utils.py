@@ -62,7 +62,10 @@ def extract_fit_displacement(dsfile,expttype='size_contrast_opto_0'):
                     sigma = session['retinotopy_0']['rf_sigma'][:]
                     X = session['cell_center'][:]
                     y = sc0['rf_displacement_deg'][:].T
-                    lkat = ut.k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]),sigma>5)
+                    if sigma.max()>0:
+                        lkat = ut.k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]),sigma>5)
+                    else:
+                        lkat = ut.k_and(pval<0.05,~np.isnan(X[:,0]),~np.isnan(y[:,0]))
                     linreg = sklearn.linear_model.LinearRegression().fit(X[lkat],y[lkat])
                     displacement[keylist[ikey]] = np.zeros_like(y)
                     displacement[keylist[ikey]][~np.isnan(X[:,0])] = linreg.predict(X[~np.isnan(X[:,0])])

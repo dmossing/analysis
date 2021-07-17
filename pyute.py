@@ -1833,12 +1833,53 @@ def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
             tuning = tuning.append(tip_df)
     return tuning
 
-def compute_tuning_trialwise_df(df,trial_info,selector,include=None):
+def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
+    tuning = {}
+    params = list(selector.keys())
+    if expts is None:
+        expts = list(trial_info.keys())
+    nexpt = len(expts)
+    if include is None:
+        include = {expt:None for expt in expts}
+    for iexpt,expt in enumerate(expts):
+        trialwise = dicti[expt][key][np.newaxis]
+        nroi = trialwise.shape[0]
+        ntrial = trialwise.shape[1]
+        if include[expt] is None:
+            print('including all trials in one partition')
+            include[expt] = np.ones((ntrial,),dtype='bool')
+        if not isinstance(include[expt],list):
+            include[expt] = [include[expt]]
+        npart = len(include[expt])
+        tuning[expt] = [None for ipart in range(npart)]
+# selector: dict where each key is a param in ti.keys(), and each value is either a callable returning a boolean,
+# to be applied to ti[param], or an input to the function filter_selector
+# filter selector: if filter_selector(selector[param]), the tuning curve will be separated into the unique elements of ti[param]. 
+        condition_list,_ = gen_condition_list(trial_info[expt],selector,filter_selector=np.logical_not)
+        iconds,uconds = zip(*[pd.factorize(c,sort=True) for c in condition_list])
+        nconds = [len(u) for u in uconds]
+        for ipart in range(npart):
+            nreps = np.sum(k_and(*[(iconds[ic] == 1) for ic in range(len(condition_list))]))
+            #print(nconds + [nreps])
+            tip = np.zeros((nroi,)+tuple(nconds)+(nreps,))
+            for iflat in range(np.prod(nconds)):
+                coords = np.unravel_index(iflat,tuple(nconds))
+                lkat = k_and(*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
+                to_include = np.in1d(np.where(lkat)[0],np.where(include[expt][ipart])[0])
+                tip[(slice(None),)+coords+(slice(None),)] = trialwise[:,lkat]
+                tip[(slice(None),)+coords+(~to_include,)] = np.nan 
+            tuning[expt][ipart] = tip
+    return tuning
+
+def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=False):
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
     nexpt = len(expts)
-    tuning = pd.DataFrame()
+    if return_dict:
+        tuning = {}
+    else:
+        tuning = pd.DataFrame()
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -1852,6 +1893,8 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None):
         if not isinstance(include[expt],list):
             include[expt] = [include[expt]]
         npart = len(include[expt])
+        if return_dict:
+            tuning[expt] = [None for ipart in range(npart)]
 #         if isinstance(include[expt],list):
 #             tuning[iexpt] = [None for ipart in range(npart)]
         #condition_list = []
@@ -1873,11 +1916,14 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None):
                 to_include = np.in1d(np.where(lkat)[0],np.where(include[expt][ipart])[0])
                 tip[(slice(None),)+coords+(slice(None),)] = trialwise.loc[:,lkat]
                 tip[(slice(None),)+coords+(~to_include,)] = np.nan 
-            shp = [np.arange(s) for s in tip.shape[1:]]
-            column_labels = pd.MultiIndex.from_product(shp,names=params[1:]+['trial#'])
-            index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
-            tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
-            tuning = tuning.append(tip_df)
+            if return_dict:
+                tuning[expt][ipart] = tip
+            else:
+                shp = [np.arange(s) for s in tip.shape[1:]]
+                column_labels = pd.MultiIndex.from_product(shp,names=params[1:]+['trial#'])
+                index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
+                tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
+                tuning = tuning.append(tip_df)
     return tuning
 
 def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
