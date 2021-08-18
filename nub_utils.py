@@ -10,6 +10,7 @@ import pyute as ut
 import matplotlib.pyplot as plt
 import autograd.scipy.special as ssp
 import scipy.stats as sst
+import scipy.io as sio
 from matplotlib.colors import ListedColormap
 import von_mises_analysis as vma
 
@@ -34,7 +35,7 @@ nubs_xnor = np.concatenate((nubs_active,xnor_gates),axis=1)
 # similar to parula colormap, ported to python
 parula_path = '/Users/dan/Documents/code/adesnal/'
 parula_filename = parula_path+'matlab_parula_colormap.mat'
-parula = ListedColormap(ut.loadmat(parula_filename,'cmap'))
+parula = ListedColormap(sio.loadmat(parula_filename)['cmap'][()])
 
 ###
 # not used in final analysis
@@ -1242,6 +1243,7 @@ def show_evan_style(train_response,test_response,ht=6,cmap=parula,line=True,draw
         plt.tight_layout(pad=7)
 
 def ayaz_model(c,d,r0,rd,rs,sd,ss,m,n,delta):
+    # return len(d) x len(c) array, corresponding to Ayaz et al. model-like outputs for each size and contrast
     D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
     S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
     return r0 + rd*(c[np.newaxis,:]**n)*(D**m)/(1+rs*(c[np.newaxis,:]**n)*(S**m))

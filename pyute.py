@@ -24,6 +24,7 @@ from pympler import asizeof
 import sklearn.metrics as skm
 import sklearn
 import scipy.interpolate as sip
+import naka_rushton_analysis as nra
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -921,7 +922,7 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,alpha=1):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,alpha=1,delta=0):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
@@ -933,9 +934,9 @@ def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidt
         mn_tgt = mn_tgt - baseline
         lb_tgt = lb_tgt - baseline
         ub_tgt = ub_tgt - baseline
-        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha,delta=delta)
     else:
-        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha,delta=delta)
 
 def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
     # rows of arr: repetitions to be averaged
@@ -2116,3 +2117,99 @@ def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired
             slc[ithis] = unrav[iithis]
         interp[slc] = sip.interp1d(usize,arr[tuple(slc)])(desired_usize)
     return interp
+
+def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
+    plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+
+def plot_parametric_fn_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+    if errorstyle == 'pct':
+        mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
+    elif errorstyle == 'bs':
+        mean_fn = lambda y: bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
+    xinterp = np.linspace(x.min(),x.max(),101)
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
+    for iconn in range(cpl.shape[1]):
+        params,_ = nra.fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
+        to_plot = nra.two_asymptote_fn(xinterp,*params[0])
+        plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
+    if errorstyle == 'pct':
+        plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+    elif errorstyle=='bs':
+        plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+
+def apply_fn_to_nested_list(fn,ind_list,data):
+    # given a single lists of lists as argument to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        return fn(data)
+    else:
+        array_flag = isinstance(data,np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [data[i] for i in ind_list[0]]
+        else:
+            this_data = data
+        to_return = [apply_fn_to_nested_list(fn,ind_list[1:],td) for td in this_data]
+        if array_flag:
+            to_return = np.array(to_return)
+        return to_return
+
+def listzip(list_of_lists):
+    return [list(x) for x in list(zip(*list_of_lists))]
+
+def apply_fn_to_nested_lists(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return multiple lists of lists as respective outputs
+    if not len(ind_list):
+        to_return = fn(*args)
+    else:
+        array_flag = isinstance(args[0],np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = [list(x) for x in list(zip(*this_data))]
+        to_return = [apply_fn_to_nested_lists(fn,ind_list[1:],*td) for td in this_data]
+        #if np.isscalar(to_return[0]):
+        #    #print('is scalar')
+        #    to_return = listzip([[tr] for tr in to_return])
+        #else:
+        to_return = listzip(to_return)
+        #except:
+        #    to_return = list(zip([np.array(tr) for tr in to_return]))
+        if array_flag:
+            to_return = [np.array(tr) for tr in to_return]
+    return to_return
+
+def apply_fn_to_nested_lists_single_out(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        to_return = fn(*args)
+    else:
+        array_flag = isinstance(args[0],np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = listzip(this_data)
+        to_return = [apply_fn_to_nested_lists_single_out(fn,ind_list[1:],*td) for td in this_data]
+        if array_flag:
+            to_return = [np.array(tr) for tr in to_return]
+    return to_return
+
+def apply_fn_to_nested_lists_no_out(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        fn(*args)
+    else:
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = listzip(this_data)
+        for td in this_data:
+            apply_fn_to_nested_lists_no_out(fn,ind_list[1:],*td)
+
+def list_of_lists_dim(list_of_lists):
+    if isinstance(list_of_lists,list):
+        return (len(list_of_lists),) + list_of_lists_dim(list_of_lists[0])
+    else:
+        return ()

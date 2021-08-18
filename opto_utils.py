@@ -414,8 +414,8 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
         xlabel = 'PC event rate, light off'
     if ylabel is None:
         ylabel = 'PC event rate, light on'
+    this_animal_data = animal_data.copy()
     if equate_0:
-        this_animal_data = animal_data.copy()
         this_animal_data[:,:,0] = animal_data[:,:,0].mean(1)[:,np.newaxis]
     lb,ub,mn = ut.bootstrap(this_animal_data,pct=pct+(50,),fn=np.nanmean,axis=0)
     stats = ut.bootstat(this_animal_data,fns=[compute_slope_w_intercept_,compute_intercept_])
@@ -452,13 +452,19 @@ def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=
         xmax = animal_data.transpose()[0].max()
     xx = np.linspace(xmin,xmax,101)
     if incl_intercept:
-        stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_,compute_intercept_],nreps=nreps)#,nreps=nreps)#_equal_cond
+        try:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_,compute_intercept_],nreps=nreps)#,nreps=nreps)#_equal_cond
+        except:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)#,nreps=nreps)#_equal_cond
         #print('animal data shape: '+str(animal_data.shape))
         #print('stats shape: '+str([s.shape for s in stats]))
         #print(stats)
         YY = xx[:,np.newaxis]*stats[0]+stats[1]
     else:
-        stats = ut.bootstat(animal_data,fns=[compute_slope_],nreps=nreps)#_equal_cond
+        try:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_],nreps=nreps)#_equal_cond
+        except:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_cols],nreps=nreps)#_equal_cond
         if flipxy:
             YY = xx[:,np.newaxis]*1/stats[0]
         else:
@@ -473,6 +479,7 @@ def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=
     #if flipxy:
     #else:
     #    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
+    return stats
 
 def zip_pairs(list_of_pairs):
     lb = [lp[0] for lp in list_of_pairs]
