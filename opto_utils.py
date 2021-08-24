@@ -278,8 +278,8 @@ def sort_by_pref_dir(rs,ori_axis=3):
             rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
     return rs_sort
 
-def sort_both_by_pref_dir(rs,other,ori_axis=3):
-    return sort_all_by_pref_dir((rs,ori_axis),(other,ori_axis))
+def sort_both_by_pref_dir(rs,other,ori_axis=3,return_pref_dir=False):
+    return sort_all_by_pref_dir((rs,ori_axis),(other,ori_axis),return_pref_dir=return_pref_dir)
     #rs_sort = rs.copy()
     #other_sort = other.copy()
     #for ir in range(len(rs_sort)):
@@ -301,8 +301,9 @@ def sort_both_by_pref_dir(rs,other,ori_axis=3):
     #        other_sort[ir][iroi] = other_sort[ir][iroi][slicer]
     #return rs_sort,other_sort
 
-def sort_all_by_pref_dir(rs,*others):
+def sort_all_by_pref_dir(rs,*others,return_pref_dir=False):
     rs_sort = rs[0].copy()
+    pref_dir = [None for _ in rs_sort]
     ori_axis = rs[1]
     others_sort = [other[0].copy() for other in others]
     other_ori_axes = [other[1] for other in others]
@@ -315,17 +316,20 @@ def sort_all_by_pref_dir(rs,*others):
             rs_ori = np.nanmean(rs_ori,idim) #np.nanmean(rs_ori,1)
         nroi = rs_ori.shape[0]
         nori = rs_ori.shape[1]
-        pref_dir = np.argmax(rs_ori,axis=1)
+        pref_dir[ir] = np.argmax(rs_ori,axis=1)
         slicer = [slice(None) for idim in range(len(rs_sort[ir].shape)-1)]
         other_slicers = [[slice(None) for idim in range(len(other_sort[ir].shape)-1)] for other_sort in others_sort]
         for iroi in range(nroi):
-            order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
+            order = np.array(list(np.arange(pref_dir[ir][iroi],nori))+list(np.arange(0,pref_dir[ir][iroi])))
             slicer[ori_axis-1] = order
             rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
             for iother in range(len(others)):
                 other_slicers[iother][other_ori_axes[iother]-1] = order
                 others_sort[iother][ir][iroi] = others_sort[iother][ir][iroi][other_slicers[iother]]
-    return [rs_sort]+others_sort
+    if not return_pref_dir:
+        return [rs_sort]+others_sort
+    else:
+        return [rs_sort]+others_sort+[pref_dir]
 
 def fix_fg_dir(rs):
     rs_sort = rs.copy()
