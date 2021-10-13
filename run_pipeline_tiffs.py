@@ -72,6 +72,7 @@ ops = {
         'sig_baseline': 10., # smoothing constant for gaussian filter
         'prctile_baseline': 8.,# optional (whether to use a percentile baseline)
         'neucoeff': .7,  # neuropil coefficient
+        'do_bidiphase': True
       }
 
 

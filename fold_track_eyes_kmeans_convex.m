@@ -1,6 +1,9 @@
-function fold_track_eyes_kmeans_convex(foldname,dry_run)
+function fold_track_eyes_kmeans_convex(foldname,dry_run,look_for_existing)
 if nargin < 2
     dry_run = false;
+end
+if nargin < 3
+    look_for_existing = false;
 end
 d = dir(foldname);
 forbidden = {'.','..','Duplicate','.DS_Store','new_tree'};
@@ -20,7 +23,7 @@ end
 if ~dry_run
     for i=1:numel(d)
         if ~ismember(d(i).name,forbidden) && ~contains(d(i).name,'eye_tracking')
-            if ~exist([foldname '/eye_tracking_' d(i).name '.mat'])
+            if ~look_for_existing || ~exist([foldname '/eye_tracking_' d(i).name '.mat'])
                 i
                 thisfold = [foldname '/' d(i).name];
                 tic

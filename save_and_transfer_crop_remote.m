@@ -1,4 +1,7 @@
-function save_and_transfer_crop_remote(foldname,sbxbase,copymat)
+function save_and_transfer_crop_remote(foldname,sbxbase,copymat,rect)
+% if rect is populated, then it is taken to be the pre-specified crop.
+% Otherwise, the user is asked to define a crop using the GUI.
+% imcrop = im(rect(1):rect(2),rect(3):rect(4))
 if nargin < 3
     copymat = true;
 end
@@ -32,7 +35,11 @@ for i=1:numel(fnames)
     bidi(i) = isfield(matfile,'info') && ~matfile.info.scanmode;
 end
 fnames = fnames(bidi);
-save_crop_for_alignment(fnames(1),sbxfold);
+if nargin < 4
+    save_crop_for_alignment(fnames(1),sbxfold);
+else
+    save_crop_for_alignment(fnames(1),sbxfold,rect);
+end
 for i=2:numel(fnames)
     transfer_crop(fnames(1),fnames(i))
 end
