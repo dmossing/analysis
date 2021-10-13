@@ -10,8 +10,6 @@ from oasis import oasisAR1, oasisAR2
 import pyute as ut
 import analysis_template as at
 from importlib import reload
-reload(ut)
-reload(at)
 import scipy.ndimage.filters as sfi
 import scipy.stats as sst
 import scipy.ndimage.measurements as snm
@@ -695,7 +693,7 @@ def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36,60)),uc
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')
 
-def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None):
+def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,edgecolors='k'):
     if len(y1.shape)==2:
         nsize,ncontrast = y1.shape
     z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
@@ -710,9 +708,9 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
         z = [z[idim][:,1:] for idim in range(2)]
         colors = colors[1:]
     if equate_0:
-        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*dot_scale,alpha=alpha,edgecolors='k',linewidths=1)
+        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*dot_scale,alpha=alpha,edgecolors=edgecolors,linewidths=1)
     for s in range(nsize):
-        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*dot_scale,alpha=alpha,edgecolors='k',linewidths=1)
+        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*dot_scale,alpha=alpha,edgecolors=edgecolors,linewidths=1)
     if equality_line:
         plt.plot((mn,mx),(mn,mx),c='k')
     if square:
@@ -748,7 +746,7 @@ def scatter3d_size_contrast(y1,y2,y3,nsize=5,ncontrast=6,alpha=1,equality_line=T
         ax.set_ylim((mn-wiggle,mx+wiggle))
         ax.set_zlim((mn-wiggle,mx+wiggle))
 
-def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1):
+def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1,edgecolors='k'):
     def compute_mean_sem(x):
         xmean = np.nanmean(x,0)
         n_non_nan = np.sum(~np.isnan(x),0)
@@ -767,7 +765,7 @@ def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=F
         xmean,xsem = compute_mean_sem(x)
         ymean,ysem = compute_mean_sem(y)
     plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1,alpha=alpha)
-    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx,alpha=alpha)
+    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx,alpha=alpha,edgecolors=edgecolors)
 
 def scatter_size_contrast_pct_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1):
     def compute_mean_sem(x):

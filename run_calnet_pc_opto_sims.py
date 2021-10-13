@@ -15,7 +15,8 @@ dt = 1e-1
 fix_dim = 0
 avg_last_factor = 0.5
 sim_options = {}
-for lbl,val in zip(['Niter','opto_levels','dt','fix_dim','avg_last_factor'],[Niter,opto_levels,dt,fix_dim,avg_last_factor]):
+both_pixels = False
+for lbl,val in zip(['Niter','opto_levels','dt','fix_dim','avg_last_factor','both_pixels'],[Niter,opto_levels,dt,fix_dim,avg_last_factor,both_pixels]):
     sim_options[lbl] = val
 
 def build_models(weights_files):
@@ -74,15 +75,18 @@ def build_models(weights_files):
     return mdls,mdls_no_pcpc,mdls_no_pcpv,mdls_no_pcvip,mdls_no_pcsst,mdls_no_vipbias,mdls_no_sstvip
 
 def run_on_mdl(mdl,sim_options):
-    Niter,opto_levels,dt,fix_dim,avg_last_factor = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor']]
+    Niter,opto_levels,dt,fix_dim,avg_last_factor,both_pixels = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor','both_pixels']]
     average_last = int(np.floor(Niter*avg_last_factor)) #/5
-    this_YY_opto = dyn.compute_steady_state_Model(mdl,Niter=Niter,fix_dim=fix_dim,inj_mag=opto_levels,sim_type='inj',dt=dt)
+    if both_pixels:
+        this_YY_opto = dyn.compute_steady_state_Model_multi_inj(mdl,Niter=Niter,fix_dim=[fix_dim,fix_dim+mdl.nQ],inj_mag=[opto_levels,opto_levels],sim_type='inj',dt=dt)
+    else:
+        this_YY_opto = dyn.compute_steady_state_Model(mdl,Niter=Niter,fix_dim=fix_dim,inj_mag=opto_levels,sim_type='inj',dt=dt)
     to_return = np.nanmean(this_YY_opto[:,:,-average_last:],2)
     return to_return
 
 def simulate_opto_effects(mdls,sim_options=sim_options,pool_size=1):
     nwt = len(mdls)
-    Niter,opto_levels,dt,fix_dim,avg_last_factor = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor']]
+    Niter,opto_levels,dt,fix_dim,avg_last_factor,both_pixels = [sim_options[key] for key in ['Niter','opto_levels','dt','fix_dim','avg_last_factor','both_pixels']]
     nopto = sim_options['opto_levels'].size
     if pool_size==1:
         YY_opto_tavg = np.zeros((nwt,nopto)+mdls[0].Eta.shape)
@@ -131,22 +135,44 @@ def build_models_and_simulate_opto_effects(weights_files,target_file,sim_options
     #YY_opto_tavg_no_pcpv = transform(YY_opto_tavg_no_pcpv)
     #np.save(target_file,{'YY_opto':YY_opto_tavg,'YY_opto_no_pcpc':YY_opto_tavg_no_pcpc,'YY_opto_no_pcpv':YY_opto_tavg_no_pcpv})
 
-def run(fit_lbl,calnet_base=calnet_base,sim_options=sim_options,pool_size=1):
+def run(fit_lbl,calnet_base=calnet_base,sim_options=sim_options,pool_size=1,target_prefix='pc_opto_tavg',lcutoff=10):
     weights_fold = calnet_base + 'weights/weights_%s/'%fit_lbl
     weights_files = glob.glob(weights_fold+'*.npy')
     weights_files.sort()
-    target_file = calnet_base + 'dynamics/pc_opto_tavg_%s.npy'%fit_lbl
+    losses = np.zeros((len(weights_files),))
+    for iwt in range(len(weights_files)):
+        Wstar_dict = np.load(weights_files[iwt],allow_pickle=True)[()]
+        losses[iwt] = Wstar_dict['loss']
+    weights_files = [wf for wf,l in zip(weights_files,losses) if l < np.nanpercentile(losses,lcutoff)]
+    #weights_files = weights_files[:1]
+    target_file = calnet_base + 'dynamics/%s_%s.npy'%(target_prefix,fit_lbl)
     #target_file = calnet_base + 'dynamics/pc_small_opto_tavg_%s.npy'%fit_lbl
+    print('number of files: '+str(len(weights_files)))
     build_models_and_simulate_opto_effects(weights_files,target_file,sim_options=sim_options,pool_size=pool_size)
+
+def run_one_and_both(pool_size,indicator,calnet_base=calnet_base):
+    sim_options['both_pixels'] = True
+    run(fit_lbl,pool_size=pool_size,calnet_base=calnet_base,sim_options=sim_options,target_prefix='pc_both_pixels_opto_tavg')
+    if indicator:
+        sim_options['both_pixels'] = False
+        run(fit_lbl,pool_size=pool_size,calnet_base=calnet_base,sim_options=sim_options,target_prefix='pc_one_pixel_opto_tavg')
 
 if __name__=='__main__':
     fit_lbl = sys.argv[1]
     if len(sys.argv)==3:
         pool_size = int(sys.argv[2])
-        run(fit_lbl,pool_size=pool_size)
+        one_and_both = False
+        run_one_and_both(pool_size,one_and_both)
     elif len(sys.argv)>3:
         pool_size = int(sys.argv[2])
-        calnet_base = sys.argv[3]
-        run(fit_lbl,pool_size=pool_size,calnet_base=calnet_base)
+        one_and_both = bool(int(sys.argv[3]))
+        print('one and both: '+str(one_and_both))
+        run_one_and_both(pool_size,one_and_both)
+    elif len(sys.argv)>4:
+        pool_size = int(sys.argv[2])
+        calnet_base = sys.argv[4]
+        one_and_both = bool(int(sys.argv[3]))
+        run_one_and_both(pool_size,one_and_both,calnet_base=calnet_base)
+        #run(fit_lbl,pool_size=pool_size,calnet_base=calnet_base,sim_options=sim_options)
     else:
         run(fit_lbl)

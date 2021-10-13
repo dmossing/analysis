@@ -10,7 +10,9 @@ import pyute as ut
 import matplotlib.pyplot as plt
 import autograd.scipy.special as ssp
 import scipy.stats as sst
+import scipy.io as sio
 from matplotlib.colors import ListedColormap
+import von_mises_analysis as vma
 
 # visual stim ordering convention
 nub_locs = np.array([(0,0),(1,0),(0,1),(-1,0),(0,-1)])
@@ -33,7 +35,7 @@ nubs_xnor = np.concatenate((nubs_active,xnor_gates),axis=1)
 # similar to parula colormap, ported to python
 parula_path = '/Users/dan/Documents/code/adesnal/'
 parula_filename = parula_path+'matlab_parula_colormap.mat'
-parula = ListedColormap(ut.loadmat(parula_filename,'cmap'))
+parula = ListedColormap(sio.loadmat(parula_filename)['cmap'][()])
 
 ###
 # not used in final analysis
@@ -151,7 +153,7 @@ def evaluate_output_amplitude(this_response,theta0,fn=None,lpoisson=0,nub_var=nu
         return ((norm_response - ypred)**2*(1+lpoisson/(ypred+norm_response+fudge))).sum()
     return minusL(theta)
 
-def fit_output_amplitude_offset(this_response,fn=None,theta0=None,lpoisson=0,nub_var=nubs_active,bounds=None,lam=0): # ,land=0
+def fit_output_amplitude_offset(this_response,fn=None,theta0=None,lpoisson=0,nub_var=nubs_active,bounds=None,lam=0,allow_amplitude=True): # ,land=0
     scaleby = 1
     amplitude = np.sqrt((this_response**2).sum())/scaleby
     norm_response = this_response/amplitude
@@ -176,11 +178,15 @@ def fit_output_amplitude_offset(this_response,fn=None,theta0=None,lpoisson=0,nub
     #theta0 = 1+np.concatenate((this_response[[16,8,4,2,1]],(1,)))
     #thetastar_temp = fit_output_amplitude_fixed_rf(this_response,fn=fn,theta0=theta0,nub_var=nub_var)
     if bounds is None:
-        bounds = [(-np.inf,np.inf) for x in range(theta0.size-2)] + [(0,1),(-np.inf,np.inf)]
+        if allow_amplitude:
+            bounds = [(-np.inf,np.inf) for x in range(theta0.size-2)] + [(0,1),(-np.inf,np.inf)]
+        else:
+            bounds = [(-np.inf,np.inf) for x in range(theta0.size-2)] + [(1,1),(-np.inf,np.inf)]
     #if nub_var.shape[1]==9:
     #    bounds[5:9] = [(0,0) for x in range(4)]
     thetastar = sop.fmin_l_bfgs_b(minusL,theta0,fprime=minusdLdtheta,bounds=bounds)
-    thetastar[0][nub_var.shape[1]+1] = thetastar[0][nub_var.shape[1]+1]*amplitude
+    #thetastar[0][nub_var.shape[1]+1] = thetastar[0][nub_var.shape[1]+1]*amplitude
+    thetastar[0][nub_var.shape[1]+1:] = thetastar[0][nub_var.shape[1]+1:]*amplitude
     return thetastar
 
 def evaluate_output_amplitude_offset(this_response,theta0,fn=None,lpoisson=0,nub_var=nubs_active):
@@ -225,9 +231,9 @@ def fit_output_amplitude_fixed_rf(this_response,fn=None,theta0=None,nub_var=nubs
     thetastar[0][-1] = thetastar[0][-1]*amplitude
     return thetastar
 
-def compute_overlap(mu,sigma2):
+def compute_overlap(mu,sigma2,diam=1):
     def compute_component(mu,sigma2):
-        return 0.5*(ssp.erf((0.5 - mu)/np.sqrt(2*sigma2)) - ssp.erf((-0.5 - mu)/np.sqrt(2*sigma2)))
+        return 0.5*(ssp.erf((0.5*diam - mu)/np.sqrt(2*sigma2)) - ssp.erf((-0.5*diam - mu)/np.sqrt(2*sigma2)))
     components = [compute_component(mu[iaxis],sigma2) for iaxis in range(2)]
     return np.prod(components)
 
@@ -276,7 +282,7 @@ def show_gaussian_fit(theta,bd=1.75,cbd=2):
     plt.xlim((-bd,bd))
     plt.ylim((-bd,bd))
 
-def show_fit(theta,bd=1.75,cbd=1,nub_order=np.array([0,1,2,3,4])):
+def show_fit(theta,bd=1.75,cbd=1,nub_order=np.array([0,1,2,3,4]),add_1=False,nub_lbls=None):
     x = np.linspace(-bd,bd,100)
     y = np.linspace(bd,-bd,100)
     xx,yy = np.meshgrid(x,y)
@@ -294,7 +300,11 @@ def show_fit(theta,bd=1.75,cbd=1,nub_order=np.array([0,1,2,3,4])):
     pc = PatchCollection(rects, alpha=1, facecolor=facecolors, edgecolor='k')
     plt.gca().add_collection(pc)
     #plt.scatter(nub_locs[:,0],nub_locs[:,1],c='g',marker='+')
-    nub_lbls = [str(n) for n in range(nub_locs.shape[0])]
+    if nub_lbls is None:
+        if add_1:
+            nub_lbls = [str(n+1) for n in range(nub_locs.shape[0])]
+        else:
+            nub_lbls = [str(n) for n in range(nub_locs.shape[0])]
     for inub in range(this_nub_locs.shape[0]):
         plt.text(this_nub_locs[inub,0],this_nub_locs[inub,1],nub_lbls[inub],c='k',horizontalalignment='center',verticalalignment='center')
     #plt.text(nub_locs[:,0],nub_locs[:,1],nub_lbls,c='g')
@@ -1200,7 +1210,6 @@ def test_validity_of_linear_pred(test_norm_response,linear_pred):
 def show_evan_style(train_response,test_response,ht=6,cmap=parula,line=True,draw_stim_ordering=True):
     sorteach = np.argsort(train_response[:,evan_order_actual],1)[:,::-1]
     sortind = np.arange(train_response.shape[0])
-#    fig = plt.figure()
     for n in [0]:
         new_indexing = np.argsort(sorteach[:,n],kind='mergesort')
         sortind = sortind[new_indexing]
@@ -1231,9 +1240,125 @@ def show_evan_style(train_response,test_response,ht=6,cmap=parula,line=True,draw
         plt.text(lbl_locs[inub],5*ht+1,this_nub_no)
     if line:
         plt.plot((0.5,31.5),(5*ht,0),c='k')
-#         cbaxes = fig.add_axes([0.12, 0.28, 0.03, 0.52]) 
-#         cb = plt.colorbar(img,cax=cbaxes)
-#         cbaxes.yaxis.set_ticks_position('left')
-#         cb.set_label('Normalized Response')
-#         cbaxes.yaxis.set_label_position('left')
         plt.tight_layout(pad=7)
+
+def ayaz_model(c,d,r0,rd,rs,sd,ss,m,n,delta):
+    # return len(d) x len(c) array, corresponding to Ayaz et al. model-like outputs for each size and contrast
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    return r0 + rd*(c[np.newaxis,:]**n)*(D**m)/(1+rs*(c[np.newaxis,:]**n)*(S**m))
+
+def ayaz_like_theta(c,d,theta,fn=ayaz_model):
+    return fn(c,d,*theta)
+
+def ayaz_model_adapted(c,d,r0,rd,rs,sd,ss,n1,n2,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    return r0 + rd*(c[np.newaxis,:]**n1)*D/(1+rs*(c[np.newaxis,:]**n2)*S)
+
+def ayaz_model_two_n(c,d,r0,rd,rs,sd,ss,m,n1,n2,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    return r0 + rd*(c[np.newaxis,:]**n1)*(D**m)/(1+rs*(c[np.newaxis,:]**n2)*(S**m))
+
+def ayaz_model_two_n_offset(c,d,r0,a,rd,rs,sd,ss,m,n1,n2,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    #print('D,S: '+str((D[d==0],S[d==0])))
+    rate = r0 + (a+rd*(c[np.newaxis,:]**n1)*(D**m))/(1+rs*(c[np.newaxis,:]**n2)*(S**m))
+    #print('rate, d=0: '+str(rate[d==0,:]))
+    if not np.all(np.isnan(rate[d==0,:])) and not np.all(rate[d==0,:]==np.nanmean(rate[d==0,:])):
+        print('r0,a,rd,rs,sd,ss,m,n1,n2,delta: '+str((r0,a,rd,rs,sd,ss,m,n1,n2,delta)))
+    return rate
+
+def ayaz_model_one_n_offset(c,d,r0,a,rd,rs,sd,ss,m,n,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    #print('D,S: '+str((D[d==0],S[d==0])))
+    rate = r0 + (a+rd*(c[np.newaxis,:]**n)*(D**m))/(1+rs*(c[np.newaxis,:]**n)*(S**m))
+    #print('rate, d=0: '+str(rate[d==0,:]))
+    if not np.all(np.isnan(rate[d==0,:])) and not np.all(rate[d==0,:]==np.nanmean(rate[d==0,:])):
+        print('r0,a,rd,rs,sd,ss,m,n,delta: '+str((r0,a,rd,rs,sd,ss,m,n,delta)))
+    return rate
+
+def ayaz_model_sub_one_n_offset(c,d,r0,a,rd,rs,rm,sd,ss,sm,m,n,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    M = np.array([compute_overlap(np.array((delta,0)),sm**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    #print('D,S: '+str((D[d==0],S[d==0])))
+    rate = r0 + (a+rd*(c[np.newaxis,:]**n)*(D**m)-rm*(c[np.newaxis,:]**n)*(M**m))/(1+rs*(c[np.newaxis,:]**n)*(S**m))
+    #print('rate, d=0: '+str(rate[d==0,:]))
+    #if not np.all(np.isnan(rate[d==0,:])) and not np.all(rate[d==0,:]==np.nanmean(rate[d==0,:])):
+    #    print('r0,a,rd,rs,sd,ss,m,n,delta: '+str((r0,a,rd,rs,sd,ss,m,n,delta)))
+    return rate
+
+def ayaz_model_sub_three_n_offset(c,d,r0,a,rd,rs,rm,sd,ss,sm,m,nd,ns,nm,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    M = np.array([compute_overlap(np.array((delta,0)),sm**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    #print('D,S: '+str((D[d==0],S[d==0])))
+    rate = r0 + (a+rd*(c[np.newaxis,:]**nd)*(D**m)-rm*(c[np.newaxis,:]**nm)*(M**m))/(1+rs*(c[np.newaxis,:]**ns)*(S**m))
+    #print('rate, d=0: '+str(rate[d==0,:]))
+    #if not np.all(np.isnan(rate[d==0,:])) and not np.all(rate[d==0,:]==np.nanmean(rate[d==0,:])):
+    #    print('r0,a,rd,rs,sd,ss,m,n,delta: '+str((r0,a,rd,rs,sd,ss,m,n,delta)))
+    return rate
+
+#def ayaz_model_sub_ind_n_offset(c,d,r0,rdp,rsp,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+#    Dp = np.array([compute_overlap(np.array((delta,0)),sdp**2,diam=this_d) for this_d in d])[:,np.newaxis]
+#    Sp = np.array([compute_overlap(np.array((delta,0)),ssp**2,diam=this_d) for this_d in d])[:,np.newaxis]
+#    Dm = np.array([compute_overlap(np.array((delta,0)),sdm**2,diam=this_d) for this_d in d])[:,np.newaxis]
+#    Sm = np.array([compute_overlap(np.array((delta,0)),ssm**2,diam=this_d) for this_d in d])[:,np.newaxis]
+#    rate = r0 + rdp*(c[np.newaxis,:]**npp)*(Dp**m)/(1+rsp*(c[np.newaxis,:]**npp)*(Sp**m)) - rdm*(c[np.newaxis,:]**nmm)*(Dm**m)/(1+rsm*(c[np.newaxis,:]**nmm)*(Sm**m))
+#    return rate
+
+def ayaz_model_sub_ind_n_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #ap,am = 0,0
+    rate = r0 + compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta) - compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    return rate
+
+def ayaz_model_sub_ind_n_one_ss_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #am = 0
+    #rate = r0 + compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta) - compute_norm_model(c,d,0,rdm,rsp,sdm,ssp,m,nmm,npp,delta)
+    rate = r0 + compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,nmm,delta) - compute_norm_model(c,d,0,rdm,rsp,sdm,ssp,m,nmm,nmm,delta)
+    return rate
+
+def compute_norm_model(c,d,a,rd,rs,sd,ss,m,nd,ns,delta):
+    D = np.array([compute_overlap(np.array((delta,0)),sd**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    S = np.array([compute_overlap(np.array((delta,0)),ss**2,diam=this_d) for this_d in d])[:,np.newaxis]
+    return (a+rd*(c[np.newaxis,:]**nd)*(D**m))/(1+rs*(c[np.newaxis,:]**ns)*(S**m))
+
+def ayaz_model_div_ind_n_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #ap,am = 0,0
+    pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,npp,npp,delta)
+    #pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,sdm,m,npp,npp,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,sdm,m,npp,npp,delta)
+    rate = r0 + pterm/(1 + dterm)
+    return rate
+
+def ayaz_model_div_ind_n_one_ss_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #ap,am = 0,0
+    #pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta)
+    ##dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,npp,npp,delta)
+    pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,sdm,m,npp,npp,delta)
+    dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,sdm,m,npp,npp,delta)
+    rate = r0 + pterm/(1 + dterm)
+    return rate
+
+def ayaz_model_div_ind_n_pm_offset(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    #ap,am = 0,0
+    pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,nmm,nmm,delta)
+    #pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,sdm,m,npp,npp,delta)
+    #dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,sdm,m,npp,npp,delta)
+    rate = r0 + pterm/(1 + dterm)
+    return rate
+
+def ayaz_model_div_ind_n_offset_with_vm(c,d,r0,ap,rdp,rsp,am,rdm,rsm,sdp,ssp,sdm,ssm,m,npp,nmm,delta):
+    pterm = compute_norm_model(c,d,ap,rdp,rsp,sdp,ssp,m,npp,npp,delta)
+    dterm = compute_norm_model(c,d,am,rdm,rsm,sdm,ssm,m,npp,npp,delta)
+    rate = r0 + pterm/(1 + dterm)
+    return rate

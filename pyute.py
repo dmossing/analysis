@@ -24,6 +24,7 @@ from pympler import asizeof
 import sklearn.metrics as skm
 import sklearn
 import scipy.interpolate as sip
+import naka_rushton_analysis as nra
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1]
@@ -164,7 +165,7 @@ def bootstat_equal_cond(arr,fns,nreps=1000,pct=(2.5,97.5),axis_equal_cond=0):
     N,k = arr.shape
     axis = 0
     uvals = np.unique(arr[:,axis_equal_cond])
-    print(uvals)
+    #print(uvals)
     nvals = len(uvals)
     Nthese = np.zeros((nvals,),dtype='int')
     for ival in range(nvals):
@@ -174,11 +175,11 @@ def bootstat_equal_cond(arr,fns,nreps=1000,pct=(2.5,97.5),axis_equal_cond=0):
     for val in uvals:
         these_inds = np.where(arr[:,axis_equal_cond]==val)[0]
         c = np.concatenate((c,np.random.choice(these_inds,size=(Nmin,nreps))),axis=0)
-    print(c)
+    #print(c)
     L = len(arr.shape)
     resamp = np.rollaxis(arr,axis,0)
     resamp = resamp[c] # now (Nmin,nreps,k)
-    print(resamp.shape)
+    #print(resamp.shape)
     resamp = np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
     resamp = np.rollaxis(resamp,0,L+1)
     stat = [fn(resamp,axis=axis) for fn in fns]
@@ -921,7 +922,7 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,alpha=1,delta=0):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
@@ -933,9 +934,9 @@ def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidt
         mn_tgt = mn_tgt - baseline
         lb_tgt = lb_tgt - baseline
         ub_tgt = ub_tgt - baseline
-        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha,delta=delta)
     else:
-        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha,delta=delta)
 
 def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
     # rows of arr: repetitions to be averaged
@@ -954,7 +955,7 @@ def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,n
         plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
     return mn_tgt,std_tgt
 
-def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=None,markersize=None,norm_to_max=False,delta=0,alpha=1):
+def plot_pct_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,delta=0,alpha=1):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanpercentile(arr,50,axis=0)
@@ -1018,6 +1019,7 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
         opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
         c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
 
+    print('linewidth: %d'%linewidth)
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
     errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
@@ -1026,8 +1028,11 @@ def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linesty
     #else:
     #    cc = c
     cc = c.copy()
-    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
-    plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
+    #plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
+    plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle='none',alpha=alpha) #,fmt=None)
+    if linewidth>0:
+        print('plotting')
+        plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
     plt.scatter(x,mn_tgt,c=cc,s=markersize,alpha=alpha)
 
 def get_dict_ind(opt,i):
@@ -1707,15 +1712,15 @@ def pca_denoise(arr,Npc):
     u,s,vh = np.linalg.svd(arr.T,full_matrices=False)
     return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
 
-def bar_pdf(data,bins=None,alpha=1):
+def bar_pdf(data,bins=None,alpha=1,**kwargs):
     # probability density function bar plot
     h,_ = np.histogram(data,bins=bins)
-    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha)
+    plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha,**kwargs)
 
-def line_pdf(data,bins=None):
+def line_pdf(data,bins=None,**kwargs):
     # probability density function line plot
     h,_ = np.histogram(data,bins=bins)
-    plt.plot(0.5*(bins[:-1]+bins[1:]),h/h.sum())
+    plt.plot(0.5*(bins[:-1]+bins[1:]),h/h.sum(),**kwargs)
 
 def line_cdf(data,bins=None):
     # cumulative density function line plot
@@ -1786,7 +1791,7 @@ def select_trials(trial_info,selector,training_frac,include_all=False,seed=0):
 
     return train_test
 
-def compute_tuning_df(df,trial_info,selector,include=None):
+def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
@@ -1821,12 +1826,105 @@ def compute_tuning_df(df,trial_info,selector,include=None):
             for iflat in range(np.prod(nconds)):
                 coords = np.unravel_index(iflat,tuple(nconds))
                 lkat = k_and(include[expt][ipart],*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
-                tip[(slice(None),)+coords] = np.nanmean(trialwise.loc[:,lkat],-1)
+                tip[(slice(None),)+coords] = fn(trialwise.loc[:,lkat],axis=-1)
             shp = [np.arange(s) for s in tip.shape[1:]]
             column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
             index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
             tuning = tuning.append(tip_df)
+    return tuning
+
+def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
+    tuning = {}
+    params = list(selector.keys())
+    if expts is None:
+        expts = list(trial_info.keys())
+    nexpt = len(expts)
+    if include is None:
+        include = {expt:None for expt in expts}
+    for iexpt,expt in enumerate(expts):
+        trialwise = dicti[expt][key][np.newaxis]
+        nroi = trialwise.shape[0]
+        ntrial = trialwise.shape[1]
+        if include[expt] is None:
+            print('including all trials in one partition')
+            include[expt] = np.ones((ntrial,),dtype='bool')
+        if not isinstance(include[expt],list):
+            include[expt] = [include[expt]]
+        npart = len(include[expt])
+        tuning[expt] = [None for ipart in range(npart)]
+# selector: dict where each key is a param in ti.keys(), and each value is either a callable returning a boolean,
+# to be applied to ti[param], or an input to the function filter_selector
+# filter selector: if filter_selector(selector[param]), the tuning curve will be separated into the unique elements of ti[param]. 
+        condition_list,_ = gen_condition_list(trial_info[expt],selector,filter_selector=np.logical_not)
+        iconds,uconds = zip(*[pd.factorize(c,sort=True) for c in condition_list])
+        nconds = [len(u) for u in uconds]
+        for ipart in range(npart):
+            nreps = np.sum(k_and(*[(iconds[ic] == 1) for ic in range(len(condition_list))]))
+            #print(nconds + [nreps])
+            tip = np.zeros((nroi,)+tuple(nconds)+(nreps,))
+            for iflat in range(np.prod(nconds)):
+                coords = np.unravel_index(iflat,tuple(nconds))
+                lkat = k_and(*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
+                to_include = np.in1d(np.where(lkat)[0],np.where(include[expt][ipart])[0])
+                tip[(slice(None),)+coords+(slice(None),)] = trialwise[:,lkat]
+                tip[(slice(None),)+coords+(~to_include,)] = np.nan 
+            tuning[expt][ipart] = tip
+    return tuning
+
+def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=False):
+    params = list(selector.keys())
+#     expts = list(trial_info.keys())
+    expts = df.session_id.unique()
+    nexpt = len(expts)
+    if return_dict:
+        tuning = {}
+    else:
+        tuning = pd.DataFrame()
+    if include is None:
+        include = {expt:None for expt in expts}
+    for iexpt,expt in enumerate(expts):
+        in_this_expt = (df.session_id == expt)
+        trialwise = df.loc[in_this_expt].pivot(values='data',index='roi_index',columns='trial_index')
+        nroi = trialwise.shape[0]
+        ntrial = trialwise.shape[1]
+        if include[expt] is None:
+            print('including all trials in one partition')
+            include[expt] = np.ones((ntrial,),dtype='bool')
+        if not isinstance(include[expt],list):
+            include[expt] = [include[expt]]
+        npart = len(include[expt])
+        if return_dict:
+            tuning[expt] = [None for ipart in range(npart)]
+#         if isinstance(include[expt],list):
+#             tuning[iexpt] = [None for ipart in range(npart)]
+        #condition_list = []
+        # args to gen_condition_list
+        # ti
+# selector: dict where each key is a param in ti.keys(), and each value is either a callable returning a boolean,
+# to be applied to ti[param], or an input to the function filter_selector
+# filter selector: if filter_selector(selector[param]), the tuning curve will be separated into the unique elements of ti[param]. 
+        condition_list,_ = gen_condition_list(trial_info[expt],selector,filter_selector=np.logical_not)
+        iconds,uconds = zip(*[pd.factorize(c,sort=True) for c in condition_list])
+        nconds = [len(u) for u in uconds]
+        for ipart in range(npart):
+            nreps = np.sum(k_and(*[(iconds[ic] == 1) for ic in range(len(condition_list))]))
+            #print(nconds + [nreps])
+            tip = np.zeros((nroi,)+tuple(nconds)+(nreps,))
+            for iflat in range(np.prod(nconds)):
+                coords = np.unravel_index(iflat,tuple(nconds))
+                lkat = k_and(*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
+                to_include = np.in1d(np.where(lkat)[0],np.where(include[expt][ipart])[0])
+                tip[(slice(None),)+coords+(slice(None),)] = trialwise.loc[:,lkat]
+                tip[(slice(None),)+coords+(~to_include,)] = np.nan 
+            if return_dict:
+                tuning[expt][ipart] = tip
+            else:
+                shp = [np.arange(s) for s in tip.shape[1:]]
+                column_labels = pd.MultiIndex.from_product(shp,names=params[1:]+['trial#'])
+                index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
+                tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
+                tuning = tuning.append(tip_df)
     return tuning
 
 def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
@@ -1887,7 +1985,7 @@ def erase_top_right():
 
 def compute_osi(arr,ori=np.arange(0,360,45)):
     # ori axis must be second to last
-    trialno = ori.shape[0]
+    #trialno = ori.shape[0]
     th = np.deg2rad(np.mod(ori,180))
     sinterm = np.sin(2*th).dot(arr)
     costerm = np.cos(2*th).dot(arr)
@@ -2019,3 +2117,99 @@ def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired
             slc[ithis] = unrav[iithis]
         interp[slc] = sip.interp1d(usize,arr[tuple(slc)])(desired_usize)
     return interp
+
+def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
+    plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+
+def plot_parametric_fn_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+    if errorstyle == 'pct':
+        mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
+    elif errorstyle == 'bs':
+        mean_fn = lambda y: bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
+    xinterp = np.linspace(x.min(),x.max(),101)
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
+    for iconn in range(cpl.shape[1]):
+        params,_ = nra.fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
+        to_plot = nra.two_asymptote_fn(xinterp,*params[0])
+        plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
+    if errorstyle == 'pct':
+        plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+    elif errorstyle=='bs':
+        plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+
+def apply_fn_to_nested_list(fn,ind_list,data):
+    # given a single lists of lists as argument to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        return fn(data)
+    else:
+        array_flag = isinstance(data,np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [data[i] for i in ind_list[0]]
+        else:
+            this_data = data
+        to_return = [apply_fn_to_nested_list(fn,ind_list[1:],td) for td in this_data]
+        if array_flag:
+            to_return = np.array(to_return)
+        return to_return
+
+def listzip(list_of_lists):
+    return [list(x) for x in list(zip(*list_of_lists))]
+
+def apply_fn_to_nested_lists(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return multiple lists of lists as respective outputs
+    if not len(ind_list):
+        to_return = fn(*args)
+    else:
+        array_flag = isinstance(args[0],np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = [list(x) for x in list(zip(*this_data))]
+        to_return = [apply_fn_to_nested_lists(fn,ind_list[1:],*td) for td in this_data]
+        #if np.isscalar(to_return[0]):
+        #    #print('is scalar')
+        #    to_return = listzip([[tr] for tr in to_return])
+        #else:
+        to_return = listzip(to_return)
+        #except:
+        #    to_return = list(zip([np.array(tr) for tr in to_return]))
+        if array_flag:
+            to_return = [np.array(tr) for tr in to_return]
+    return to_return
+
+def apply_fn_to_nested_lists_single_out(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        to_return = fn(*args)
+    else:
+        array_flag = isinstance(args[0],np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = listzip(this_data)
+        to_return = [apply_fn_to_nested_lists_single_out(fn,ind_list[1:],*td) for td in this_data]
+        if array_flag:
+            to_return = [np.array(tr) for tr in to_return]
+    return to_return
+
+def apply_fn_to_nested_lists_no_out(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        fn(*args)
+    else:
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = listzip(this_data)
+        for td in this_data:
+            apply_fn_to_nested_lists_no_out(fn,ind_list[1:],*td)
+
+def list_of_lists_dim(list_of_lists):
+    if isinstance(list_of_lists,list):
+        return (len(list_of_lists),) + list_of_lists_dim(list_of_lists[0])
+    else:
+        return ()

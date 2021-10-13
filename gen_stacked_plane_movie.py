@@ -80,6 +80,3 @@ def make_suite2p_fold(date,animalid,exptno,base='/home/mossing/scratch/2Pdata/su
 
 def make_suite2p_file(date,animalid,exptno):
     return '_'.join([date,exptno,animalid,'2P','plane{0}','1.tif'])
-
-def gen_stim_movies(stim_id=np.array((0,0,0)),delta=100,scaley=0.5,spacebetween=5,source_fold=None,source_file=None,frame_file=None,offset=1000,frame_no=200,target_fold='/home/mossing/Documents/notebooks/temp/',frame_rg=(1,0)):
-    gen_movie(delta=delta,scaley=scaley,spacebetween=spacebetween,source_fold=source_fold,source_file=source_file,frame_file=frame_file,offset=offset,frame_no=frame_no,target_fold=target_fold,frame_rg=frame_rg)

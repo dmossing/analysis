@@ -16,10 +16,10 @@ opto_activation_data_file = calnet_data_fold+'vip_chrimson_data_for_sim.npy'
 
 ntries = 1
 
-init_noise = 0#0.3 # 0.1
+init_noise = 0.3 # 0.1
 tv = True
 correct_Eta = False
-init_Eta_with_s02 = True#False
+init_Eta_with_s02 = False#True#False
 init_Eta12_with_dYY = True
 use_opto_transforms = True
 norm_opto_transforms = False
@@ -31,8 +31,9 @@ help_constrain_isn = True
 ignore_halo_vip = False
 verbose = True
 free_amplitude = False
-init_W_from_lsq = False
-init_W_from_lbfgs = True
+init_W_from_lsq = True#False
+init_W_from_lbfgs = False#True
+fit_s02 = False
 
 zero_extra_weights = [np.zeros((2,4),dtype='bool'),np.zeros((4,4),dtype='bool')]
 #zero_extra_weights[1][2,1] = True
@@ -42,7 +43,7 @@ def run_fitting(target_name,seed=None):
     print('running %s'%(target_name))
     if not seed is None:
         np.random.seed(seed=seed)
-    fcowo.fit_weights_and_save(target_name,ca_data_file=ca_data_file,opto_silencing_data_file=opto_silencing_data_file,opto_activation_data_file=opto_activation_data_file,allow_var=False,fit_s02=True,constrain_isn=True,tv=tv,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=init_W_from_lsq,init_W_from_lbfgs=init_W_from_lbfgs,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=correct_Eta,init_Eta_with_s02=init_Eta_with_s02,init_Eta12_with_dYY=init_Eta12_with_dYY,use_opto_transforms=use_opto_transforms,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2,help_constrain_isn=help_constrain_isn,ignore_halo_vip=ignore_halo_vip,verbose=verbose,free_amplitude=free_amplitude,norm_opto_transforms=norm_opto_transforms,zero_extra_weights=zero_extra_weights)
+    fcowo.fit_weights_and_save(target_name,ca_data_file=ca_data_file,opto_silencing_data_file=opto_silencing_data_file,opto_activation_data_file=opto_activation_data_file,allow_var=False,fit_s02=fit_s02,constrain_isn=True,tv=tv,l2_penalty=0.1,init_noise=init_noise,init_W_from_lsq=init_W_from_lsq,init_W_from_lbfgs=init_W_from_lbfgs,scale_init_by=1,init_W_from_file=False,init_file=None,correct_Eta=correct_Eta,init_Eta_with_s02=init_Eta_with_s02,init_Eta12_with_dYY=init_Eta12_with_dYY,use_opto_transforms=use_opto_transforms,share_residuals=share_residuals,stimwise=stimwise,simulate1=simulate1,simulate2=simulate2,help_constrain_isn=help_constrain_isn,ignore_halo_vip=ignore_halo_vip,verbose=verbose,free_amplitude=free_amplitude,norm_opto_transforms=norm_opto_transforms,zero_extra_weights=zero_extra_weights)
 
 def run_fitting_one_arg(inp):
     target_name,seed = inp

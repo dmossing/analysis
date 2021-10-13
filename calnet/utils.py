@@ -17,6 +17,7 @@ import size_contrast_analysis as sca
 import scipy.stats as sst
 import multiprocessing as mp
 import copy
+import glob
 
 def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast_0',run_cutoff=10,running_pct_cutoff=0.4):
     # take in an HDF5 data struct, and convert to an n-dimensional matrix
@@ -1432,30 +1433,29 @@ def align_all_by_neuron(*rs_and_eis):
         rs_aligned[ir][in_each[:,ir]] = rs[ir]
     return rs_aligned,expt_ids,neuron_ids
 
-def compute_Xcouplings(YY_opto,mdls):
+def compute_couplings(YY_opto,mdls,Xcoupling=False):
     nfiles,nopto,nN,ntypes = YY_opto.shape
-    nxtypes = mdls[0].WWmx.shape[0]
-    couplings = np.zeros((nfiles,nopto,6,6,nxtypes,ntypes))
-    for iwt,mdl in enumerate(mdls):
-        couplings[iwt] = compute_Xcoupling(YY_opto[iwt],mdl)
-    return couplings
-
-def compute_Xcoupling(YY_opto,mdl):
-    coupling = compute_coupling(YY_opto,mdl)
-    Xcoupling = mdl.WWmx @ coupling
-    return Xcoupling
-
-def compute_couplings(YY_opto,mdls):
-    nfiles,nopto,nN,ntypes = YY_opto.shape
-    couplings = np.zeros((nfiles,nopto,6,6,ntypes,ntypes))
+    if not Xcoupling:
+        couplings = np.zeros((nfiles,nopto,6,6,ntypes,ntypes))
+    else:
+        nXtypes = mdls[0].XX.shape[1]
+        couplings = np.zeros((nfiles,nopto,6,6,nXtypes,ntypes))
+    #couplings = np.zeros((nfiles,nopto,6,6,ntypes,ntypes))
     #phis = np.zeros((nfiles,nopto,6,6,ntypes))
     for iwt,mdl in enumerate(mdls):
-        couplings[iwt] = compute_coupling(YY_opto[iwt],mdl)
+        couplings[iwt] = compute_coupling(YY_opto[iwt],mdl,Xcoupling=Xcoupling)
     return couplings
 
-def compute_coupling(YY_opto,mdl):
+def compute_Xcouplings(YY_opto,mdls):
+    return compute_couplings(YY_opto,mdls,Xcoupling=True)
+
+def compute_coupling(YY_opto,mdl,Xcoupling=False):
     nopto,nN,ntypes = YY_opto.shape
-    coupling = np.zeros((nopto,6,6,ntypes,ntypes))
+    if not Xcoupling:
+        coupling = np.zeros((nopto,6,6,ntypes,ntypes))
+    else:
+        nXtypes = mdl.XX.shape[1]
+        Xcoupling = np.zeros((nopto,6,6,nXtypes,ntypes))
     try:
         Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
         amp = np.ones((ntypes,))
@@ -1484,7 +1484,10 @@ def compute_coupling(YY_opto,mdl):
         for istim in range(nN):
             iistim,jjstim = np.unravel_index(istim,(6,6))
             Phi = np.diag(phis[iistim,jjstim])
-            coupling[ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
+            if not Xcoupling:
+                coupling[ilight,iistim,jjstim] = Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
+            else:
+                coupling[ilight,iistim,jjstim] = WWmx @ Phi @ np.linalg.inv(np.eye(ntypes) - WWmy @ Phi)
     return coupling
 
 def compute_coupling_ij(YY_opto,mdl,iistim,jjstim):
@@ -1648,3 +1651,12 @@ def run_all_fitting(fws_fn=None,init_files=[None],calnet_data_fold=None,weight_b
     else:
         for this_inp in inp:
             run_fitting_one_arg(this_inp)
+
+def get_weights_files(fit_lbl,basefold='/Users/dan/Documents/notebooks/mossing-PC/shared_data/calnet_data/'):
+    subfold = 'weights_%s/'%fit_lbl
+#     plots_fold = basefold + 'fit_graphics/' + subfold
+    weights_fold = basefold + 'weights/' + subfold
+    weights_files = glob.glob(weights_fold+'*.npy')
+    weights_files.sort()
+    weights_filenames = [weights_file.split('/')[-1][:-4] for weights_file in weights_files]
+    return weights_files,weights_filenames
