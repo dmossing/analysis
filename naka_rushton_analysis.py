@@ -652,6 +652,8 @@ def slope_c50_fn(crf,cinterp,thresh=0.5):
     return pseudo_c50
 
 def numeric_c50_fn(crf,cinterp,thresh=0.5):
+    # compute a pseudo-c50 by finding the point past the peak slope, 
+    # where the sloep is below a threshold*peak slope
     cval = np.array([crf(cc) for cc in cinterp])
     decreasing = (np.diff(cval)<0)
     if np.any(decreasing):

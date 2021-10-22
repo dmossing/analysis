@@ -39,7 +39,8 @@ class ca_imaging(object):
 
         self.c_l4 = np.array((0,0.5,0))
         self.c_l23 = np.array((0.5,0.5,0.5))
-        self.c_sst = np.array((1,0.65,0))
+        #self.c_sst = np.array((1,0.65,0))
+        self.c_sst = np.array((1,0.5,0))
         self.c_vip = np.array((1,0,1))
         self.c_pv = np.array((0,0,1))
         self.celltype_colors = [self.c_l4,self.c_l23,self.c_sst,self.c_vip,self.c_pv]
@@ -63,7 +64,8 @@ class ca_imaging(object):
         self.nexpt = ut.apply_fn_to_nested_lists_single_out(find_nexpt,[None,None,None],self.expt_ids)
         self.nexpt = accumulate_nexpt(self.nexpt)
 
-        self.rsexpt = ut.apply_fn_to_nested_lists_single_out(average_expt_means,[None,None,None],self.expt_ids,self.rso,self.nexpt)
+        self.rsexpt = self.avg_by_expt(self.rso)
+        #self.rsexpt = ut.apply_fn_to_nested_lists_single_out(average_expt_means,[None,None,None],self.expt_ids,self.rso,self.nexpt)
         self.rsexpt_sem = ut.apply_fn_to_nested_lists_single_out(average_expt_sems,[None,None,None],self.expt_ids,self.rso_sem,self.nexpt)
 
         self.rsexpt_dims = ut.list_of_lists_dim(self.rsexpt)
@@ -76,6 +78,10 @@ class ca_imaging(object):
         self.nrunning = self.rsexpt_dims[self.running_dim]
         self.ncelltype = self.rsexpt_dims[self.celltype_dim]
         self.nalignment = self.rsexpt_dims[self.alignment_dim]
+
+    def avg_by_expt(self, data):
+        to_return = ut.apply_fn_to_nested_lists_single_out(average_expt_means,[None,None,None],self.expt_ids,data,self.nexpt)
+        return to_return
 
     def norm_to_mean(self, expt_ids, *args):
         # given a series of args, normalize row i of each to np.nanmean(args[0][i])
@@ -116,7 +122,7 @@ class ca_imaging(object):
     def gen_2d_colors(self,this_ncontrast,celltype_colors=None):
         # given a list of celltype colors, build a list of arrays shading those colors down to black, in this_ncontrast steps
         if celltype_colors is None:
-            celltype_colors = self.celltype_colors
+            celltype_colors = self.celltype_colors_for_2d
         cfrac = np.linspace(1,0,this_ncontrast+1)[:-1]
         colors = [cfrac[:,np.newaxis]*np.array(c)[np.newaxis,:] for c in celltype_colors]
         return colors
@@ -135,37 +141,67 @@ class ca_imaging(object):
         plt.tight_layout()
         savefig(savefile)
 
-    def compute_c50s(self, clip_decreasing = True, clip_after = 2,first_ind=0,last_ind=4):
+    def compute_c50s(self, clip_decreasing = True, clip_after = 2,first_ind=0,last_ind=4,exptwise=True):
+        # within an experiment, compute c50 of a Naka-Rushton fit separately 
+        # at each size, clipping after clip_after decreasing values, for sizes
+        # starting at first_ind and ending at last_ind
+        mi_fn = lambda x: c50_monotonic_fn_expts(x,clip_decreasing=clip_decreasing,clip_after=clip_after,show_fig=False)
+        return self.compute_mis(lbl='c50',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,exptwise=exptwise)
 
-        this_fn = lambda x: c50_monotonic_fn(x,clip_decreasing=clip_decreasing,clip_after=clip_after,show_fig=False)
-        self.c50s = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],self.rsexpt)
+    def compute_smis(self,first_ind=1,last_ind=5,exptwise=True,xaxis=None):
+        # compute Surround Modulation Index, defined as the response at maximum
+        # size divided by the response at preferred size, starting at contrast
+        # first_ind (0 is 0% contrast) and ending at contrast last_ind
+        mi_fn = smi_fn
+        return self.compute_mis(lbl='smi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,exptwise=exptwise,xaxis=xaxis)
 
-        self.c50_first_ind = first_ind
-        self.c50_last_ind = last_ind
-        this_fn = lambda x: compute_c50mi(x,first_ind=self.c50_first_ind,last_ind=self.c50_last_ind)
-        self.c50mis = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],self.c50s)
+    def compute_csis(self,first_ind=0,last_ind=5,exptwise=True,xaxis=None):
+        # compute Surround Modulation Index, defined as the response at maximum
+        # size divided by the response at preferred size, starting at contrast
+        # first_ind (0 is 0% contrast) and ending at contrast last_ind
+        mi_fn = csi_fn
+        return self.compute_mis(lbl='csi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,exptwise=exptwise,xaxis=xaxis)
 
-        this_fn = lambda x: compute_c50sc(x,first_ind=self.c50_first_ind,last_ind=self.c50_last_ind,pval=False)
-        self.c50scs = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],self.c50s)
-        this_fn = lambda x: compute_c50sc(x,first_ind=self.c50_first_ind,last_ind=self.c50_last_ind,pval=True)
-        self.c50scs_pval = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],self.c50s)
+    def compute_mis(self,lbl='smi',first_ind=1,last_ind=5,mi_fn=None,exptwise=True,xaxis=None):
+        # compute a modulation index and related metrics (e.g. SMI). 
+        this_fn = lambda x: mi_fn(x)
+        if exptwise:
+            this_data = self.rsexpt
+            mis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],this_data)
+        else:
+            this_data = self.rso
+            mis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],this_data)
+            mis = self.avg_by_expt(mis)
+        setattr(self,lbl+'s',mis)
 
-    def compute_smis(self,first_ind=1,last_ind=5):
+        setattr(self,lbl+'_first_ind',first_ind)
+        setattr(self,lbl+'_last_ind',last_ind)
 
-        this_fn = lambda x: smi_fn(x)
-        self.smis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],self.rsexpt)
+        this_fn = lambda x: compute_mimi(x,first_ind=first_ind,last_ind=last_ind,axis=1)
+        mimis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],mis)
+        setattr(self,lbl+'mis',mis)
 
-        self.smi_first_ind = first_ind
-        self.smi_last_ind = last_ind
-        this_fn = lambda x: compute_smimi(x,first_ind=self.smi_first_ind,last_ind=self.smi_last_ind)
-        self.smimis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],self.smis)
+        this_fn = lambda x: compute_misc(x,first_ind=first_ind,last_ind=last_ind,pval=False)
+        miscs = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
+        setattr(self,lbl+'scs',miscs)
 
-        this_fn = lambda x: compute_smisc(x,first_ind=self.smi_first_ind,last_ind=self.smi_last_ind,pval=False)
-        self.smiscs = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],self.smis)
-        this_fn = lambda x: compute_smisc(x,first_ind=self.smi_first_ind,last_ind=self.smi_last_ind,pval=True)
-        self.smiscs_pval = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],self.smis)
+        this_fn = lambda x: compute_misc(x,first_ind=first_ind,last_ind=last_ind,pval=True)
+        miscs_pval = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
+
+        this_fn = lambda x: compute_mislope(x,first_ind=first_ind,last_ind=last_ind,pval=False,xaxis=xaxis)
+        mislopes = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
+        setattr(self,lbl+'slopes',mislopes)
+
+        this_fn = lambda x: compute_mislope(x,first_ind=first_ind,last_ind=last_ind,pval=True,xaxis=xaxis)
+        mislopes_pval = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
+        setattr(self,lbl+'slopes_pval',mislopes_pval)
+
 
     def compute_ccs(self,show_fig=False,pval_cutoff=0.05):
+        # compute Pearson correlation coefficients between tuning curves avged
+        # over single imaging sessions. pval determines whether within-celltype
+        # tuning curve correlations across imaging sessions are larger than 
+        # across-celltype tuning curve correlations (Mann-Whitney U test)
         self.cc = np.zeros((self.nrunning,self.nalignment,self.ncelltype,self.ncelltype))
         self.cc_list = {}
         self.pval_cc = np.zeros((self.nrunning,self.nalignment,self.ncelltype,self.ncelltype))
@@ -196,11 +232,16 @@ class ca_imaging(object):
             self.plot_cc(pval_cutoff=pval_cutoff,irun=0,ialign=0)
 
     def show_cc_pval(self,pval_cutoff=0.05,irun=0,ialign=0):
+        # show pairs i,j of cell types for which distribution of imaging session
+        # to imaging session cc's are significantly lower than distribution of 
+        # within cell type i imaging session to imaging session cc's 
         plt.figure()
         plt.imshow(np.log10(self.pval_cc[irun,ialign][self.disp_order][:,self.disp_order])<np.log10(0.05))
         plt.colorbar()
 
     def plot_cc(self,pval_cutoff=0.05,irun=0,ialign=0):
+        # show image of average imaging session to imaging session tuning curve
+        # Pearson correlation coefficient
         deltai = 0.5
         deltaj = -0.275
         disp_order = self.disp_order
@@ -222,15 +263,41 @@ class ca_imaging(object):
         plt.savefig('figures/avg_correlation_coefficient_btw_expts_by_celltype.eps')
 
     def plot_c50_vs_size(self,c50s,colors,savefile=None):
+        # plot size in deg on the x axis, and c50s on the y axis
         bootstrap_opaque_plot_transparent(self.usize,c50s,colors)
         plt.xlabel('size ($^o$)')
-        plt.ylabel('$C_{50}$')
+        plt.ylabel('$C_{50}$ (%)')
+        plt.tight_layout()
+        savefig(savefile)
+
+    def plot_csi_vs_size(self,csis,colors,savefile=None,xticks=None):
+        # plot size in deg on the x axis, and contrast sensitivity index on the y axis
+        bootstrap_opaque_plot_transparent(self.usize,csis,colors)
+        if not xticks is None:
+            plt.xticks(xticks)
+        plt.xlabel('size ($^o$)')
+        plt.ylabel('CSI = \n resp. to 6%/max resp.')
         plt.tight_layout()
         savefig(savefile)
 
     def plot_smi_vs_contrast_semilogx(self,smis,colors,savefile=None):
+        # using quasi-semilogx, plot contrast on the x axis, and surround modulation index
+        #  on the y axis
         x = np.arange(1,6)
-        bootstrap_opaque_plot_transparent(x,smis[:,1:],colors)
+        to_plot = smis
+        bootstrap_opaque_plot_transparent(x,to_plot[:,1:],colors)
+        plt.xticks(x,self.ucontrast[1:])
+        plt.xlabel('contrast (%)')
+        plt.ylabel('SMI = \n resp. to 60$^o$/max resp.')
+        plt.tight_layout()
+        savefig(savefile)
+
+    def plot_smi_vs_contrast_semilogx_roiwise(self,smis,colors,savefile=None):
+        # using quasi-semilogx, plot contrast on the x axis, and surround modulation index,
+        # but computing SMI for each ROI separately, and then averaging across ROIs
+        x = np.arange(1,6)
+        to_plot = self.avg_by_expt(smis)
+        bootstrap_opaque_plot_transparent(x,to_plot[:,1:],colors)
         plt.xticks(x,self.ucontrast[1:])
         plt.xlabel('contrast (%)')
         plt.ylabel('SMI = \n resp. to 60$^o$/max resp.')
@@ -238,6 +305,7 @@ class ca_imaging(object):
         savefig(savefile)
 
     def plot_pref_ori_hist(show_dir=False,split_by_expt_id=False,irun=0,ialign=0):
+        # plot histogram of preferred orientation for each cell type
         def plot_data(data,opt):
             xlbl = opt['xlbl']
             pct_by = opt['pct_by']
@@ -273,6 +341,7 @@ class ca_imaging(object):
             plt.savefig('figures/%s_pref_%s_hist_%s.eps'%(self.celltype_lbls[icelltype],stat_lbl))
 
     def plot_sst_vip_spont_bars(self,irun=0,ialign=0,epsilon=0.02):
+        # plot bars of spontaneous activity for sst and vip cells
         rsexpt = self.rsexpt
         ratio = [None for itype in range(self.ncelltype)]
         for itype in range(1,self.ncelltype):
@@ -319,9 +388,13 @@ class extracellular_ephys(object):
         self.ucontrast = [0,5,10,20,40,80]
 
 def find_nexpt(expt_ids):
+    # count the max number of unique expt_ids
     return int(expt_ids.max()+1)
 
 def accumulate_nexpt(nexpt):
+    # nexpt: nested list, celltype x running x alignment
+    # for each running and alignment condition, populate nexpt according to the 
+    # highest expt_id encountered for any running or alignment condition
     nrun = len(nexpt)
     ntype = len(nexpt[0])
     nalign = len(nexpt[0][0])
@@ -334,14 +407,19 @@ def accumulate_nexpt(nexpt):
     return nexpt
 
 def average_expt_means(expt_ids,rso,nexpt):
+    # input: rso, neuron x size x contrast x orientation
+    # average over all neurons with the same expt_id
+    # output: rsexpt, expt x size x contrast x orientation
     rsexpt = np.nan*np.ones((nexpt,)+rso.shape[1:])
     for iexpt in range(nexpt):
         if np.any(expt_ids==iexpt):
             rsexpt[iexpt] = np.nanmean(rso[expt_ids==iexpt],0)
-    print(rsexpt.shape)
     return rsexpt
 
 def average_expt_sems(expt_ids,rso_sem,nexpt):
+    # input: rso_sem, neuron x size x contrast x orientation
+    # compute SEM across all neurons with the same expt_id by propagating error
+    # (sqrt(sum)/N)
     rsexpt_sem = np.nan*np.ones((nexpt,)+rso_sem.shape[1:])
     for iexpt in range(nexpt):
         in_this_expt = (expt_ids==iexpt)
@@ -361,6 +439,8 @@ def average_expt_sems(expt_ids,rso_sem,nexpt):
 #    return this_arr.tolist()
 
 def tile_list_of_lists(this_list,dims,axis=None):
+    # populate a list of lists, each with the values in this_list, starting at the axis'th
+    # level from the top
     if not axis is None:
         starting_here = [repeat_value_list_of_lists(this_val,dims[axis+1:]) for this_val in this_list]
         return repeat_value_list_of_lists(starting_here,dims[:axis])
@@ -368,12 +448,15 @@ def tile_list_of_lists(this_list,dims,axis=None):
         return repeat_value_list_of_lists(this_list,dims)
 
 def repeat_value_list_of_lists(this_val,dims):
+    # recursively populate a list of lists with the same value, this_val, down to
+    # the deepest level
     if not len(dims):
         return this_val
     else:
         return [repeat_value_list_of_lists(this_val,dims[1:]) for d in range(dims[0])]
 
 def mean_normalize(to_plot):
+    # normalize each row (0th dimension) of to_plot to the mean across that row
     mn = np.nanmean(to_plot.reshape((to_plot.shape[0],-1)),-1)
     shp = to_plot.shape
     slicer = [slice(None)] + [np.newaxis for s in shp[1:]]
@@ -382,12 +465,18 @@ def mean_normalize(to_plot):
 
 
 def fit_two_n_fn(data):
+    # fit a Naka-Rushton function to data, with separate exponents n for numerator
+    # and denominator
     return fit_nr_fn(data,model_fn=nra.nr_two_n_model)
 
 def fit_two_c50_fn(data):
+    # fit a Naka-Rushton function to data, with separate C50s for numerator
+    # and denominator
     return fit_nr_fn(data,model_fn=nra.nr_two_c50_model)
 
 def fit_nr_fn(data,model_fn=nra.nr_two_n_model):
+    # fit a Naka-Rushton function to data, with the form of the function
+    # specified by model_fn
     ucontrast = np.array((0,6,12,25,50,100))
     if not data is None and data.size:
         this_data = np.nanmean(data,-1)
@@ -408,6 +497,11 @@ def fit_nr_fn(data,model_fn=nra.nr_two_n_model):
         return this_model
     else:
         return None
+
+def c50_monotonic_fn_expts(data,clip_decreasing=True,clip_after=2,ucontrast=np.array((0,6,12,25,50,100)),show_fig=False):
+    to_return = [c50_monotonic_fn(data[iexpt],clip_decreasing=True,clip_after=2,ucontrast=np.array((0,6,12,25,50,100)),show_fig=False) for iexpt in range(data.shape[0])]
+    to_return = np.array(to_return)
+    return to_return
 
 def c50_monotonic_fn(data,clip_decreasing=True,clip_after=2,ucontrast=np.array((0,6,12,25,50,100)),show_fig=False):
     if not data is None:
@@ -440,10 +534,26 @@ def c50_monotonic_fn(data,clip_decreasing=True,clip_after=2,ucontrast=np.array((
 
     return c50s
 
-def smi_fn(data):
-    return np.nanmean(data,-1)[:,-1,:]/np.nanmax(np.nanmean(data,-1),1)
+def mi_preprocess(data,subtract_min=True):
+    to_return = np.nanmean(data,-1)
+    #to_return = to_return - np.nanmean(to_return[:,:,0],1)[:,np.newaxis,np.newaxis]
+    if subtract_min:
+        to_return = to_return - np.nanmin(np.nanmin(to_return,1),1)[:,np.newaxis,np.newaxis]
+    return to_return
+
+def smi_fn(data,subtract_min=True):
+    this_data = mi_preprocess(data,subtract_min=subtract_min)#[:,:,first_ind:last_ind+1]
+    return this_data[:,-1,:]/np.nanmax(this_data,1)
+
+def csi_fn(data,subtract_min=True):
+    this_data = mi_preprocess(data,subtract_min=subtract_min)#[:,:,first_ind:last_ind+1]
+    #return this_data[:,:,1]/this_data[:,:,-1]
+    #return this_data[:,:,2]/np.nanmax(this_data,2)
+    return this_data[:,:,1]/np.nanmax(this_data,2)
 
 def interp_numeric_c50_fn(data,resolution=501,thresh=0.5,show_fig=False):
+    # using a pseudo-c50 function, interpolate the pseudo-c50s of the data
+    # by sampling the data at the specified resolution
     if not data is None:
         this_data = np.nanmean(data,2)
         this_sem = np.nanmean(data,2)
@@ -474,26 +584,57 @@ def interp_numeric_c50_fn(data,resolution=501,thresh=0.5,show_fig=False):
     return c50s
 
 def compute_c50mi(c50,first_ind=0,last_ind=-2):
+    # compute the difference in c50 between the first and last size (specified)
     return c50[first_ind] - c50[last_ind]
 
 def compute_smimi(smi,first_ind=1,last_ind=5):
+    # compute the difference in smi between the first and last contrast (specified)
     return smi[:,first_ind] - smi[:,last_ind]
 
-def compute_c50sc(c50,first_ind=0,last_ind=4,pval=False):
-    spearman = sst.spearmanr(c50[first_ind:last_ind+1],np.arange(first_ind,last_ind+1))
-    if not pval:
-        return spearman.correlation
-    else:
-        return spearman.pval
+def compute_mimi(mi,axis=1,first_ind=1,last_ind=5):
+    # subtract element last_ind (on axis # axis) from element first_ind
+    first_slicer,last_slicer = [[slice(None) for _ in mi.shape] for _ in range(2)]
+    first_slicer[axis] = first_ind
+    last_slicer[axis] = last_ind
+    return mi[first_slicer] - mi[last_slicer]
 
-def compute_smisc(smi,first_ind=1,last_ind=5,pval=False):
-    spearman = sst.spearmanr(smi[first_ind:last_ind+1],np.arange(first_ind,last_ind+1))
+def compute_misc(mi,first_ind=0,last_ind=5,pval=False):
+    # compute spearman correlation coefficient between the value mi and the index of mi
+    try:
+        to_correlate = mi[first_ind:last_ind+1]
+        non_nan = ~np.isnan(to_correlate)
+        spearman = sst.spearmanr(to_correlate[non_nan],np.arange(first_ind,last_ind+1)[non_nan],nan_policy='omit')
+        #non_nan = ~np.isnan(to_correlate)
+        #spearman = sst.spearmanr(to_correlate[non_nan],np.arange(first_ind,last_ind+1)[non_nan])
+    except ValueError: # not enough non-nan values
+        return np.nan
     if not pval:
         return spearman.correlation
     else:
-        return spearman.pval
+        return spearman.pvalue
+
+def compute_mislope(mi,first_ind=0,last_ind=5,pval=False,xaxis=None):
+    # compute the slope of the mi curve with respect to x values xaxis (if specified)
+    # or the index of mi (otherwise)
+    try:
+        to_correlate = mi[first_ind:last_ind+1]
+        non_nan = ~np.isnan(to_correlate)
+        if xaxis is None:
+            xdata = np.arange(first_ind,last_ind+1)[non_nan]
+        else:
+            xdata = xaxis[first_ind:last_ind+1][non_nan]
+        print(xdata)
+        ydata = to_correlate[non_nan]
+        slope,intercept,pvalue,_,_ = sst.linregress(xdata,ydata)
+    except ValueError: # not enough non-nan values
+        return np.nan
+    if not pval:
+        return slope 
+    else:
+        return pvalue
 
 class fig_gen(object):
+    # class to generate figures, given parameters opt and data_obj of class ca_imaging
     def __init__(self,opt,data_obj):
         self.savefiles = data_obj.gen_rsexpt_filenames(opt['filebase'],opt['rsexpt_inds'])
         this_fn = lambda *args: opt['fn'](*args, **opt['add_kwargs'])
@@ -501,6 +642,7 @@ class fig_gen(object):
         ut.apply_fn_to_nested_lists_no_out(this_fn,opt['ind_list'],*attr_args,self.savefiles)
 
 class pc_c50mi_bars(fig_gen):
+    # class to generate figure of c50mi bars
     def __init__(self,data_obj,use_mi=True):
         opt = {}
         opt['filebase'] = 'figures/%s_c50mi_bars_%s.jpg'
@@ -526,31 +668,70 @@ class pc_c50mi_bars(fig_gen):
         savefig(savefile.replace('pc_l23','pc'))
 
 class pc_smimi_bars(fig_gen):
-    def __init__(self,data_obj,use_mi=True):
+    # class to generate figure of smimi bars
+    def __init__(self,data_obj,mi_type='mi'):
         opt = {}
         opt['filebase'] = 'figures/%s_smimi_bars_%s.jpg'
         opt['rsexpt_inds'] = [1,0]#(lbls[itype],alignment_lbls[ialign])
         opt['ind_list'] = [None,[0,1],[0]]
         opt['fn'] = self.single_fn
         opt['attr_args'] = ['smimis','rsexpt_colors','rsexpt_full_celltype_lbls']
-        if not use_mi:
+        if mi_type == 'sc':
             opt['attr_args'][0] = 'smiscs'
-        opt['add_kwargs'] = {'ucontrasts':[data_obj.ucontrast[data_obj.smi_first_ind],data_obj.ucontrast[data_obj.smi_last_ind]],'use_mi':use_mi}
+        elif mi_type == 'slope':
+            opt['attr_args'][0] = 'smislopes'
+        opt['add_kwargs'] = {'ucontrasts':[data_obj.ucontrast[data_obj.smi_first_ind],data_obj.ucontrast[data_obj.smi_last_ind]],'mi_type':mi_type}
         super().__init__(opt,data_obj)
-    def single_fn(self,smimis,colors,full_celltype_lbl,savefile,ucontrasts=[6,100],use_mi=True):
+    def single_fn(self,smimis,colors,full_cellmi_type_lbl,savefile,ucontrasts=[6,100],mi_type='mi'):
         plt.figure(figsize=(2.5,2.5))
         plot_bar_with_dots(smimis,colors)
-        plt.xticks((0,),[full_celltype_lbl])
-        if use_mi:
+        plt.xticks((0,),[full_cellmi_type_lbl])
+        if mi_type == 'mi':
             plt.ylabel('SMI at %d%% - SMI at %d%%'%tuple(ucontrasts))
-        else:
+        elif mi_type == 'sc':
             plt.ylabel('Spearman corr. coef., \n SMI vs. contrast')
+        elif mi_type == 'slope':
+            plt.ylabel('slope, SMI vs. contrast')
+        plt.xlim((-1,1))
+        ut.erase_top_right()
+        plt.tight_layout()
+        savefig(savefile.replace('pc_l23','pc'))
+
+class pc_csi_bars(fig_gen):
+    # class to generate figure of csi bars
+    def __init__(self,data_obj,mi_type='mi'):
+        opt = {}
+        opt['filebase'] = 'figures/%s_csi_bars_%s.jpg'
+        opt['rsexpt_inds'] = [1,0]#(lbls[itype],alignment_lbls[ialign])
+        opt['ind_list'] = [None,[0,1],[0]]
+        opt['fn'] = self.single_fn
+        opt['attr_args'] = ['csis','rsexpt_colors','rsexpt_full_celltype_lbls']
+        if mi_type == 'sc':
+            opt['attr_args'][0] = 'csiscs'
+        elif mi_type == 'slope':
+            opt['attr_args'][0] = 'csislopes'
+        opt['add_kwargs'] = {'usizes':[data_obj.usize[data_obj.csi_first_ind],data_obj.usize[data_obj.csi_last_ind]],'mi_type':mi_type}
+        super().__init__(opt,data_obj)
+    def single_fn(self,csimis,colors,full_celltype_lbl,savefile,usizes=[5,36],mi_type='mi'):
+        plt.figure(figsize=(2.5,2.5))
+        plot_bar_with_dots(csimis,colors)
+        plt.xticks((0,),[full_celltype_lbl])
+        if mi_type == 'mi':
+            plt.ylabel('CSI at %d%% - CSI at %d%%'%tuple(usizes))
+        elif mi_type == 'sc':
+            plt.ylabel('Spearman corr. coef., \n CSI vs. size')
+        elif mi_type == 'slope':
+            plt.ylabel('slope, CSI vs. size')
         plt.xlim((-1,1))
         ut.erase_top_right()
         plt.tight_layout()
         savefig(savefile.replace('pc_l23','pc'))
 
 def plot_bar_with_dots(smimi,colors=None,epsilon=0.05,alpha=0.5,pct=(16,84)):
+    # plot a series of bars (smimi can be a list), where the top of the 
+    # bar is at the average value of each list element, and dots corresponding
+    # to all the values within each list element, with x jittered by epsilon
+    # bar has opacity alpha, and dots are fully opaque
     if not isinstance(smimi,list):
         smimi = [smimi]
         colors = [colors]
@@ -565,6 +746,9 @@ def plot_bar_with_dots(smimi,colors=None,epsilon=0.05,alpha=0.5,pct=(16,84)):
         print(p)
 
 def bootstrap_opaque_plot_transparent(x,Y,colors,savefile=None,alpha=0.2):
+    # plot transparent lines, indicating indiv. imaging sessions, with opacity
+    # alpha, and bold lines, indicating average across sessions.
+    # Y vs x
     plt.figure(figsize=(2.5,2.5))
     plt.plot(x,Y.T,alpha=0.2,c=colors)
     ut.plot_bootstrapped_errorbars_hillel(x,Y[:,np.newaxis],pct=(16,84),colors=colors[np.newaxis])
@@ -577,9 +761,80 @@ def savefig(savefile):
         else:
             plt.savefig(savefile,dpi=300)
 
-class interp_size_tuning(fig_gen):
+def plot_size_tuning(rsexpt=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
+    this_ncontrast = len(these_contrasts)
+    this_usize = usize
+    this_ucontrast = ucontrast
+
+    if ams is None:
+        #assert(not data is None and not theta is None)
+        assert(not data is None)
+        ams = ayaz_model(data,usize=usize,ucontrast=ucontrast,theta=theta,sub=sub,two_n=two_n)
+    this_ucontrast = np.array([ams.ucontrast[i] for i in these_contrasts])
+    this_theta = ams.theta
+    fn = ams.fn
+
+    usize0 = np.concatenate(((0,),usize))
+    this_data = sim_utils.gen_size_tuning(ams.data)
+
+    if deriv:
+        if deriv_axis==1:
+            this_data = sca.compute_slope_avg(usize0,this_data,axis=deriv_axis)
+        elif deriv_axis==2:
+            this_data = sca.compute_slope_avg(ucontrast,this_data,axis=deriv_axis)
+        this_modeled = np.zeros((ninterp,this_ncontrast))
+        for icontrast in range(this_ncontrast):
+            if deriv_axis==1:
+                srf = lambda d: ams.fn(np.array((this_ucontrast[icontrast],)),np.array((d,)))[0,0]
+                sslope = np.array([grad(srf)(ss) for ss in this_usize])
+                this_modeled[:,icontrast] = sslope
+            elif deriv_axis==2:
+                for isize,ss in enumerate(this_usize):
+                    crf = lambda c: ams.fn(np.array((c,)),np.array((ss,)))[0,0]
+                    sslope = grad(crf)(this_ucontrast[icontrast])
+                    this_modeled[isize,icontrast] = sslope
+    else:
+        this_modeled = ams.fn(this_ucontrast,this_usize)
+
+    if True:
+        if error_type=='bs':
+            ut.plot_bootstrapped_errorbars_hillel(usize0,this_data[:,:,these_contrasts].transpose((0,2,1)),linewidth=0,colors=colors)
+        elif error_type=='pct':
+            ut.plot_pct_errorbars_hillel(usize0,this_data[:,:,these_contrasts].transpose((0,2,1)),linewidth=0,colors=colors,pct=(16,84))
+        for icontrast in range(this_ncontrast):
+            plt.plot(usize_interp,this_modeled[:,icontrast],c=colors[icontrast])
+        #plt.xticks(cinds,(100*ucontrast).astype('int'))
+    ut.erase_top_right()
+    plt.xlabel('size ($^o$)')
+    plt.ylabel('event rate/mean')
+    if not deriv:
+        plt.gca().set_ylim(bottom=0)
+    plt.tight_layout()
+
+class size_tuning(fig_gen):
+    # plot interpolated size tuning based on Ayaz et al style fits, and error
+    # bars and dots based on actual data
     def __init__(self,data_obj):
         opt = {}
+        opt['filebase'] = 'figures/%s_size_by_3_contrasts_%s_%s.eps'
+        opt['rsexpt_inds'] = [1,0,2]
+        opt['ind_list'] = [None,None,None]
+        opt['fn'] = self.plot_size_tuning
+        opt['attr_args'] = ['ams_all','rsexpt_colors_for_2d']
+        opt['add_kwargs'] = {'usize':data_obj.usize,'these_contrasts':[1,3,5]}
+        super().__init__(opt,data_obj)
+    def plot_size_tuning(self,ams,colors,savefile=None,usize=None,these_contrasts=None):
+        plt.figure(figsize=(3,2.5))
+        colors2d = gen_2d_colors(len(these_contrasts),celltype_colors=[colors])[0]
+        nra.plot_interp_size_tuning(ams=ams,usize=usize,these_contrasts=these_contrasts,colors=colors2d)
+        savefig(savefile)
+        
+class interp_size_tuning(size_tuning):
+    # plot interpolated size tuning based on Ayaz et al style fits, and error
+    # bars and dots based on actual data
+    def __init__(self,data_obj):
+        opt = {}
+        super().__init__(data_obj)
         opt['filebase'] = 'figures/%s_size_by_3_contrasts_%s_%s.eps'
         opt['rsexpt_inds'] = [1,0,2]
         opt['ind_list'] = [None,None,None]
@@ -593,7 +848,28 @@ class interp_size_tuning(fig_gen):
         nra.plot_interp_size_tuning(ams=ams,usize=usize,these_contrasts=these_contrasts,colors=colors2d)
         savefig(savefile)
 
+class interp_contrast_tuning(fig_gen):
+    # plot interpolated contrast tuning based on Ayaz et al style fits, and
+    # error bars and dots based on actual data
+    def __init__(self,data_obj):
+        opt = {}
+        opt['filebase'] = 'figures/%s_contrast_by_3_sizes_%s_%s.eps'
+        opt['rsexpt_inds'] = [1,0,2]
+        opt['ind_list'] = [None,None,None]
+        opt['fn'] = self.plot_interp_contrast_tuning
+        opt['attr_args'] = ['ams_all','rsexpt_colors_for_2d']
+        opt['add_kwargs'] = {'ucontrast':data_obj.usize,'these_sizes':[0,2,4]}
+        super().__init__(opt,data_obj)
+    def plot_interp_size_tuning(self,ams,colors,savefile=None,usize=None,these_contrasts=None):
+        plt.figure(figsize=(3,2.5))
+        colors2d = gen_2d_colors(len(these_contrasts),celltype_colors=[colors])[0]
+        nra.plot_interp_size_tuning(ams=ams,usize=usize,these_contrasts=these_contrasts,colors=colors2d)
+        savefig(savefile)
+
 class interp_size_slope(fig_gen):
+    # compute slope in units of mean event rate / deg, plot computed values
+    # plus interpolated curves based on Ayaz et al.-style model fits
+    # still need to debug
     def __init__(self,data_obj):
         opt = {}
         opt['filebase'] = 'figures/%s_size_slope_by_3_contrasts_%s_%s.eps'
@@ -617,7 +893,10 @@ class interp_size_slope(fig_gen):
         plt.tight_layout()
         #savefig(savefile)
 
-class interp_contrast_slope_by_size(fig_gen):
+class interp_contrast_slope_by_contrast(fig_gen):
+    # compute slope in units of mean event rate / %, plot computed values
+    # plus interpolated curves based on Ayaz et al.-style model fits
+    # still need to debug
     def __init__(self,data_obj):
         opt = {}
         opt['filebase'] = 'figures/%s_contrast_slope_by_3_contrasts_%s_%s.eps'
@@ -641,6 +920,9 @@ class interp_contrast_slope_by_size(fig_gen):
         #savefig(savefile)
 
 class interp_contrast_slope_by_size(fig_gen):
+    # compute slope in units of mean event rate / deg, plot computed values
+    # plus interpolated curves based on Ayaz et al.-style model fits
+    # still need to debug
     def __init__(self,data_obj):
         opt = {}
         opt['filebase'] = 'figures/%s_contrast_slope_by_3_contrasts_%s_%s.eps'
@@ -672,6 +954,10 @@ class interp_contrast_slope_by_size(fig_gen):
         plt.savefig('figures/%s_contrast_slope_by_3_sizes_%s_%s.eps'%(lbls[itype],running_lbls[irun],alignment_lbls[ialign]))
 
 def compute_diff_avg(zdata,axis=0):
+    # compute differences between adjacent data points of zdata along axis axis
+    # to get a diff value for each entry, for middle entries, average the 
+    # two diff values whose computation included that entry; for edge entries,
+    # just use the edge entry
     zdata_diff = np.diff(zdata,axis=axis)
     zdata_diff_avg = np.zeros_like(zdata)
     slicer = [slice(None) for idim in range(len(zdata.shape))]
@@ -688,6 +974,11 @@ def compute_diff_avg(zdata,axis=0):
     return zdata_diff_avg
 
 def compute_slope_avg(tdata,zdata,axis=0):
+    # compute differences between adjacent data points of zdata along axis axis
+    # and divide by adjacent values of tdata.
+    # to get a slope value for each entry, for middle entries, average the 
+    # two slope values whose computation included that entry; for edge entries,
+    # just use the edge entry
     slicer = [np.newaxis for idim in range(len(zdata.shape))]
     slicer[axis] = slice(None)
     zdata_slope = np.diff(zdata,axis=axis)/np.diff(tdata)[slicer]
