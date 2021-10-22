@@ -1717,6 +1717,25 @@ def bar_pdf(data,bins=None,alpha=1,**kwargs):
     h,_ = np.histogram(data,bins=bins)
     plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha,**kwargs)
 
+def bar_pdf_sig(data,bins=None,alpha=1,sig=None,sig_above=True,sig_facecolor='w',**kwargs):
+    # probability density function bar plot
+    if sig is None:
+        bar_pdf(data,bins=None,alpha=1,**kwargs)
+    else:
+        h_insig,_ = np.histogram(data[~sig],bins=bins)
+        h_sig,_ = np.histogram(data[sig],bins=bins)
+        n = h_insig.sum() + h_sig.sum()
+        if sig_above:
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_insig/n,width=bins[1]-bins[0],alpha=alpha,**kwargs)
+            new_kwargs = kwargs
+            new_kwargs['facecolor'] = sig_facecolor
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_sig/n,bottom=h_insig/n,width=bins[1]-bins[0],alpha=alpha,**new_kwargs)
+        else:
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_insig/n,bottom=h_sig/n,width=bins[1]-bins[0],alpha=alpha,**kwargs)
+            new_kwargs = kwargs
+            new_kwargs['facecolor'] = sig_facecolor
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_sig/n,width=bins[1]-bins[0],alpha=alpha,**new_kwargs)
+
 def line_pdf(data,bins=None,**kwargs):
     # probability density function line plot
     h,_ = np.histogram(data,bins=bins)

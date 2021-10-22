@@ -409,7 +409,7 @@ def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen
 
 class ayaz_model(object):
     # runs fitting if theta is None
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False,run_fitting=True):
         self.data = data
         self.usize = usize        
         self.ucontrast = ucontrast
@@ -426,12 +426,22 @@ class ayaz_model(object):
         assert(self.data.shape[1]==len(usize))
         assert(self.data.shape[2]==len(ucontrast))
         if theta is None:
-            self.fit(theta0=theta0,delta0=delta0)
+            if run_fitting:
+                self.fit(theta0=theta0,delta0=delta0)
         else:
             self.theta = theta
             # len(d) x len(c) output
             self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
-    def fit(self,theta0=None,delta0=0):
+
+    def fn_theta(self,c,d,theta):
+        modeled = nub_utils.ayaz_like_theta(c,d,theta,fn=self.base_fn)
+        return modeled
+
+    def predict(self,theta):
+        modeled = self.fn_theta(self.ucontrast,self.usize,theta)
+        return modeled
+
+    def initialize(self,delta0=0):
         r0 = np.nanmin(self.data)
         rd = 100
         rs = 100
@@ -440,24 +450,34 @@ class ayaz_model(object):
         m = 1
         n = 1#2
         delta = delta0
+        theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
+        return theta0
+
+    def bound(self):
         mmin = 0.5
         mmax = 5
         smax = 180
+        bds = sop.Bounds(np.zeros_like(self.theta0),np.inf*np.ones_like(self.theta0))
+#         bds.ub[4] = 0
+        bds.lb[11:14] = mmin
+        bds.ub[11:14] = mmax
+        bds.ub[7:11] = smax
+        bds.ub[4] = 0
+        return bds
+
+    def fit(self,theta0=None,delta0=0):
             
         def cost(theta):
-            modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,theta,fn=self.base_fn)
+            modeled = self.predict(theta)
             non_nan = ~np.isnan(self.data)
             return np.sum((modeled[np.newaxis] - self.data)[non_nan]**2)
-        
+
         if theta0 is None:
-            #theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
-            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
-        bds = sop.Bounds(np.zeros_like(theta0),np.inf*np.ones_like(theta0))
-#         bds.ub[4] = 0
-        bds.lb[-4:-1] = mmin
-        bds.ub[-4:-1] = mmax
-        bds.ub[-8:-4] = smax
-        bds.ub[4] = 0
+            theta0 = self.initialize(delta0=delta0)
+
+        self.theta0 = theta0
+        
+        bds = self.bound()
         
         if not self.norm_top:
             bds.ub[3] = 0
@@ -471,13 +491,49 @@ class ayaz_model(object):
         if res.success:
             self.theta = res.x
             self.cost = res.fun
-            self.modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
-            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+            self.modeled = self.predict(self.theta)#nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
+            #self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+            self.fn = lambda c,d: self.fn_theta(c,d,self.theta)
             self.c50 = self.theta[5]**(-1/self.theta[-3])
             self.c50top = self.theta[3]**(-1/self.theta[-3])
             self.c50bottom = self.theta[6]**(-1/self.theta[-3])
         else:
             print(str((itype,iexpt))+' unsuccessful')
+
+class ayaz_opto_model(ayaz_model):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,ulight=np.arange(2),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
+        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,theta=theta,delta0=delta0,two_n=two_n,run_fitting=False)
+        self.ulight = ulight
+        self.nlight = len(ulight)
+        self.fit()
+    def initialize(self,delta0=0):
+        theta0 = super().initialize(delta0=delta0)
+        theta0 = np.concatenate((theta0,(0,)),axis=0)
+        return theta0
+    def bound(self):
+        bds = super().bound()
+        bds.lb[15] = -1
+        bds.ub[15] = np.inf
+        return bds
+    def fn_theta(self,c,d,theta):
+        theta_light = theta[-1]
+        r0 = theta[0]
+        no_opto_pred = super().fn_theta(c,d,theta[:-1]) - r0 # baseline subtracted prediction
+        opto_pred = np.tile(no_opto_pred[:,:,np.newaxis],(1,1,self.nlight))
+        opto_mult = np.array((1,1/(1 + theta_light)))[np.newaxis,np.newaxis,:]
+        opto_pred = opto_pred*opto_mult
+        opto_pred = opto_pred + r0
+        return opto_pred
+
+    #def predict(self,theta):
+    #    theta_light = theta[-1]
+    #    r0 = theta[0]
+    #    no_opto_pred = super().predict(theta[:-1]) - r0 # baseline subtracted prediction
+    #    opto_pred = np.tile(no_opto_pred[:,:,np.newaxis],(1,1,self.nlight))
+    #    opto_mult = np.array((1,1/(1 + theta_light)))[np.newaxis,np.newaxis,:]
+    #    opto_pred = opto_pred*opto_mult
+    #    opto_pred = opto_pred + r0
+    #    return opto_pred
 
 class ayaz_ori_model(ayaz_model):
     def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,uangle=np.arange(0,360,45),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):

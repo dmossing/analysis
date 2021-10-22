@@ -752,7 +752,8 @@ def compute_bootstrap_error_faster(df,trial_info,selector,pct=(16,84),include=No
             bounds[iexpt] = bounds[iexpt][0]
     return bounds
                 
-def compute_bootstrap_error(df,trial_info,selector,pct=(16,84),include=None):
+def compute_bootstrap_error(df,trial_info,selector,pct=(16,84),include=None,nreps=1000):
+    # bounds, list of lists: expt x partition x pct (percentile) x (roi x size? x stim)
     params = list(selector.keys())
     expts = list(trial_info.keys())
     nexpt = len(expts)
@@ -784,7 +785,7 @@ def compute_bootstrap_error(df,trial_info,selector,pct=(16,84),include=None):
             for iflat in range(np.prod(nconds)):
                 coords = np.unravel_index(iflat,tuple(nconds))
                 lkat = ut.k_and(include[expt][ipart],*[iconds[ic] == coords[ic] for ic in range(len(condition_list))])
-                bds = ut.bootstrap(trialwise[:,lkat],np.nanmean,axis=1,pct=pct)
+                bds = ut.bootstrap(trialwise[:,lkat],np.nanmean,axis=1,pct=pct,nreps=nreps)
                 for ipct in range(npct):
                     bounds[iexpt][ipart][ipct][(slice(None),)+coords] = bds[ipct]
         if compress_flag:

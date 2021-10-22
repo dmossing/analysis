@@ -1455,7 +1455,7 @@ def compute_coupling(YY_opto,mdl,Xcoupling=False):
         coupling = np.zeros((nopto,6,6,ntypes,ntypes))
     else:
         nXtypes = mdl.XX.shape[1]
-        Xcoupling = np.zeros((nopto,6,6,nXtypes,ntypes))
+        coupling = np.zeros((nopto,6,6,nXtypes,ntypes))
     try:
         Wmx,Wmy,Wsx,Wsy,s02,K,kappa,T,XX,XXp,Eta,Xi,h1,h2,bl = mdl.as_list
         amp = np.ones((ntypes,))
