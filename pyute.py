@@ -1700,6 +1700,7 @@ def gen_big_bool(bool_list):
     return big_ind
 
 def set_lims(*arrs,wiggle_pct=0.05):
+    # set the axis limits based on the extreme values of arrs, + wiggle_pct % extra space on each side
     mn = np.inf
     mx = -np.inf
     for arr in arrs:
@@ -1710,6 +1711,7 @@ def set_lims(*arrs,wiggle_pct=0.05):
     plt.ylim((mn-wiggle,mx+wiggle))
 
 def pca_denoise(arr,Npc):
+    # PCA denoising using the first Npc principal components of array
     u,s,vh = np.linalg.svd(arr.T,full_matrices=False)
     return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
 
@@ -1748,6 +1750,9 @@ def line_cdf(data,bins=None):
     plt.plot(0.5*(bins[:-1]+bins[1:]),np.cumsum(h)/h.sum())
 
 def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac=0.5): 
+    # given a dataframe, compute mean (tuning) for each roi and stimulus condition,
+    # across one of many random partitionings of the data, and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     selector_s1 = gen_nub_selector_s1() 
     selector_v1 = gen_nub_selector_v1() 
     keylist = list(trial_info.keys()) 
@@ -1812,6 +1817,9 @@ def select_trials(trial_info,selector,training_frac,include_all=False,seed=0):
     return train_test
 
 def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
+    # given a dataframe, compute mean (tuning) for each roi and stimulus condition,
+    # and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
@@ -1855,6 +1863,8 @@ def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
     return tuning
 
 def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
+    # given a dictionary with keys given by the keys of trial_info, retrieve entry corresponding to key
+    # for each of those entries, and put them into a dataframe, which is returned
     tuning = {}
     params = list(selector.keys())
     if expts is None:
@@ -2113,6 +2123,9 @@ def zero_origin(cmd='y'):
 
 def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1):
     # plot bar with bootstrapped error bars and dots, jittered by epsilon, dot size s, transparency alpha on everything
+    # make data a list, if it is not
+    if not isinstance(data,list):
+        data = [data]
     if not isinstance(s,list):
         s = [s for d in data]
     if colors is None:

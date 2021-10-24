@@ -33,6 +33,8 @@ class ephys(object):
         return to_plot
 
     def plot_size_tuning(self,save_fig=True,show_legend=True):
+        # plot size tuning curves with across-expt error bars, from size x contrast data
+        # at 3 contrasts
         for irun in range(2):
             for data,c,lbl in zip([self.rrs[irun],self.rfs[irun]],[self.c_l23,self.c_pv],['pc_l23','pv_l23']):
                 shp = data.shape
@@ -48,6 +50,7 @@ class ephys(object):
                 plt.gca().set_ylim(bottom=0)
                 if show_legend:
                     plt.legend(['5%','20%','80%'])
+                plt.xticks((0,20,40,60))
                 plt.xlabel('size ($^o$)')
                 plt.ylabel('firing rate (Hz)')
                 plt.tight_layout()
@@ -56,7 +59,29 @@ class ephys(object):
                     filename = 'figures/ephys_%s_size_by_3_contrasts_%s_.eps'%(lbl,self.running_lbls[irun])
                     plt.savefig(filename)
 
+                plt.figure(figsize=(2.5,2.5))
+                colors = [np.array(((0.5,0.5,0.5),(1,0.9,0.5))),np.array(((0,0,0),(1,0.8,0)))]
+                for iicontrast,icontrast in enumerate([1,5]):
+                    plt.figure(figsize=(2.5,2.5))
+                    ut.plot_bootstrapped_errorbars_hillel(self.usize0,size_tuning[:,:,icontrast,:].transpose((0,2,1)),pct=(16,84),colors=colors[iicontrast])
+                    plt.xticks((0,20,40,60))
+                    plt.xlabel('size ($^o$)')
+                #     plt.ylabel('event rate (a.u.)')
+                    plt.ylabel('firing rate (Hz)')
+                #     plt.legend(['light off','light on'])
+                    plt.title('%d%% contrast'%self.ucontrast[icontrast])
+                    ut.erase_top_right()
+                    plt.gca().set_ylim(bottom=0)
+                    if show_legend:
+                        plt.legend(['light off','light on'])
+                    plt.tight_layout()
+                    if save_fig:
+                        filename = 'figures/ephys_vip_halo_%s_size_by_contrast_%d_%s.eps'%(lbl,icontrast,self.running_lbls[irun])
+                        plt.savefig(filename)
+
     def plot_contrast_tuning(self,save_fig=True,show_legend=True):
+        # plot contrast tuning curves with across-expt error bars, from size x contrast data
+        # at 3 sizes
         for irun in range(2):
             for data,c,lbl in zip([self.rrs[irun],self.rfs[irun]],[self.c_l23,self.c_pv],['pc_l23','pv_l23']):
                 shp = data.shape
@@ -79,25 +104,25 @@ class ephys(object):
                 if save_fig:
                     plt.savefig('figures/ephys_%s_contrast_by_3_sizes_%s_.eps'%(lbl,self.running_lbls[irun]))
     
-    def plot_csi_smi(self):
-        c_l23 = np.array((0.5,0.5,0.5))
-        c_pv = np.array((0,0,1))
-        colors = [c_l23,c_pv]
-        csis = [None for irun in range(2)]
-        csimis = [None for irun in range(2)]
-        smis = [None for irun in range(2)]
-        smimis = [None for irun in range(2)]
+    def compute_csi_smi(self):
+        # compute csi and smi across all experiments, as well as slopes
+        # with respect to usize and ucontrast
+        self.csis = [None for irun in range(2)]
+        self.csimis = [None for irun in range(2)]
+        self.smis = [None for irun in range(2)]
+        self.smimis = [None for irun in range(2)]
         cmax = 6
     # for ialign in range(2):
     #     c50mis[ialign] = [None for irun in range(2)]
     #     c50s[ialign] = [None for irun in range(2)]
         for irun in range(2):
-            csis[irun] = [None for itype in range(2)]
-            csimis[irun] = [None for itype in range(2)]
-            smis[irun] = [None for itype in range(2)]
-            smimis[irun] = [None for itype in range(2)]
-            for data,lbl,itype in zip([self.rrs[irun],self.rfs[irun]],['pc_l23','pv_l23'],[0,1]):
-                nroi = data.shape[0]
+            self.csis[irun] = [None for itype in range(2)]
+            self.csimis[irun] = [None for itype in range(2)]
+            self.smis[irun] = [None for itype in range(2)]
+            self.smimis[irun] = [None for itype in range(2)]
+            for data,itype in zip([self.rrs[irun],self.rfs[irun]],[0,1]):
+                nexpt = data.shape[0]
+                nlight = data.shape[-1]
                 # csis[irun][itype] = np.nan*np.ones((nroi,3))
     #             for iroi in range(nroi):
     #                 print(iroi)
@@ -110,19 +135,28 @@ class ephys(object):
     #                 opt_params = nra.fit_opt_params_two_n(np.array(ucontrast_ephys[:cmax]),this_data[lkat,:cmax])
     # #                 opt_params = nra.fit_opt_params(ucontrast[:cmax],this_data[lkat,:cmax])
     #                 csis[irun][itype][iroi,lkat] = opt_params[nparams+1:2*nparams+1]
-                csis[irun][itype] = csi_fn(data,subtract_min=True,avg_last=False)
-                smis[irun][itype] = smi_fn(data,subtract_min=True,avg_last=False)
-                csimis[irun][itype] = np.nan*np.ones((data.shape[0],data.shape[-1]))
-                smimis[irun][itype] = np.nan*np.ones((data.shape[0],data.shape[-1]))
+                self.csis[irun][itype] = csi_fn(data,subtract_min=True,avg_last=False)
+                self.smis[irun][itype] = smi_fn(data,subtract_min=True,avg_last=False)
+                self.csimis[irun][itype] = np.nan*np.ones((nexpt,nlight))
+                self.smimis[irun][itype] = np.nan*np.ones((nexpt,nlight))
                 # csimis[irun][itype] = csis[irun][itype][:,0]-csis[irun][itype][:,-1]
-                for iexpt in range(csis[irun][itype].shape[0]):
-                    for ilight in range(csis[irun][itype].shape[-1]):
-                        csimis[irun][itype][iexpt,ilight] = compute_mislope(csis[irun][itype][iexpt,:,ilight],first_ind=0,last_ind=-1,pval=False,xaxis=self.usize)
-                        smimis[irun][itype][iexpt,ilight] = compute_mislope(smis[irun][itype][iexpt,:,ilight],first_ind=1,last_ind=-1,pval=False,xaxis=self.ucontrast)
-
+                for iexpt in range(nexpt):
+                    for ilight in range(nlight):
+                        self.csimis[irun][itype][iexpt,ilight] = compute_mislope(self.csis[irun][itype][iexpt,:,ilight],first_ind=0,last_ind=-1,pval=False,xaxis=self.usize)
+                        self.smimis[irun][itype][iexpt,ilight] = compute_mislope(self.smis[irun][itype][iexpt,:,ilight],first_ind=1,last_ind=-1,pval=False,xaxis=self.ucontrast)
+    
+    def plot_csi_smi_baseline(self):
+        # check that csis and smis are computed
+        if not hasattr(self,'csis'):
+            self.compute_csi_smi()
+        c_l23 = np.array((0.5,0.5,0.5))
+        c_pv = np.array((0,0,1))
+        colors = [c_l23,c_pv]
+        for irun in range(2):
+            for data,lbl,itype in zip([self.rrs[irun],self.rfs[irun]],['pc_l23','pv_l23'],[0,1]):
                 plt.figure(figsize=(2.5,2.5))
-                plt.plot(self.usize,csis[irun][itype][:,:,0].T,alpha=0.2,c=colors[itype])
-                ut.plot_bootstrapped_errorbars_hillel(self.usize,csis[irun][itype][:,np.newaxis,:,0],pct=(16,84),colors=np.array(colors[itype])[np.newaxis])
+                plt.plot(self.usize,self.csis[irun][itype][:,:,0].T,alpha=0.2,c=colors[itype])
+                ut.plot_bootstrapped_errorbars_hillel(self.usize,self.csis[irun][itype][:,np.newaxis,:,0],pct=(16,84),colors=np.array(colors[itype])[np.newaxis])
                 plt.xlabel('size ($^o$)')
                 plt.ylabel('CSI')
                 ut.erase_top_right()
@@ -130,9 +164,9 @@ class ephys(object):
                 plt.savefig('figures/ephys_%s_c50_by_size_%s.jpg'%(lbl,self.running_lbls[irun]),dpi=300)
 
                 plt.figure(figsize=(2.5,2.5))
-                plt.plot(np.arange(1,len(self.ucontrast)),smis[irun][itype][:,1:,0].T,alpha=0.2,c=colors[itype])
+                plt.plot(np.arange(1,len(self.ucontrast)),self.smis[irun][itype][:,1:,0].T,alpha=0.2,c=colors[itype])
                 plt.xticks(np.arange(1,len(self.ucontrast)),self.ucontrast[1:])
-                ut.plot_bootstrapped_errorbars_hillel(np.arange(1,len(self.ucontrast)),smis[irun][itype][:,np.newaxis,1:,0],pct=(16,84),colors=np.array(colors[itype])[np.newaxis])
+                ut.plot_bootstrapped_errorbars_hillel(np.arange(1,len(self.ucontrast)),self.smis[irun][itype][:,np.newaxis,1:,0],pct=(16,84),colors=np.array(colors[itype])[np.newaxis])
                 plt.xlabel('contrast (%)')
                 plt.ylabel('SMI')
                 ut.erase_top_right()
@@ -144,19 +178,58 @@ class ephys(object):
         for irun in range(2):
             plt.figure(figsize=(2.5,2.5))
             for iitype,itype in enumerate([0]):
-                smimi = smimis[irun][itype].copy()[:,0]
-                plt.bar((iitype,),np.nanmean(smimi,0),color=colors[itype],alpha=0.5)
-                plt.errorbar((iitype,),np.nanmean(smimi,0),np.nanstd(smimi,0)/np.sqrt(np.sum(~np.isnan(smimi),0)),fmt='none',c='k')
-                plt.scatter(iitype*np.ones_like(smimi)+epsilon*np.random.randn(smimi.shape[0]),smimi,facecolor=colors[itype],linewidth=1,edgecolor='k')
-                _,p = sst.wilcoxon(smimi[~np.isnan(smimi)])
-                print('p-value: %f'%p)
-            # plt.plot((0+epsilon,1-epsilon),smimi.T,c='k',alpha=0.5)
+                smimi = self.smimis[irun][itype].copy()[:,0]
+                plot_bar_with_dots(smimi,colors[itype],epsilon=epsilon)
             plt.xticks((0,),['L2/3 RS'])
             plt.ylabel('slope, SMI vs. contrast')
             plt.xlim((-1,1))
             plt.tight_layout()
             ut.erase_top_right()
             plt.savefig('figures/ephys_pc_pv_smimi_bars_%s.jpg'%(self.running_lbls[irun]),dpi=300)
+
+    def plot_csi_smi_opto(self):
+        # check that csis and smis are computed
+        if not hasattr(self,'csis'):
+            self.compute_csi_smi()
+        halo_colors = [np.array((0,0,0)),np.array((1,0.8,0))]
+        p = [None for irun in range(2)]
+        for irun in range(2):
+            p[irun] = [None for itype in range(2)]
+            for itype,lbl in zip([0,1],['pc_l23','pv_l23']):
+                smi = self.smis[irun][itype].copy()
+                plt.figure(figsize=(2.5,2.5))
+        #         plt.plot(ucontrast,smi_expt[:,1:,ilight].T,c=c,alpha=0.2)
+                ut.plot_bootstrapped_errorbars_hillel(np.arange(1,len(self.ucontrast)),smi[:,1:,:].transpose((0,2,1)),pct=(16,84),colors=halo_colors)
+        #         plt.legend(['5%','20%','80%'])
+        #         plt.xlabel('size ($^o$)')
+                plt.xticks(np.arange(1,len(self.ucontrast)),self.ucontrast[1:])
+                plt.ylabel('SMI = \n resp. to 60$^o$/max resp.')
+                plt.xlabel('contrast (%)')
+                plt.tight_layout()
+                ut.erase_top_right()
+                plt.savefig('figures/ephys_vip_halo_%s_smi_by_size_%s.jpg'%(lbl,self.running_lbls[irun]),dpi=300)
+                
+        halo_colors = [np.array((0,0,0)),np.array((1,0.8,0))]
+        itype = 0
+        running_lbls = ['non_running','running']
+        for irun in range(2):
+            for itype,lbl in zip(range(2),['pc_l23','pv_l23']):
+                plt.figure(figsize=(2.5,2.5))
+                data = self.smimis[irun][itype]
+                epsilon = 0.1
+                colors = ['k',np.array((1,0.8,0))]
+                for ilight in range(2):
+                    plt.bar((ilight,),np.nanmean(data,0)[ilight],color=halo_colors[ilight],alpha=0.5)
+                plt.errorbar((0,1),np.nanmean(data,0),np.nanstd(data,0)/np.sqrt(np.sum(~np.isnan(data[:,0]),0)),fmt='none',c='k')
+                plt.plot((0+epsilon,1-epsilon),data.T,c='k',alpha=0.5)
+                plt.xticks((0,1),['light off','light on'])
+                plt.ylabel('slope, SMI vs. contrast (/ %)')
+            #     plt.ylim((0,12))
+                ut.erase_top_right()
+                plt.tight_layout()
+                _,p = sst.wilcoxon(data[:,0],data[:,1])
+                print('p-value: %f'%p)
+                plt.savefig('figures/ephys_vip_halo_%s_smimi_bars_%s.jpg'%(lbl,self.running_lbls[irun]),dpi=300)
 
 class ca_imaging(object):
     # contains parameters for generating figures relevant to calcium imaging data, in Mossing et al. 2021
