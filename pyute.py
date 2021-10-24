@@ -27,7 +27,7 @@ import scipy.interpolate as sip
 import naka_rushton_analysis as nra
 
 def norm01(arr,dim=1):
-    # normalize each row of arr to [0,1]
+    # normalize each row of arr to [0,1] 
     dim = np.minimum(dim,len(arr.shape)-1)
     try:
         mnm = arr.min(dim)[:,np.newaxis]
@@ -71,6 +71,7 @@ def zscore(arr):
     return (arr-mn)/st
 
 def threeand(a,b,c):
+    # logical_and of three variables # equivalent to a & b & c
     return k_and(a,b,c)
 
 def print_multipage(args,fn,filename):
@@ -1892,6 +1893,9 @@ def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
     return tuning
 
 def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=False):
+    # given a dataframe, return trialwise response (tuning) for each roi, stimulus condition,
+    # and trial, and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
@@ -1947,6 +1951,9 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=
     return tuning
 
 def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
+    # given a dataframe, compute mean (tuning), lower and upper bounds (lb,ub) for each roi and stimulus condition,
+    # and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
@@ -1999,6 +2006,7 @@ def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
     return tuning,lb,ub
 
 def erase_top_right():
+    # delete top and right borders of bounding box in current axes
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
 
@@ -2012,6 +2020,7 @@ def compute_osi(arr,ori=np.arange(0,360,45)):
     return np.sqrt(costerm**2+sinterm**2)/sumterm
 
 def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light on'],alpha=0.5,epsilon=0.1,errorstyle='sem',pct=(16,84),plot_lines=True):
+    # plot sets of bars with lines connecting them, lines corresponding to repetitions, and bars corresponding to means
     nx = data.shape[1]
     for ilight in range(nx):
         plt.bar((ilight,),np.nanmean(data,0)[ilight],color=colors[ilight],alpha=0.5)
@@ -2035,6 +2044,8 @@ def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light o
         plt.xticks(np.arange(nx),xticklabels)
 
 def align_to_entry(data,entry,axis=1):
+    # circ shift each row of data along axis such that corresponding index entry is at the 0th position
+    # (axis entry ends up with len 2*original len - 1)
     shp = data.shape
     ndim = len(shp)
     naxis = shp[axis]
@@ -2047,6 +2058,7 @@ def align_to_entry(data,entry,axis=1):
     return data_aligned
 
 def circ_align_to_entry(data,entry,axis=1):
+    # circ shift each row of data along axis such that corresponding index entry is at the 0th position
     shp = data.shape
     ndim = len(shp)
     naxis = shp[axis]
@@ -2059,16 +2071,21 @@ def circ_align_to_entry(data,entry,axis=1):
     return data_aligned
 
 def circ_align_to_entry_axiswise(data,entry,based_axis=0,entry_axis=1):
+    # circ shift ith dim of data along axis such that corresponding index entry is at the 0th position
     data_t = np.moveaxis(data,based_axis,0)
     data_aligned_t = circ_align_to_entry(data_t,entry,axis=entry_axis)
     data_aligned = np.moveaxis(data_aligned_t,0,based_axis)
     return data_aligned
 
 def align_to_pref_size(sc):
+    # sc roi x size x contrast x orientation
+    # compute preferred index along axis 1 (size), averaged along the others, and shift 
+    # such that that index is at the 0th position (axis 1 ends up with len 2*original len - 1)
     prefsize = np.argmax(np.nanmean(np.nanmean(sc,-1),-1),axis=1)
     return align_to_entry(sc,prefsize,axis=1)
 
 def circ_align_to_pref(data,axis=1):
+    # compute preferred index along axis, and circ shift such that that index is at the 0th position
     ndim = len(data.shape)
     # roll axis of interest to second dimension
     data_t = data.transpose((0,axis)+tuple(np.setdiff1d(np.arange(1,ndim),axis)))
@@ -2082,17 +2099,20 @@ def circ_align_to_pref(data,axis=1):
     return data_aligned
 
 def imshow_hot_cold(arr,mx=None,interpolation='nearest'):
+    # show arr with colormap blue-white-red, centered around 0
     if mx is None:
         mx = np.nanmax(np.abs(arr))
     plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx,interpolation=interpolation)
 
 def zero_origin(cmd='y'):
+    # set origin to zero ('xy'), or lower axis lim to 0 ('x' or 'y')
     if 'y' in cmd:
         plt.gca().set_ylim(bottom=0)
     if 'x' in cmd:
         plt.gca().set_xlim(left=0)
 
 def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1):
+    # plot bar with bootstrapped error bars and dots, jittered by epsilon, dot size s, transparency alpha on everything
     if not isinstance(s,list):
         s = [s for d in data]
     if colors is None:
@@ -2109,6 +2129,7 @@ def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=4
     plt.xticks(np.arange(len(data)),tick_labels)
 
 def mult_apply(arr,fn,dims,keepdims=False):
+    # apply fn to arr along dims, and then either leave singleton dimensions along dims or squeeze them out (keepdims)
     arr_to_return = arr.copy()
     for dim in dims:
         arr_to_return = fn(arr_to_return,axis=dim,keepdims=True)
@@ -2119,6 +2140,7 @@ def mult_apply(arr,fn,dims,keepdims=False):
     return arr_to_return[slc]
 
 def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired_usize=np.logspace(np.log10(5),np.log10(60),4)):
+    # interpolate along axis, originally sampled at points usize, at new points desired_usize
     shp = list(arr.shape)
     desired_shp = shp.copy()
     assert(shp[axis]==len(usize))
@@ -2138,9 +2160,11 @@ def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired
     return interp
 
 def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
-    plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+    # plot an interpolated function, with dots and percentile errorbars from the original data
+    plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
 
 def plot_parametric_fn_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+    # plot an interpolated function, with dots and errorbars from the original data
     if errorstyle == 'pct':
         mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
     elif errorstyle == 'bs':
@@ -2173,6 +2197,7 @@ def apply_fn_to_nested_list(fn,ind_list,data):
         return to_return
 
 def listzip(list_of_lists):
+    # given a list of lists L[i][j], swap indices to return L[j][i]
     return [list(x) for x in list(zip(*list_of_lists))]
 
 def apply_fn_to_nested_lists(fn,ind_list,*args):
@@ -2228,6 +2253,7 @@ def apply_fn_to_nested_lists_no_out(fn,ind_list,*args):
             apply_fn_to_nested_lists_no_out(fn,ind_list[1:],*td)
 
 def list_of_lists_dim(list_of_lists):
+    # return the len of the list at each level in a list of lists
     if isinstance(list_of_lists,list):
         return (len(list_of_lists),) + list_of_lists_dim(list_of_lists[0])
     else:

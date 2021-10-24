@@ -8,6 +8,155 @@ import matplotlib.pyplot as plt
 from numpy import maximum as npmaximum
 import scipy.stats as sst
 import size_contrast_analysis as sca
+import sim_utils
+
+class ephys(object):
+    # class to hold all data from across several ephys experiments
+    def __init__(self, datafile=None):
+        # load datafile (.mat)
+        if datafile is None:
+            datafile = '/Users/dan/Documents/data/julia/VIPHaloSizeContNoInterp.mat'
+        self.rrs,self.rfs = ut.loadmat(datafile,['rrs','rfs'])
+        self.ucontrast = np.array([0,5,10,20,40,80])
+        self.usize = np.array([8,20,60])
+        self.usize0 = np.concatenate(((0,),self.usize))
+        self.this_ncontrast = 3
+        self.cfrac = np.linspace(1,0,self.this_ncontrast+1)[:-1]
+        self.c_pv = self.cfrac[:,np.newaxis]*np.array(((0,0,1)))
+        self.c_l23 = self.cfrac[:,np.newaxis]*np.array(((0.5,0.5,0.5)))
+        self.running_lbls = ['non_running', 'running']
+
+    def gen_size_tuning(self, sc):
+        # generate size tuning curve for each expt, from size x contrast data
+        gray = np.tile(sc[:,0].mean(0)[np.newaxis,np.newaxis],(1,sc.shape[1]))
+        to_plot = np.concatenate((gray,sc),axis=0)
+        return to_plot
+
+    def plot_size_tuning(self,save_fig=True,show_legend=True):
+        for irun in range(2):
+            for data,c,lbl in zip([self.rrs[irun],self.rfs[irun]],[self.c_l23,self.c_pv],['pc_l23','pv_l23']):
+                shp = data.shape
+                nexpt = shp[0]
+                nlight = shp[3]
+                size_tuning = np.zeros((shp[0],shp[1]+1,shp[2],shp[3]))
+                for iexpt in range(nexpt):
+                    for ilight in range(nlight):
+                        size_tuning[iexpt,:,:,ilight] = self.gen_size_tuning(data[iexpt,:,:,ilight])
+
+                plt.figure(figsize=(2.5,2.5))
+                ut.plot_bootstrapped_errorbars_hillel(self.usize0,size_tuning[:,:,[1,3,5],0].transpose((0,2,1)),pct=(16,84),colors=c)
+                plt.gca().set_ylim(bottom=0)
+                if show_legend:
+                    plt.legend(['5%','20%','80%'])
+                plt.xlabel('size ($^o$)')
+                plt.ylabel('firing rate (Hz)')
+                plt.tight_layout()
+                ut.erase_top_right()
+                if save_fig:
+                    filename = 'figures/ephys_%s_size_by_3_contrasts_%s_.eps'%(lbl,self.running_lbls[irun])
+                    plt.savefig(filename)
+
+    def plot_contrast_tuning(self,save_fig=True,show_legend=True):
+        for irun in range(2):
+            for data,c,lbl in zip([self.rrs[irun],self.rfs[irun]],[self.c_l23,self.c_pv],['pc_l23','pv_l23']):
+                shp = data.shape
+                nexpt = shp[0]
+                nlight = shp[3]
+        #         size_tuning = np.zeros((shp[0],shp[1]+1,shp[2],shp[3]))
+        #         for iexpt in range(nexpt):
+        #             for ilight in range(nlight):
+        #                 size_tuning[iexpt,:,:,ilight] = gen_size_tuning(data[iexpt,:,:,ilight])
+
+                plt.figure(figsize=(2.5,2.5))
+                ut.plot_bootstrapped_errorbars_hillel(self.ucontrast,data[:,:,:,0].transpose((0,1,2)),pct=(16,84),colors=c)
+                plt.gca().set_ylim(bottom=0)
+                if show_legend:
+                    plt.legend(['8$^o$','20$^o$','60$^o$'])
+                plt.xlabel('contrast (%)')
+                plt.ylabel('firing rate (Hz)')
+                plt.tight_layout()
+                ut.erase_top_right()
+                if save_fig:
+                    plt.savefig('figures/ephys_%s_contrast_by_3_sizes_%s_.eps'%(lbl,self.running_lbls[irun]))
+    
+    def plot_csi_smi(self):
+        c_l23 = np.array((0.5,0.5,0.5))
+        c_pv = np.array((0,0,1))
+        colors = [c_l23,c_pv]
+        csis = [None for irun in range(2)]
+        csimis = [None for irun in range(2)]
+        smis = [None for irun in range(2)]
+        smimis = [None for irun in range(2)]
+        cmax = 6
+    # for ialign in range(2):
+    #     c50mis[ialign] = [None for irun in range(2)]
+    #     c50s[ialign] = [None for irun in range(2)]
+        for irun in range(2):
+            csis[irun] = [None for itype in range(2)]
+            csimis[irun] = [None for itype in range(2)]
+            smis[irun] = [None for itype in range(2)]
+            smimis[irun] = [None for itype in range(2)]
+            for data,lbl,itype in zip([self.rrs[irun],self.rfs[irun]],['pc_l23','pv_l23'],[0,1]):
+                nroi = data.shape[0]
+                # csis[irun][itype] = np.nan*np.ones((nroi,3))
+    #             for iroi in range(nroi):
+    #                 print(iroi)
+    #             #     this_data,this_error = rs[irun][itype][ialign][iroi],rs_sem[irun][itype][ialign][iroi]
+    #             #     this_data = np.nanmean(this_data,2)
+    #             #     this_error = combine_sem(this_error,2)
+    #                 this_data = data[iroi,:,:,0]
+    #                 lkat = np.all(~np.isnan(this_data),1)
+    #                 nparams = np.sum(lkat)
+    #                 opt_params = nra.fit_opt_params_two_n(np.array(ucontrast_ephys[:cmax]),this_data[lkat,:cmax])
+    # #                 opt_params = nra.fit_opt_params(ucontrast[:cmax],this_data[lkat,:cmax])
+    #                 csis[irun][itype][iroi,lkat] = opt_params[nparams+1:2*nparams+1]
+                csis[irun][itype] = csi_fn(data,subtract_min=True,avg_last=False)
+                smis[irun][itype] = smi_fn(data,subtract_min=True,avg_last=False)
+                csimis[irun][itype] = np.nan*np.ones((data.shape[0],data.shape[-1]))
+                smimis[irun][itype] = np.nan*np.ones((data.shape[0],data.shape[-1]))
+                # csimis[irun][itype] = csis[irun][itype][:,0]-csis[irun][itype][:,-1]
+                for iexpt in range(csis[irun][itype].shape[0]):
+                    for ilight in range(csis[irun][itype].shape[-1]):
+                        csimis[irun][itype][iexpt,ilight] = compute_mislope(csis[irun][itype][iexpt,:,ilight],first_ind=0,last_ind=-1,pval=False,xaxis=self.usize)
+                        smimis[irun][itype][iexpt,ilight] = compute_mislope(smis[irun][itype][iexpt,:,ilight],first_ind=1,last_ind=-1,pval=False,xaxis=self.ucontrast)
+
+                plt.figure(figsize=(2.5,2.5))
+                plt.plot(self.usize,csis[irun][itype][:,:,0].T,alpha=0.2,c=colors[itype])
+                ut.plot_bootstrapped_errorbars_hillel(self.usize,csis[irun][itype][:,np.newaxis,:,0],pct=(16,84),colors=np.array(colors[itype])[np.newaxis])
+                plt.xlabel('size ($^o$)')
+                plt.ylabel('CSI')
+                ut.erase_top_right()
+                plt.tight_layout()
+                plt.savefig('figures/ephys_%s_c50_by_size_%s.jpg'%(lbl,self.running_lbls[irun]),dpi=300)
+
+                plt.figure(figsize=(2.5,2.5))
+                plt.plot(np.arange(1,len(self.ucontrast)),smis[irun][itype][:,1:,0].T,alpha=0.2,c=colors[itype])
+                plt.xticks(np.arange(1,len(self.ucontrast)),self.ucontrast[1:])
+                ut.plot_bootstrapped_errorbars_hillel(np.arange(1,len(self.ucontrast)),smis[irun][itype][:,np.newaxis,1:,0],pct=(16,84),colors=np.array(colors[itype])[np.newaxis])
+                plt.xlabel('contrast (%)')
+                plt.ylabel('SMI')
+                ut.erase_top_right()
+                plt.tight_layout()
+                plt.savefig('figures/ephys_%s_smi_by_contrast_%s.jpg'%(lbl,self.running_lbls[irun]),dpi=300)
+
+        epsilon = 0.05
+        colors = [(0.5,0.5,0.5),(0,0,1)]
+        for irun in range(2):
+            plt.figure(figsize=(2.5,2.5))
+            for iitype,itype in enumerate([0]):
+                smimi = smimis[irun][itype].copy()[:,0]
+                plt.bar((iitype,),np.nanmean(smimi,0),color=colors[itype],alpha=0.5)
+                plt.errorbar((iitype,),np.nanmean(smimi,0),np.nanstd(smimi,0)/np.sqrt(np.sum(~np.isnan(smimi),0)),fmt='none',c='k')
+                plt.scatter(iitype*np.ones_like(smimi)+epsilon*np.random.randn(smimi.shape[0]),smimi,facecolor=colors[itype],linewidth=1,edgecolor='k')
+                _,p = sst.wilcoxon(smimi[~np.isnan(smimi)])
+                print('p-value: %f'%p)
+            # plt.plot((0+epsilon,1-epsilon),smimi.T,c='k',alpha=0.5)
+            plt.xticks((0,),['L2/3 RS'])
+            plt.ylabel('slope, SMI vs. contrast')
+            plt.xlim((-1,1))
+            plt.tight_layout()
+            ut.erase_top_right()
+            plt.savefig('figures/ephys_pc_pv_smimi_bars_%s.jpg'%(self.running_lbls[irun]),dpi=300)
 
 class ca_imaging(object):
     # contains parameters for generating figures relevant to calcium imaging data, in Mossing et al. 2021
@@ -178,7 +327,7 @@ class ca_imaging(object):
         setattr(self,lbl+'_last_ind',last_ind)
 
         this_fn = lambda x: compute_mimi(x,first_ind=first_ind,last_ind=last_ind,axis=1)
-        mimis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],mis)
+        mimis = ut.apply_fn_to_nested_list(this_fn,[None,None,None],mis) # should this be [None,None,None,None]?
         setattr(self,lbl+'mis',mis)
 
         this_fn = lambda x: compute_misc(x,first_ind=first_ind,last_ind=last_ind,pval=False)
@@ -534,19 +683,22 @@ def c50_monotonic_fn(data,clip_decreasing=True,clip_after=2,ucontrast=np.array((
 
     return c50s
 
-def mi_preprocess(data,subtract_min=True):
-    to_return = np.nanmean(data,-1)
+def mi_preprocess(data,subtract_min=True,avg_last=True):
+    if avg_last:
+        to_return = np.nanmean(data,-1)
+    else:
+        to_return = data
     #to_return = to_return - np.nanmean(to_return[:,:,0],1)[:,np.newaxis,np.newaxis]
     if subtract_min:
         to_return = to_return - np.nanmin(np.nanmin(to_return,1),1)[:,np.newaxis,np.newaxis]
     return to_return
 
-def smi_fn(data,subtract_min=True):
-    this_data = mi_preprocess(data,subtract_min=subtract_min)#[:,:,first_ind:last_ind+1]
+def smi_fn(data,subtract_min=True,avg_last=True):
+    this_data = mi_preprocess(data,subtract_min=subtract_min,avg_last=avg_last)#[:,:,first_ind:last_ind+1]
     return this_data[:,-1,:]/np.nanmax(this_data,1)
 
-def csi_fn(data,subtract_min=True):
-    this_data = mi_preprocess(data,subtract_min=subtract_min)#[:,:,first_ind:last_ind+1]
+def csi_fn(data,subtract_min=True,avg_last=True):
+    this_data = mi_preprocess(data,subtract_min=subtract_min,avg_last=avg_last)#[:,:,first_ind:last_ind+1]
     #return this_data[:,:,1]/this_data[:,:,-1]
     #return this_data[:,:,2]/np.nanmax(this_data,2)
     return this_data[:,:,1]/np.nanmax(this_data,2)
@@ -583,23 +735,25 @@ def interp_numeric_c50_fn(data,resolution=501,thresh=0.5,show_fig=False):
 
     return c50s
 
-def compute_c50mi(c50,first_ind=0,last_ind=-2):
+def compute_c50mi(c50,first_ind=0,last_ind=-1):
     # compute the difference in c50 between the first and last size (specified)
     return c50[first_ind] - c50[last_ind]
 
-def compute_smimi(smi,first_ind=1,last_ind=5):
+def compute_smimi(smi,first_ind=1,last_ind=-1):
     # compute the difference in smi between the first and last contrast (specified)
     return smi[:,first_ind] - smi[:,last_ind]
 
-def compute_mimi(mi,axis=1,first_ind=1,last_ind=5):
+def compute_mimi(mi,axis=1,first_ind=1,last_ind=-1):
     # subtract element last_ind (on axis # axis) from element first_ind
     first_slicer,last_slicer = [[slice(None) for _ in mi.shape] for _ in range(2)]
     first_slicer[axis] = first_ind
     last_slicer[axis] = last_ind
     return mi[first_slicer] - mi[last_slicer]
 
-def compute_misc(mi,first_ind=0,last_ind=5,pval=False):
+def compute_misc(mi,first_ind=0,last_ind=-1,pval=False):
     # compute spearman correlation coefficient between the value mi and the index of mi
+    if last_ind < 0:
+        last_ind = mi.shape[0] - last_ind
     try:
         to_correlate = mi[first_ind:last_ind+1]
         non_nan = ~np.isnan(to_correlate)
@@ -613,9 +767,11 @@ def compute_misc(mi,first_ind=0,last_ind=5,pval=False):
     else:
         return spearman.pvalue
 
-def compute_mislope(mi,first_ind=0,last_ind=5,pval=False,xaxis=None):
+def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None):
     # compute the slope of the mi curve with respect to x values xaxis (if specified)
     # or the index of mi (otherwise)
+    if last_ind < 0:
+        last_ind = mi.shape[0] - last_ind
     try:
         to_correlate = mi[first_ind:last_ind+1]
         non_nan = ~np.isnan(to_correlate)
@@ -623,7 +779,7 @@ def compute_mislope(mi,first_ind=0,last_ind=5,pval=False,xaxis=None):
             xdata = np.arange(first_ind,last_ind+1)[non_nan]
         else:
             xdata = xaxis[first_ind:last_ind+1][non_nan]
-        print(xdata)
+        # print(xdata)
         ydata = to_correlate[non_nan]
         slope,intercept,pvalue,_,_ = sst.linregress(xdata,ydata)
     except ValueError: # not enough non-nan values
@@ -743,7 +899,7 @@ def plot_bar_with_dots(smimi,colors=None,epsilon=0.05,alpha=0.5,pct=(16,84)):
         plt.errorbar((iitype,),mn,np.nanstd(data,0)/np.sqrt(np.sum(~np.isnan(data),0)),fmt='none',c='k')
         plt.scatter(iitype*np.ones_like(data)+epsilon*np.random.randn(data.shape[0]),data,facecolor=colors[iitype],linewidth=1,edgecolor='k')
         _,p = sst.wilcoxon(data[~np.isnan(data)])
-        print(p)
+        print('p-value: %f'%p)
 
 def bootstrap_opaque_plot_transparent(x,Y,colors,savefile=None,alpha=0.2):
     # plot transparent lines, indicating indiv. imaging sessions, with opacity
@@ -755,6 +911,7 @@ def bootstrap_opaque_plot_transparent(x,Y,colors,savefile=None,alpha=0.2):
     ut.erase_top_right()
 
 def savefig(savefile):
+    # save file to string if not None; if not eps, set resolution to 300 dpi
     if not savefile is None:
         if '.eps' in savefile:
             plt.savefig(savefile)
@@ -762,6 +919,7 @@ def savefig(savefile):
             plt.savefig(savefile,dpi=300)
 
 def plot_size_tuning(rsexpt=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
+    # under construction
     this_ncontrast = len(these_contrasts)
     this_usize = usize
     this_ucontrast = ucontrast
@@ -812,8 +970,7 @@ def plot_size_tuning(rsexpt=None,these_contrasts=[1,3,5],ninterp=101,usize=np.ar
     plt.tight_layout()
 
 class size_tuning(fig_gen):
-    # plot interpolated size tuning based on Ayaz et al style fits, and error
-    # bars and dots based on actual data
+    # under construction
     def __init__(self,data_obj):
         opt = {}
         opt['filebase'] = 'figures/%s_size_by_3_contrasts_%s_%s.eps'
