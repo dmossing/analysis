@@ -10,6 +10,7 @@ import size_contrast_analysis as sca
 from numpy import maximum as npmaximum
 
 # fit models of the form (a*(c/c50)^n + b)/((c/c50)^n + 1), where subsets of a, b, and c50 are allowed to vary for each size
+# this formulation is referred to below as the "vanilla Naka-Rushton function"
 
 #def fit_opt_params(c,r):
 #    a_0 = r.max()
@@ -21,6 +22,7 @@ from numpy import maximum as npmaximum
 #    return params_opt['x']
 
 def fit_opt_params(c,R,Rsem=None):
+    # fit optimal parameters for the vanilla naka rushton model
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
@@ -42,6 +44,7 @@ def fit_opt_params(c,R,Rsem=None):
     return params_opt['x']
 
 def fit_opt_params_offset(c,R,Rsem=None):
+    # fit optimal parameters for the vanilla naka rushton model with constant additive offset
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
@@ -63,6 +66,7 @@ def fit_opt_params_offset(c,R,Rsem=None):
     return params_opt['x']
 
 def fit_opt_params_monotonic(c,R,Rsem=None,clip_decreasing=False,clip_after=1):
+    # fit optimal parameters for the vanilla Naka-Rushton model up to the maximum value of R, and ignoring subsequent values
     nsizes = R.shape[0]
     cmax = (np.argmax(R,axis=1)).astype('int')
     for isize in range(R.shape[0]):
@@ -93,6 +97,7 @@ def fit_opt_params_monotonic(c,R,Rsem=None,clip_decreasing=False,clip_after=1):
     return params_opt['x']
 
 def fit_opt_params_two_n_monotonic(c,R,Rsem=None):
+    # fit optimal parameters for the two-exponent Naka-Rushton model up to the maximum value of R, and ignoring subsequent values
     nsizes = R.shape[0]
     cmax = (np.argmax(R,axis=1)).astype('int')
     for isize in range(R.shape[0]):
@@ -137,6 +142,7 @@ def fit_opt_params_two_n_monotonic(c,R,Rsem=None):
 #    return (a*(c/c50)**n + b)/(1+(c/c50)**n)
 
 def naka_rushton(c,params,ncells):
+    # compute the vanilla naka rushton function for a given set of parameters, allowing ncells values of a and c50
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1:-1]
@@ -145,6 +151,7 @@ def naka_rushton(c,params,ncells):
     return (a[:,np.newaxis]*aux**n + b)/(1+aux**n)
 
 def naka_rushton_offset(c,params,ncells):
+    # compute the vanilla naka rushton function with additive offset for a given set of parameters, allowing ncells values of a and c50
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1:-1]
@@ -153,6 +160,7 @@ def naka_rushton_offset(c,params,ncells):
     return (a[:,np.newaxis]*aux**n)/(1+aux**n) + b
 
 def fit_opt_params_only_a(c,R):
+    # fit optimal parameters for the vanilla Naka-Rushton model, allowing only a, and not c50, to vary
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
@@ -163,6 +171,7 @@ def fit_opt_params_only_a(c,R):
     return params_opt['x']
 
 def naka_rushton_only_a(c,params,ncells):
+    # vanilla Naka-Rushton model, allowing only a, and not c50, to vary
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1]
