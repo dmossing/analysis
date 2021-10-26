@@ -854,6 +854,7 @@ def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None):
             xdata = xaxis[first_ind:last_ind+1][non_nan]
         # print(xdata)
         ydata = to_correlate[non_nan]
+        print((xdata.min(),xdata.max()))
         slope,intercept,pvalue,_,_ = sst.linregress(xdata,ydata)
     except ValueError: # not enough non-nan values
         return np.nan

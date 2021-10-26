@@ -602,13 +602,21 @@ def assign_from_uparam(modal,modal_uparam,this,this_uparam):
 #         a = a[slc]
 #     return a
 
-def gen_size_tuning(sc):
+def gen_size_tuning(sc,combiner=np.nanmean):
     # sc: (nroi,nsize,ncontrast)
     # add 0% contrast stimulus as if it were a 0 degree size
-    gray = np.tile(np.nanmean(sc[:,:,0],1)[:,np.newaxis,np.newaxis],(1,1,sc.shape[2]))
+    gray = np.tile(combiner(sc[:,:,0],axis=1)[:,np.newaxis,np.newaxis],(1,1,sc.shape[2]))
     to_plot = np.concatenate((gray,sc),axis=1)
     print(to_plot.shape)
     return to_plot
+
+def gen_size_tuning_sem(sc_sem):
+    # sc_sem: (nroi,nsize,ncontrast)
+    # add 0% contrast stimulus as if it were a 0 degree size
+    # combine sems as sqrt(mean(sc_sem**2))
+    def combiner(sem,axis=1):
+        return np.sqrt(np.nanmean(sem**2,axis=axis))
+    return gen_size_tuning(sc_sem,combiner=combiner)
 
 def plot_size_tuning_by_contrast(arr):
     usize = np.array((0,5,8,13,22,36))
