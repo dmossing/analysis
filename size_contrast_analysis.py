@@ -947,10 +947,10 @@ def compute_encoding_axis_fn(reg,proc,fn):
 
 def compute_encoding_axis_projections(reg,proc):
 
-    # compute auroc based on test set trials: take population activity vectors for 0 and target contrast, use regression
-    # trained on training set to predict contrast for both sets of population activity vectors, compute AUROC of predicted contrasts for both
+    # use regression trained on training set to predict 
+    # contrast for both sets of population activity vectors
 
-    auroc = {}#[None for k in range(len(proc))]
+    proj = {}#[None for k in range(len(proc))]
     uangle,usize,ucontrast = [[None for k in range(len(proc))] for iparam in range(3)]
     icutoff = 0
     
@@ -958,7 +958,9 @@ def compute_encoding_axis_projections(reg,proc):
         if not reg[iexpt][icutoff] is None:
             cutoff = proc[iexpt]['cutoffs'][icutoff]
             desired_outputs = ['angle','size','contrast','running','sigma','v','uangle','usize','ucontrast','train']
-            angle,size,contrast,running,sigma,v,uangle[iexpt],usize[iexpt],ucontrast[iexpt],train = [proc[iexpt][output].copy() for output in desired_outputs]
+            angle,size,contrast,running,sigma,v,uangle[iexpt],\
+                usize[iexpt],ucontrast[iexpt],train \
+                    = [proc[iexpt][output].copy() for output in desired_outputs]
             zero_contrast = ut.k_and(contrast==0,running) #,eye_dist < np.nanpercentile(eye_dist,50))
             nsize = len(usize[iexpt])
             ncontrast = len(ucontrast[iexpt])
@@ -969,14 +971,16 @@ def compute_encoding_axis_projections(reg,proc):
                         if ucontrast[iexpt][icontrast]==0:
                             this_contrast = zero_contrast.copy()
                         else:
-                            this_contrast = ut.k_and(angle==iangle,size==isize,contrast==icontrast,running,~train) #,eye_dist < np.nanpercentile(eye_dist,50))
+                            this_contrast = ut.k_and(angle==iangle,size==isize,
+                                contrast==icontrast,running,~train) 
+                            #,eye_dist < np.nanpercentile(eye_dist,50))
                         if this_contrast.sum():
                             X1 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[this_contrast]
                             y1 = reg[iexpt][icutoff][isize][iangle].predict(X1)
-                            auroc[(iexpt,isize,icontrast,iangle)] = y1
+                            proj[(iexpt,isize,icontrast,iangle)] = y1
                         else:
-                            auroc[(iexpt,isize,icontrast,iangle)] = np.array(())
-    return auroc
+                            proj[(iexpt,isize,icontrast,iangle)] = np.array(())
+    return proj
 
 def show_auroc(auroc,usize=None,ucontrast=None,label='Population decoder detection AUROC'):
     show_size_contrast(auroc[:,1:],flipud=True,usize=usize,ucontrast=ucontrast[1:])

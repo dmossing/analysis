@@ -104,7 +104,7 @@ class ephys(object):
                 if save_fig:
                     plt.savefig('figures/ephys_%s_contrast_by_3_sizes_%s_.eps'%(lbl,self.running_lbls[irun]))
     
-    def compute_csi_smi(self):
+    def compute_csi_smi(self, norm_to_max=False):
         # compute csi and smi across all experiments, as well as slopes
         # with respect to usize and ucontrast
         self.csis = [None for irun in range(2)]
@@ -142,13 +142,15 @@ class ephys(object):
                 # csimis[irun][itype] = csis[irun][itype][:,0]-csis[irun][itype][:,-1]
                 for iexpt in range(nexpt):
                     for ilight in range(nlight):
-                        self.csimis[irun][itype][iexpt,ilight] = compute_mislope(self.csis[irun][itype][iexpt,:,ilight],first_ind=0,last_ind=-1,pval=False,xaxis=self.usize)
-                        self.smimis[irun][itype][iexpt,ilight] = compute_mislope(self.smis[irun][itype][iexpt,:,ilight],first_ind=1,last_ind=-1,pval=False,xaxis=self.ucontrast)
+                        self.csimis[irun][itype][iexpt,ilight] = compute_mislope(self.csis[irun][itype][iexpt,:,ilight],
+                            first_ind=0,last_ind=-1,pval=False,xaxis=self.usize,norm_to_max=norm_to_max)
+                        self.smimis[irun][itype][iexpt,ilight] = compute_mislope(self.smis[irun][itype][iexpt,:,ilight],
+                            first_ind=1,last_ind=-1,pval=False,xaxis=self.ucontrast,norm_to_max=norm_to_max)
     
-    def plot_csi_smi_baseline(self):
+    def plot_csi_smi_baseline(self, norm_to_max=False):
         # check that csis and smis are computed
         if not hasattr(self,'csis'):
-            self.compute_csi_smi()
+            self.compute_csi_smi(norm_to_max=norm_to_max)
         c_l23 = np.array((0.5,0.5,0.5))
         c_pv = np.array((0,0,1))
         colors = [c_l23,c_pv]
@@ -187,10 +189,10 @@ class ephys(object):
             ut.erase_top_right()
             plt.savefig('figures/ephys_pc_pv_smimi_bars_%s.jpg'%(self.running_lbls[irun]),dpi=300)
 
-    def plot_csi_smi_opto(self):
+    def plot_csi_smi_opto(self, norm_to_max=False):
         # check that csis and smis are computed
         if not hasattr(self,'csis'):
-            self.compute_csi_smi()
+            self.compute_csi_smi(norm_to_max=norm_to_max)
         halo_colors = [np.array((0,0,0)),np.array((1,0.8,0))]
         p = [None for irun in range(2)]
         for irun in range(2):
@@ -840,7 +842,8 @@ def compute_misc(mi,first_ind=0,last_ind=-1,pval=False):
     else:
         return spearman.pvalue
 
-def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None):
+def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None,
+    norm_to_max=False,ymin=0,ymax=1):
     # compute the slope of the mi curve with respect to x values xaxis (if specified)
     # or the index of mi (otherwise)
     if last_ind < 0:
@@ -856,6 +859,9 @@ def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None):
         ydata = to_correlate[non_nan]
         print((xdata.min(),xdata.max()))
         slope,intercept,pvalue,_,_ = sst.linregress(xdata,ydata)
+        if norm_to_max:
+            max_slope = (ymax-ymin)/(xdata[-1]-xdata[0])
+            slope = slope/max_slope
     except ValueError: # not enough non-nan values
         return np.nan
     if not pval:
