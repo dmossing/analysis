@@ -369,24 +369,29 @@ class ca_imaging(object):
         # within an experiment, compute c50 of a Naka-Rushton fit separately 
         # at each size, clipping after clip_after decreasing values, for sizes
         # starting at first_ind and ending at last_ind
-        mi_fn = lambda x: c50_monotonic_fn_expts(x,clip_decreasing=clip_decreasing,clip_after=clip_after,show_fig=False)
-        return self.compute_mis(lbl='c50',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,exptwise=exptwise)
+        mi_fn = lambda x: c50_monotonic_fn_expts(x,clip_decreasing=clip_decreasing,
+            clip_after=clip_after,show_fig=False)
+        return self.compute_mis(lbl='c50',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,
+            exptwise=exptwise)
 
-    def compute_smis(self,first_ind=1,last_ind=5,exptwise=True,xaxis=None):
+    def compute_smis(self,first_ind=1,last_ind=5,exptwise=True,xaxis=None,norm_to_max=False):
         # compute Surround Modulation Index, defined as the response at maximum
         # size divided by the response at preferred size, starting at contrast
         # first_ind (0 is 0% contrast) and ending at contrast last_ind
         mi_fn = smi_fn
-        return self.compute_mis(lbl='smi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,exptwise=exptwise,xaxis=xaxis)
+        return self.compute_mis(lbl='smi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,
+            exptwise=exptwise,xaxis=xaxis,norm_to_max=norm_to_max)
 
-    def compute_csis(self,first_ind=0,last_ind=5,exptwise=True,xaxis=None):
+    def compute_csis(self,first_ind=0,last_ind=5,exptwise=True,xaxis=None,norm_to_max=False):
         # compute Surround Modulation Index, defined as the response at maximum
         # size divided by the response at preferred size, starting at contrast
         # first_ind (0 is 0% contrast) and ending at contrast last_ind
         mi_fn = csi_fn
-        return self.compute_mis(lbl='csi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,exptwise=exptwise,xaxis=xaxis)
+        return self.compute_mis(lbl='csi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,
+            exptwise=exptwise,xaxis=xaxis,norm_to_max=norm_to_max)
 
-    def compute_mis(self,lbl='smi',first_ind=1,last_ind=5,mi_fn=None,exptwise=True,xaxis=None):
+    def compute_mis(self,lbl='smi',first_ind=1,last_ind=5,mi_fn=None,exptwise=True,
+            xaxis=None,norm_to_max=False):
         # compute a modulation index and related metrics (e.g. SMI). 
         this_fn = lambda x: mi_fn(x)
         if exptwise:
@@ -412,11 +417,13 @@ class ca_imaging(object):
         this_fn = lambda x: compute_misc(x,first_ind=first_ind,last_ind=last_ind,pval=True)
         miscs_pval = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
 
-        this_fn = lambda x: compute_mislope(x,first_ind=first_ind,last_ind=last_ind,pval=False,xaxis=xaxis)
+        this_fn = lambda x: compute_mislope(x,first_ind=first_ind,last_ind=last_ind,
+            pval=False,xaxis=xaxis,norm_to_max=norm_to_max)
         mislopes = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
         setattr(self,lbl+'slopes',mislopes)
 
-        this_fn = lambda x: compute_mislope(x,first_ind=first_ind,last_ind=last_ind,pval=True,xaxis=xaxis)
+        this_fn = lambda x: compute_mislope(x,first_ind=first_ind,last_ind=last_ind,
+            pval=True,xaxis=xaxis,norm_to_max=norm_to_max)
         mislopes_pval = ut.apply_fn_to_nested_list(this_fn,[None,None,None,None],mis)
         setattr(self,lbl+'slopes_pval',mislopes_pval)
 
@@ -857,7 +864,7 @@ def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None,
             xdata = xaxis[first_ind:last_ind+1][non_nan]
         # print(xdata)
         ydata = to_correlate[non_nan]
-        print((xdata.min(),xdata.max()))
+        # print((xdata.min(),xdata.max()))
         slope,intercept,pvalue,_,_ = sst.linregress(xdata,ydata)
         if norm_to_max:
             max_slope = (ymax-ymin)/(xdata[-1]-xdata[0])

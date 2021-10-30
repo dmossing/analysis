@@ -36,14 +36,14 @@ def align_to_angle(data,pref_angle):
         output[iroi] = data[iroi][:,:,slicer]
     return output
 
-def compute_slopes(csi,first_ind=0):
+def compute_slopes(csi,first_ind=0,xaxis=None,norm_to_max=False):
     nexpt = csi.shape[0]
     nsize = csi.shape[1]
     nlight = csi.shape[2]
     csislope = np.zeros((nexpt,nlight))
     for iexpt in range(nexpt):
         for ilight in range(nlight):
-            csislope[iexpt,ilight] = scf.compute_mislope(csi[iexpt,:,ilight],first_ind=first_ind,last_ind=nsize-1)
+            csislope[iexpt,ilight] = scf.compute_mislope(csi[iexpt,:,ilight],first_ind=first_ind,last_ind=nsize-1,xaxis=xaxis,norm_to_max=norm_to_max)
     return csislope
 
 def compute_summary_sc(tuning,exptlist,cands=None,irun=0):
@@ -97,7 +97,7 @@ def compute_summary_sc_aligned(tuning,exptlist,displacement,cands=None,other_can
         expt_ids_aligned = np.concatenate((expt_ids_aligned,iexpt*np.ones((scs[this_ipart][centered & unlabeled].shape[0],))))
     return scbig_aligned,scanimal_aligned,semanimal_aligned,expt_ids_aligned
 
-def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,save_string=''):
+def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,save_string='',**opt):
     # make a bar plot, one black bar indicating metric with light off (calculated on xdata_norm)
     # and one colorful bar (c) indicating metric with light on (calculated on ydata_norm)
     # transparent lines indicate individual model fits
@@ -105,7 +105,7 @@ def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0
     # first_ind refers to the first index to use when computing the modulation index on the metric (here, slope)
     # 'average' indicates whether to average across model fits before plotting
     mi = np.stack([mi_fn(x[:,:,:,np.newaxis]) for x in preprocess(xdata_norm,ydata_norm,average=average)],axis=-1)
-    mimis = compute_slopes(mi,first_ind=first_ind)
+    mimis = compute_slopes(mi,first_ind=first_ind,**opt)
     plt.figure(figsize=(2.5,2.5))
     colors = [np.array((0,0,0))[np.newaxis],c[np.newaxis]]
     ut.plot_bars_with_lines(mimis,colors=colors,alpha=0.05,errorstyle='pct')
@@ -237,18 +237,18 @@ def plot_csi_errorbars(xdata_norm,ydata_norm,c=None,save_string=''):
     plt.tight_layout()
     do_saving(save_string)
 
-def plot_smimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string=''):
+def plot_smimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',**opt):
     # run plot_mimi_bars_with_lines using SMI as the metric
     first_ind = 1
-    plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=first_ind,c=c)
+    plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=first_ind,c=c,**opt)
     plt.ylabel('slope, SMI vs. contrast')
     plt.tight_layout()
     do_saving(save_string)
 
-def plot_csimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string=''):
+def plot_csimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',**opt):
     # run plot_mimi_bars_with_lines using CSI as the metric
     first_ind = 0
-    plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.csi_fn,first_ind=first_ind,c=c)
+    plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.csi_fn,first_ind=first_ind,c=c,**opt)
     plt.ylabel('slope, CSI vs. size')
     plt.tight_layout()
     do_saving(save_string)
