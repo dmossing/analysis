@@ -359,6 +359,10 @@ def weibull_one_size(c,*params):
     return weibull(c,np.array(params),1)[0]
 
 def two_asymptote_fn(x,*params):
+    # left asymptote: y = x*a1 + b1
+    # right asymptote: y = x*a2 + b2
+    # around x = x0, interpolate sigmoidally
+    # between the two asymptotes with length constant lam in x
     x0,a1,b1,a2,b2,lam = params
     as1 = a1*x + b1
     as2 = a2*x + b2
@@ -366,13 +370,20 @@ def two_asymptote_fn(x,*params):
     return factor*as1 + (1-factor)*as2
 
 def fit_opt_params_two_asymptote_fn(x,R):
+    # left asymptote: y = x*a1 + b1
+    # right asymptote: y = x*a2 + b2
+    # around x = x0, interpolate sigmoidally
+    # between the two asymptotes with length constant lam in x
+    # given R, return optimal (x0,a1,b1,a2,b2,lam)
+    # R is a nsizes x len(x) array of responses
     nsizes = R.shape[0]
-    x0_0 = np.nanmean(x)*np.ones((nsizes,))
+    x0_0 = x[np.argsort(R,axis=1)[:,R.shape[1]//2]] # index of the median of R along each row
+    # x0_0 = np.mean(x)*np.ones((nsizes,))
     a1_0 = (R[:,1]-R[:,0])/(x[1]-x[0])
     b1_0 = R[:,0] - a1_0[:]*x[0]
     a2_0 = (R[:,-1]-R[:,-2])/(x[-1]-x[-2])
     b2_0 = R[:,-1] - a2_0[:]*x[-1]
-    lam_0 = 0.25*(x[-1]-x[0])*np.ones((nsizes,))
+    lam_0 = 0.1*(x[1]-x[0])*np.ones((nsizes,))
     bds = [(-np.inf,np.inf) for _ in range(5)] + [(0,np.inf)]
     #bds = zip_pairs(bds)
     params_0 = np.concatenate([z[:,np.newaxis] for z in (x0_0,a1_0,b1_0,a2_0,b2_0,lam_0)],axis=1)
@@ -382,14 +393,14 @@ def fit_opt_params_two_asymptote_fn(x,R):
     pcov = np.nan*np.ones((nsizes,nvar,nvar))
     def f(*params):
         return two_asymptote_fn(x,*params) 
-    def fprime(x,*params):
-        return grad(f)(x,*params)
+    # def fprime(x,*params):
+    #     return grad(f)(x,*params)
     for isize in range(nsizes):
         def cost(params):
             return np.sum((R[isize] - f(*params))**2)
         def costprime(params):
             return grad(cost)(params)
-        res = sop.minimize(cost,x0=params_0[isize],bounds=bds,method='L-BFGS-B',jac=costprime)
+        res = sop.minimize(cost,x0=params_0[isize,:],bounds=bds,method='L-BFGS-B',jac=costprime)
         popt[isize] = res.x
         pcov[isize] = res.jac
         if not res.success:

@@ -11,6 +11,10 @@ import size_contrast_analysis as sca
 import size_contrast_figures as scf
 import sim_utils
 
+import pandas as pd
+import statsmodels.api as sm
+from statsmodels.formula.api import ols
+
 def preprocess(*args,average=True):
     if average:
         return tuple([np.nanmean(arg,0)[np.newaxis] for arg in args])
@@ -112,7 +116,7 @@ def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0
     ut.erase_top_right()
     do_saving(save_string)
     _,p = sst.wilcoxon(mimis[:,0],mimis[:,1])
-    print(p)
+    print('p-value: '+str(p))
 
 def plot_mi_errorbars(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,log_xaxis=True,xaxis=None,save_string=''):
     # make error bar plot, one black curve indicating metric with light off (calculated on xdata_norm)
@@ -131,6 +135,82 @@ def plot_mi_errorbars(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,
         ut.plot_pct_errorbars_hillel(xaxis,to_plot,colors=color,pct=(16,84))#,markersize=10)
     ut.erase_top_right()
     do_saving(save_string)
+
+def gen_stim_light_df(arr):
+    arr = arr[np.sum(np.sum(arr>0,-1),-1)>0]
+    shp = arr.shape
+    exptno,size,light = np.meshgrid(*[np.arange(s) for s in shp],indexing='ij')
+    keys = ['response','exptno','size','light']
+    vals = [arr,exptno,size,light]
+    bool_vals = [np.isnan(vals[0])+0]+vals[1:]
+    d = {k:v.flatten() for k,v in zip(keys,bool_vals)}
+    df_is_nan = pd.DataFrame(data=d)
+    
+#     lkat = np.sum(np.isnan(vals[0]),axis=2)==0
+    lkat = ~np.isnan(vals[0])
+    print(lkat.shape)
+    non_nan_vals = [v[lkat] for v in vals]
+    d = {k:v.flatten() for k,v in zip(keys,non_nan_vals)}
+    df_non_nan = pd.DataFrame(data=d)
+    
+    return df_is_nan,df_non_nan
+
+def gen_stim_df(arr):
+    arr = arr[np.sum(np.sum(arr>0,-1),-1)>0]
+    shp = arr.shape[:-1]
+    exptno,size = np.meshgrid(*[np.arange(s) for s in shp],indexing='ij')
+    keys = ['response_off','response_on','exptno','size']
+    vals = [arr[:,:,0],arr[:,:,1],exptno,size]
+    bool_vals = [np.isnan(vals[0])+0]+vals[1:]
+    d = {k:v.flatten() for k,v in zip(keys,bool_vals)}
+    df_is_nan = pd.DataFrame(data=d)
+    
+#     lkat = np.sum(np.isnan(vals[0]),axis=2)==0
+    lkat = ~np.isnan(vals[0])
+    print(lkat.shape)
+    non_nan_vals = [v[lkat] for v in vals]
+    d = {k:v.flatten() for k,v in zip(keys,non_nan_vals)}
+    df_non_nan = pd.DataFrame(data=d)
+    
+    return df_is_nan,df_non_nan
+
+def gen_size_contrast_df(arr):
+    arr = arr[np.sum(np.sum(np.sum(arr>0,-1),-1),-1)>0]
+    shp = arr.shape[:-1]
+    exptno,size,contrast = np.meshgrid(*[np.arange(s) for s in shp],indexing='ij')
+    keys = ['response_off','response_on','exptno','size','contrast']
+    vals = [arr[:,:,:,0],arr[:,:,:,1],exptno,size,contrast]
+    bool_vals = [np.isnan(vals[0])+0]+vals[1:]
+    d = {k:v.flatten() for k,v in zip(keys,bool_vals)}
+    df_is_nan = pd.DataFrame(data=d)
+    
+#     lkat = np.sum(np.isnan(vals[0]),axis=2)==0
+    lkat = ~np.isnan(vals[0])
+    print(lkat.shape)
+    non_nan_vals = [v[lkat] for v in vals]
+    d = {k:v.flatten() for k,v in zip(keys,non_nan_vals)}
+    df_non_nan = pd.DataFrame(data=d)
+    
+    return df_is_nan,df_non_nan
+
+def gen_size_contrast_light_df(arr):
+    arr = arr[np.sum(np.sum(np.sum(arr>0,-1),-1),-1)>0]
+    shp = arr.shape
+    exptno,size,contrast,light = np.meshgrid(*[np.arange(s) for s in shp],indexing='ij')
+    keys = ['response','exptno','size','contrast','light']
+    vals = [arr[:,:,:,:],exptno,size,contrast,light]
+    bool_vals = [np.isnan(vals[0])+0]+vals[1:]
+    d = {k:v.flatten() for k,v in zip(keys,bool_vals)}
+    df_is_nan = pd.DataFrame(data=d)
+    
+#     lkat = np.sum(np.isnan(vals[0]),axis=2)==0
+    lkat = ~np.isnan(vals[0])
+    print(lkat.shape)
+    non_nan_vals = [v[lkat] for v in vals]
+    d = {k:v.flatten() for k,v in zip(keys,non_nan_vals)}
+    df_non_nan = pd.DataFrame(data=d)
+    
+    return df_is_nan,df_non_nan
 
 def scatter_size_contrast_x_dx(xdata_norm,ydata_norm,ylim=(-0.12,0.8),save_string='',c=None):
     plt.figure(figsize=(2.5,2.5))
@@ -237,21 +317,23 @@ def plot_csi_errorbars(xdata_norm,ydata_norm,c=None,save_string=''):
     plt.tight_layout()
     do_saving(save_string)
 
-def plot_smimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',**opt):
+def plot_smimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',save=True,**opt):
     # run plot_mimi_bars_with_lines using SMI as the metric
     first_ind = 1
     plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=first_ind,c=c,**opt)
     plt.ylabel('slope, SMI vs. contrast')
     plt.tight_layout()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
 
-def plot_csimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',**opt):
+def plot_csimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',save=True,**opt):
     # run plot_mimi_bars_with_lines using CSI as the metric
     first_ind = 0
     plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.csi_fn,first_ind=first_ind,c=c,**opt)
     plt.ylabel('slope, CSI vs. size')
     plt.tight_layout()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
 
 def run_mi_plotting(network_resps,target_bin,plot_mi_fn=plot_smi_errorbars,plot_mi_lbl='pc_smi_vs_contrast_l4',ext='eps',iconns=[0,2,3,4],itype=0,opt={}):
     # run a plotting function e.g. plot_mi_errorbars, or plot_mimi_bars_with_lines
