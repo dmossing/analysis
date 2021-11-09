@@ -1765,7 +1765,8 @@ def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac
         train_test[key] = [None for ipartitioning in range(npartitionings)] 
         for ipartitioning in range(npartitionings): 
             train_test[key][ipartitioning] = select_trials(trial_info[key],selector,training_frac) 
-    tuning = pd.DataFrame() 
+    # tuning = pd.DataFrame() 
+    tuning_list = []
     ttls = ['s1_l4','s1_l23','v1_l4','v1_l23'] 
     selectors = [selector_s1, selector_s1, selector_v1, selector_v1] 
     tt = [{k:v[ipartitioning] for k,v in zip(train_test.keys(),train_test.values())} for ipartitioning in range(npartitionings)] 
@@ -1774,7 +1775,9 @@ def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac
             new_tuning = compute_tuning_df(df.loc[df.area==ttl],trial_info,selector,include=tt[ipartitioning]) 
             new_tuning.insert(new_tuning.shape[1],'partitioning',ipartitioning) 
             #new_tuning['partitioning'] = ipartitioning 
-            tuning = tuning.append(new_tuning) 
+            # tuning = tuning.append(new_tuning)
+            tuning_list.append(new_tuning)
+    tuning = pd.concat(tuning_list,axis=0)
     return tuning
 
 def select_trials(trial_info,selector,training_frac,include_all=False,seed=0):
@@ -1824,7 +1827,8 @@ def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
     nexpt = len(expts)
-    tuning = pd.DataFrame()
+    # tuning = pd.DataFrame()
+    tuning_list = []
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -1859,7 +1863,9 @@ def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
             column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
             index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
-            tuning = tuning.append(tip_df)
+            # tuning = tuning.append(tip_df)
+            tuning_list.append(tip_df)
+    tuning = pd.concat(tuning_list,axis=0)
     return tuning
 
 def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
@@ -1913,7 +1919,8 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=
     if return_dict:
         tuning = {}
     else:
-        tuning = pd.DataFrame()
+        # tuning = pd.DataFrame()
+        tuning_list = []
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -1957,7 +1964,10 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=
                 column_labels = pd.MultiIndex.from_product(shp,names=params[1:]+['trial#'])
                 index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
                 tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
-                tuning = tuning.append(tip_df)
+                # tuning = tuning.append(tip_df)
+                tuning_list.append(tip_df)
+        if not return_dict:
+            tuning = pd.concat(tuning_list,axis=0)
     return tuning
 
 def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
@@ -1968,9 +1978,10 @@ def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
     nexpt = len(expts)
-    tuning = pd.DataFrame()
-    lb = pd.DataFrame()
-    ub = pd.DataFrame()
+    # tuning = pd.DataFrame()
+    # lb = pd.DataFrame()
+    # ub = pd.DataFrame()
+    tuning_list,lb_list,ub_list = [[] for _ in range(3)]
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -2010,9 +2021,15 @@ def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
             tip_lb_df = pd.DataFrame(tip_lb.reshape((tip_lb.shape[0],-1)),index=index,columns=column_labels)
             tip_ub_df = pd.DataFrame(tip_ub.reshape((tip_ub.shape[0],-1)),index=index,columns=column_labels)
-            tuning = tuning.append(tip_df)
-            lb = lb.append(tip_lb_df)
-            ub = ub.append(tip_ub_df)
+            # tuning = tuning.append(tip_df)
+            # lb = lb.append(tip_lb_df)
+            # ub = ub.append(tip_ub_df)
+            tuning_list.append(tip_df)
+            lb_list.append(tip_lb_df)
+            ub_list.append(tip_ub_df)
+    tuning = pd.concat(tuning_list,axis=0)
+    lb = pd.concat(lb_list,axis=0)
+    ub = pd.concat(ub_list,axis=0)
     return tuning,lb,ub
 
 def erase_top_right():
