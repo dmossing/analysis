@@ -414,6 +414,7 @@ def fit_opt_params_two_asymptote_fn(x,R):
     return popt,pcov
 
 def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen=10):
+    # plot the model and the data it was fit to
     ncells = mn.shape[0]
     nsizes = mn.shape[1]
     nrows = int(np.ceil(ncells/rowlen))
@@ -458,10 +459,12 @@ class ayaz_model(object):
         return modeled
 
     def predict(self,theta):
+        # given parameters theta, return the modeled values
         modeled = self.fn_theta(self.ucontrast,self.usize,theta)
         return modeled
 
     def initialize(self,delta0=0):
+        # initialize theta with reasonable starting values
         r0 = np.nanmin(self.data)
         rd = 100
         rs = 100
@@ -474,6 +477,7 @@ class ayaz_model(object):
         return theta0
 
     def bound(self):
+        # bounds for the model parameters theta
         mmin = 0.5
         mmax = 5
         smax = 180
@@ -486,7 +490,8 @@ class ayaz_model(object):
         return bds
 
     def fit(self,theta0=None,delta0=0):
-            
+        # fit the model to the data, starting from parameters theta0, or default theta0 if not specified
+        # if fit is successful, results are stored as fields in self
         def cost(theta):
             modeled = self.predict(theta)
             non_nan = ~np.isnan(self.data)

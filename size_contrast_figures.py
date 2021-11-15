@@ -912,7 +912,7 @@ class pc_c50mi_bars(fig_gen):
 
 class pc_smimi_bars(fig_gen):
     # class to generate figure of smimi bars
-    def __init__(self,data_obj,mi_type='mi'):
+    def __init__(self,data_obj,mi_type='mi',ylim=None):
         opt = {}
         opt['filebase'] = 'figures/%s_smimi_bars_%s.jpg'
         opt['rsexpt_inds'] = [1,0]#(lbls[itype],alignment_lbls[ialign])
@@ -923,11 +923,16 @@ class pc_smimi_bars(fig_gen):
             opt['attr_args'][0] = 'smiscs'
         elif mi_type == 'slope':
             opt['attr_args'][0] = 'smislopes'
-        opt['add_kwargs'] = {'ucontrasts':[data_obj.ucontrast[data_obj.smi_first_ind],data_obj.ucontrast[data_obj.smi_last_ind]],'mi_type':mi_type}
+        opt['add_kwargs'] = {'ucontrasts':[data_obj.ucontrast[data_obj.smi_first_ind],
+        data_obj.ucontrast[data_obj.smi_last_ind]],
+        'mi_type':mi_type,
+        'ylim':ylim}
         super().__init__(opt,data_obj)
-    def single_fn(self,smimis,colors,full_cellmi_type_lbl,savefile,ucontrasts=[6,100],mi_type='mi'):
+    def single_fn(self,smimis,colors,full_cellmi_type_lbl,savefile,ucontrasts=[6,100],mi_type='mi',ylim=None):
         plt.figure(figsize=(2.5,2.5))
         plot_bar_with_dots(smimis,colors)
+        if not ylim is None:
+            plt.ylim(np.nanmin(smimis)-0.05,np.nanmax(smimis)+0.01)
         plt.xticks((0,),[full_cellmi_type_lbl])
         if mi_type == 'mi':
             plt.ylabel('SMI at %d%% - SMI at %d%%'%tuple(ucontrasts))

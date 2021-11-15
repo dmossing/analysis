@@ -914,6 +914,24 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
     #return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
     return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc # trialwise_t_offset
 
+def norm_to_mean(arr,arr_mn=None):
+    if arr_mn is None:
+        arr_mn = arr
+    arr_mn_flat = arr_mn.reshape((arr_mn.shape[0],-1))
+    mn = np.nanmean(arr_mn_flat,axis=1)
+    slicer = [slice(None)] + [np.newaxis]*(arr.ndim-1)
+    arr_norm = arr/mn[slicer]
+    return arr_norm
+
+def norm_middle_axes_to_mean(arr,arr_mn=None):
+    if arr_mn is None:
+        arr_mn = arr.copy()
+    arr_mn_flat = arr_mn.reshape((arr_mn.shape[0],-1,arr_mn.shape[-1]))
+    mn = np.nanmean(arr_mn_flat,axis=1)
+    slicer = [slice(None)] + [np.newaxis]*(arr.ndim-2) + [slice(None)]
+    arr_norm = arr/mn[slicer]
+    return arr_norm
+
 def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     if colors is None:
         colors = plt.cm.viridis(np.linspace(0,1,mn_tgt.shape[0]))

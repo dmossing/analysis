@@ -447,7 +447,6 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     plt.errorbar(mn[:,:,0].flatten(),mn[:,:,1].flatten(),xerr=xerr,yerr=yerr,fmt='none',zorder=1,c='k',alpha=0.5*alpha)
     sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha,equate_0=equate_0)
     plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
 
 def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,flipxy=False,xmin=None,xmax=None):
     if xmin is None:
@@ -478,8 +477,13 @@ def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=
     ub_YY = np.nanpercentile(YY,pct[1],axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
     #print((np.nanmean(lb_YY),np.nanmean(ub_YY)))
-    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
-    plt.plot(xx,mn_YY,c=c,alpha=alpha)
+    if not isinstance(c,list) or len(c) == 1:
+        plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
+        plt.plot(xx,mn_YY,c=c,alpha=alpha)
+    elif len(c) == 2:
+        for isign,this_sign in enumerate([xx < 0, xx >= 0]):
+            plt.fill_between(xx[this_sign],lb_YY[this_sign],ub_YY[this_sign],alpha=0.5*alpha,facecolor=c[isign])
+            plt.plot(xx[this_sign],mn_YY[this_sign],c=c[isign],alpha=alpha)
     #if flipxy:
     #else:
     #    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
