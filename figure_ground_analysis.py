@@ -5,8 +5,8 @@ import scipy.io as sio
 import matplotlib.pyplot as plt
 import numpy as np
 import h5py
-from oasis.functions import deconvolve
-from oasis import oasisAR1, oasisAR2
+# from oasis.functions import deconvolve
+# from oasis import oasisAR1, oasisAR2
 import pyute as ut
 import analysis_template as at
 from importlib import reload

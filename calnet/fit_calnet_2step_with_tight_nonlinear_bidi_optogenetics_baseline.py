@@ -340,6 +340,9 @@ def fit_weights_and_save(weights_file,ca_data_file='rs_vm_denoise_200605.npy',op
             y = [np.nanmean(Rso[icelltype][iS][iT],axis=0)[:,np.newaxis]/mx[iS][icelltype] for icelltype in range(1,ncelltypes)]
             Ypc_list[iS][iT] = [None for icelltype in range(1,ncelltypes)]
             for icelltype in range(1,ncelltypes):
+                # as currently written, penalties involving (X,Y)pc_list are effectively artificially smaller by
+                # a factor of mx[iS][icelltype] compared to what one would expect from the (X,Y)-penalty as defined
+                # subsequently.
                 rss = Rso[icelltype][iS][iT].copy()#/mx[iS][icelltype] #.reshape(Rs[icelltype][ialign].shape[0],-1)
                 #print('sum of isnan: '+str(np.isnan(rss).sum(1)))
                 #rss = Rso[icelltype][iS][iT].copy() #.reshape(Rs[icelltype][ialign].shape[0],-1)

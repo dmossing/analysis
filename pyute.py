@@ -336,6 +336,9 @@ def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,naf
     # sampled by a factor of ds. Deconvolve using OASIS, and trialize
     # b_nonneg: whether to constrain baseline to be nonnegative
     # g0: if not none, pre-defined AR(1) parameter
+    
+    import oasis.functions as ofun
+
     to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
     if to_add.max():
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
@@ -816,6 +819,9 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         return existing
     
     def process(to_add,uncorrected,neuropil,roilines):
+
+        import oasis.functions as ofun
+
         to_add_copy = to_add.copy()
         to_add = interp_nans(to_add,axis=-1)
         to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
