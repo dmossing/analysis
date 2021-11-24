@@ -18,6 +18,7 @@ import scipy.optimize as sop
 import pdb
 import sklearn
 from autograd import elementwise_grad as egrad
+from autograd import grad
 import naka_rushton_analysis as nra
 import sim_utils
 
@@ -826,7 +827,7 @@ def compute_encoding_proc(dsname,expttype='size_contrast_0',training_set=None,ru
     return proc
 
 
-def compute_encoding_proc_(sc0,training_set=None,running_trials=False,equate_ori=False,cutoffs=(20,)):
+def compute_encoding_proc_(sc0,training_set=None,running_trials=False,equate_ori=True,cutoffs=(20,)):
     nbefore = sc0['nbefore'][()]
     nafter = sc0['nafter'][()]
     decon = np.nanmean(sc0['decon'][()][:,:,nbefore:-nafter],-1)
@@ -883,6 +884,7 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
         running_trials=False,training_set=None,equate_ori=False,proc=None):
     # compute encoding axes based on training set trials
     # this performs linear regression from principal components of training set ca imaging trials onto contrast ranks
+    # reg: list of lists, with indices [iexpt][icutoff][isize][iangle]
     na = len(alphas)
     if proc is None:
         proc = compute_encoding_proc(dsname,expttype=expttype,training_set=training_set,running_trials=running_trials,
@@ -897,54 +899,6 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
         for k in range(len(keylist)):
             R[k] = [None for icutoff in range(len(cutoffs))]
             reg[k] = [None for icutoff in range(len(cutoffs))]
-            # sc0 = ds[keylist[k]][expttype]
-            # nbefore = sc0['nbefore'][()]
-            # nafter = sc0['nafter'][()]
-            # decon = np.nanmean(sc0['decon'][()][:,:,nbefore:-nafter],-1)
-            # data = sst.zscore(decon,axis=1)
-            # data[np.isnan(data)] = 0
-            # if training_set is None:
-            #     train = np.ones((decon.shape[1],),dtype='bool')
-            # else:
-            #     if isinstance(training_set[keylist[k]],list):
-            #         train = training_set[keylist[k]][0]
-            #     else:
-            #         train = training_set[keylist[k]]
-
-            # u,sigma,v = np.linalg.svd(data)
-
-            # pval_ret = sc0['rf_mapping_pval'][()]
-            # dist_ret = sc0['rf_distance_deg'][()]
-            # ontarget_ret_lax = np.logical_and(dist_ret<40,pval_ret<0.05)
-            # running_speed_cm_s = sc0['running_speed_cm_s'][()]
-            # running = np.nanmean(running_speed_cm_s[:,nbefore:-nafter],1)>7
-            # if not running_trials:
-            #     running = ~running
-            # size = sc0['stimulus_id'][()][0]
-            # contrast = sc0['stimulus_id'][()][1]
-            # angle = sc0['stimulus_id'][()][-1]
-            # if equate_ori:
-            #     angle = np.remainder(angle,4).astype('int')
-
-            # proc[k]['u'] = u
-            # proc[k]['sigma'] = sigma
-            # proc[k]['v'] = v  
-            # proc[k]['pval_ret'] = pval_ret
-            # proc[k]['dist_ret'] = dist_ret
-            # proc[k]['ontarget_ret_lax'] = ontarget_ret_lax
-            # proc[k]['running_speed_cm_s'] = running_speed_cm_s
-            # proc[k]['running'] = running
-            # proc[k]['size'] = size
-            # proc[k]['contrast'] = contrast
-            # proc[k]['angle'] = angle
-            # proc[k]['cutoffs'] = cutoffs
-            # proc[k]['train'] = train
-
-            # uangle,usize,ucontrast = [sc0[key][()] for key in ['stimulus_direction_deg','stimulus_size_deg','stimulus_contrast']]
-
-            # proc[k]['uangle'],proc[k]['usize'],proc[k]['ucontrast'] = uangle,usize,ucontrast
-            # if equate_ori:
-            #     proc[k]['uangle'] = proc[k]['uangle'][:int(len(proc[k]['uangle'])/2)]
 
             angle,size,contrast = [proc[k][key] for key in ['angle','size','contrast']]
             u,sigma,v = [proc[k][key] for key in ['u','sigma','v']]
@@ -981,58 +935,279 @@ def compute_encoding_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas
                             reg[k][icutoff][s][i] = linreg.fit(X,y)
     return reg,proc,top_score
 
-def compute_indiv_detector_axes(dsname,expttype='size_contrast_0',cutoffs=(20,),alphas=np.logspace(-2,2,50),
-        running_trials=False,training_set=None,equate_ori=False,proc=None):
+def compute_XX_yy_indiv_detector(Xtrain,proc):
+    nexpt = len(proc)
+    XX,yy = [{} for _ in range(2)]
+    for iexpt in range(nexpt):
+        if (iexpt,0,0,0) in Xtrain:
+            nsize = len(proc[iexpt]['usize'])
+            ncontrast = len(proc[iexpt]['ucontrast'])
+            nangle = 4
+            ndim = Xtrain[(iexpt,0,0,0)].shape[1]
+            all_gray_screen = np.zeros((0,ndim))
+            for iangle in range(nangle):
+                for isize in range(nsize):
+                    all_gray_screen = np.concatenate((all_gray_screen,Xtrain[(iexpt,isize,0,iangle)]),axis=0)
+            # this might be messed up-- will have to look back and make sure I am doing the right things with angles
+            for iangle in range(nangle):
+                for isize in range(nsize):
+                    this_gray_screen = all_gray_screen.copy()
+                    for jsize in range(isize):
+                        for icontrast in range(1,ncontrast):
+                            this_gray_screen = np.concatenate((this_gray_screen,\
+                                                Xtrain[(iexpt,jsize,icontrast,iangle)]),axis=0)
+                    y = np.zeros((this_gray_screen.shape[0],))
+                    contrast_present = np.zeros((0,ndim))
+                    for jsize in range(isize,nsize):
+                        for icontrast in range(1,ncontrast):
+                            this_data = Xtrain[(iexpt,jsize,icontrast,iangle)]
+                            ntrials = this_data.shape[0]
+                            contrast_present = np.concatenate((contrast_present,this_data),axis=0)
+                            y = np.concatenate((y,icontrast*np.ones((ntrials,))),axis=0)
+    #                 y = np.concatenate((np.zeros((this_gray_screen.shape[2],)),np.ones((contrast_present.shape[2],))),axis=0)
+                    X = np.concatenate((this_gray_screen,contrast_present),axis=0)
+                    XX[(iexpt,isize,iangle)] = X
+                    yy[(iexpt,isize,iangle)] = y
+    return XX,yy
+
+def compute_XX_yy_indiv_orth_detector(Xtrain,proc):
+    nexpt = len(proc)
+    XX,yy = [{} for _ in range(2)]
+    for iexpt in range(nexpt):
+        if (iexpt,0,0,0) in Xtrain:
+            nsize = len(proc[iexpt]['usize'])
+            ncontrast = len(proc[iexpt]['ucontrast'])
+            nangle = 4
+            ndim = Xtrain[(iexpt,0,0,0)].shape[1]
+            all_gray_screen = np.zeros((0,ndim))
+            for iangle in range(nangle):
+                for isize in range(nsize):
+                    all_gray_screen = np.concatenate((all_gray_screen,Xtrain[(iexpt,isize,0,iangle)]),axis=0)
+            # this might be messed up-- will have to look back and make sure I am doing the right things with angles
+            for iangle in range(nangle):
+                y = np.zeros((all_gray_screen.shape[0],nsize))
+                contrast_present = np.zeros((0,ndim))
+                for isize in range(nsize):
+                    for icontrast in range(1,ncontrast):
+                        this_data = Xtrain[(iexpt,isize,icontrast,iangle)]
+                        ntrials = this_data.shape[0]
+                        contrast_present = np.concatenate((contrast_present,this_data),axis=0)
+                        this_y = icontrast*np.ones((ntrials,))[:,np.newaxis]*(np.arange(nsize)<=isize)[np.newaxis,:]
+                        y = np.concatenate((y,this_y),axis=0)
+    #                 y = np.concatenate((np.zeros((this_gray_screen.shape[2],)),np.ones((contrast_present.shape[2],))),axis=0)
+                    X = np.concatenate((all_gray_screen,contrast_present),axis=0)
+                    XX[(iexpt,iangle)] = X
+                    yy[(iexpt,iangle)] = y
+    return XX,yy
+
+def compute_X(proc,training_data=True):
+    # output a dict with tuple keys (iexpt,isize,icontrast,iangle)
+    X = {}
+    for k in range(len(proc)):
+
+        angle,size,contrast = [proc[k][key] for key in ['angle','size','contrast']]
+        u,sigma,v = [proc[k][key] for key in ['u','sigma','v']]
+        running,train = [proc[k][key] for key in ['running','train']]
+        if not training_data:
+            train = ~train
+        ontarget_ret_lax = proc[k]['ontarget_ret_lax']
+        cutoffs = proc[k]['cutoffs']
+
+        if np.logical_and(ontarget_ret_lax.sum()>100,running.mean()>0.5):
+            
+            uangle,usize,ucontrast = [np.unique(arr) for arr in [angle,size,contrast]]
+            nsize = len(usize)
+            ncontrast = len(ucontrast)
+            nangle = len(uangle)
+            assert(nangle==4)
+            for icutoff,cutoff in enumerate(cutoffs):
+                
+                for s in range(nsize):
+                    for c in range(ncontrast):
+                        for i in range(nangle):
+                            if c == 0:
+                                stim_of_interest_all_contrast = ut.k_and(contrast==0,running,train)
+                            else:
+                                stim_of_interest_all_contrast = ut.k_and(size==usize[s],contrast==ucontrast[c],angle==uangle[i],running,train)
+                            X[(k,s,c,i)] = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[stim_of_interest_all_contrast]
+    return X
+
+def zscore_(arr,axis=0):
+    slc = [slice(None) for _ in arr.shape]
+    slc[axis] = np.newaxis
+    slc = tuple(slc)
+    return (arr - np.nanmean(arr,axis=axis)[slc])/np.nanstd(arr,axis=axis)[slc]
+
+def compute_indiv_detector_axes(proc=None,alphas=np.logspace(-2,2,50),Xtrain_extra=None,\
+        Xtest_extra=None,orth_from_smallest=False):
     # compute encoding axes based on training set trials
     # this performs linear regression from principal components of training set ca imaging trials onto contrast ranks
     na = len(alphas)
-    if proc is None:
-        proc = compute_encoding_proc(dsname,expttype=expttype,training_set=training_set,running_trials=running_trials,
-                equate_ori=equate_ori,cutoffs=(20,))
-    with ut.hdf5read(dsname) as ds:
-        keylist = list(ds.keys())
-        nkey = len(keylist)
-        R = [None for k in range(nkey)]
-        reg = [None for k in range(nkey)]
-        top_score = [None for k in range(nkey)]
-        for k in range(len(keylist)):
-            R[k] = [None for icutoff in range(len(cutoffs))]
-            reg[k] = [None for icutoff in range(len(cutoffs))]
 
-            angle,size,contrast = [proc[k][key] for key in ['angle','size','contrast']]
-            u,sigma,v = [proc[k][key] for key in ['u','sigma','v']]
-            running,train = [proc[k][key] for key in ['running','train']]
-            ontarget_ret_lax = proc[k]['ontarget_ret_lax']
+    Xtrain = compute_X(proc,training_data=True) # tuple keys (iexpt,isize,icontrast,iangle)
+    Xtest = compute_X(proc,training_data=False)
 
-            if np.logical_and(ontarget_ret_lax.sum()>100,running.mean()>0.5):
-                uangle,usize,ucontrast = [np.unique(arr) for arr in [angle,size,contrast]]
-                nsize = len(usize)
-                ncontrast = len(ucontrast)
-                nangle = len(uangle)
-                top_score[k] = np.zeros((len(cutoffs),nsize,nangle))
-                for icutoff,cutoff in enumerate(cutoffs):
-                    R[k][icutoff] = np.zeros((nsize,nangle,cutoff))
-                    reg[k][icutoff] = [None for s in range(nsize)]
-                    for s in range(nsize):
-                        reg[k][icutoff][s] = [None for i in range(nangle)]
-                        for i in range(nangle):
-                            stim_of_interest_all_contrast = ut.k_and(np.logical_or(np.logical_and(angle==i,size==s),\
-                                    contrast==0),running,train) #,eye_dist < np.nanpercentile(eye_dist,50))
-                            X = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[stim_of_interest_all_contrast]
-                            y = contrast[stim_of_interest_all_contrast] #>0
+    if not Xtrain_extra is None:
+        for key in Xtrain:
+            Xtrain[key] = np.concatenate((Xtrain[key],Xtrain_extra[key]),axis=1)
+            Xtest[key] = np.concatenate((Xtest[key],Xtest_extra[key]),axis=1)
+            # Xtrain[key] = zscore_(Xtrain[key],axis=0)
+            # Xtest[key] = zscore_(Xtest[key],axis=0)
+            # Xtrain[key] = Xtrain_extra[key].copy()
+            # Xtest[key] = Xtest_extra[key].copy()
 
-                            sc = np.zeros((na,))
-                            for ia,alpha in enumerate(alphas):
-                                linreg = sklearn.linear_model.Ridge(alpha=alpha,normalize=True)
-                                reg1 = linreg.fit(X,y)
-                                scores = sklearn.model_selection.cross_validate(linreg,X,y,cv=5)
-                                pred = sklearn.model_selection.cross_val_predict(linreg,X,y,cv=5)
-                                sc[ia] = scores['test_score'].mean()
-                            best_alpha = np.argmax(sc)
-                            top_score[k][icutoff,s,i] = sc.max()
-                            linreg = sklearn.linear_model.Ridge(alpha=alphas[best_alpha],normalize=True)
-                            reg[k][icutoff][s][i] = linreg.fit(X,y)
-    return reg,proc,top_score
+    nexpt = len(proc)
+
+    reg = {}
+    reg_score = {}
+    reg_score_mean = [None for _ in range(nexpt)]
+
+    XX,yy = compute_XX_yy_indiv_detector(Xtrain,proc) # should change these to make sure it works on Nt x Nd matrices, 
+    # where Nt is number of trials and Nd is cutoff == 20
+    XX_test,yy_test = compute_XX_yy_indiv_detector(Xtest,proc) 
+
+    for iexpt in range(nexpt):
+        if (iexpt,0,0) in XX:
+            nsize = len(proc[iexpt]['usize'])
+            ncontrast = len(proc[iexpt]['ucontrast'])
+            nangle = len(proc[iexpt]['uangle'])
+            assert(nangle==4)
+            reg_score_mean[iexpt] = np.zeros((nsize,nsize,ncontrast,nangle))
+            for iangle in range(nangle):
+                for isize in range(nsize):
+                    X,y = XX[(iexpt,isize,iangle)].copy(),yy[(iexpt,isize,iangle)].copy()
+
+                    if orth_from_smallest:
+                        for jsize in range(isize):
+                            vec = reg[(iexpt,jsize,iangle)].coef_
+                            Xproj = (X.dot(vec))[:,np.newaxis]*vec[np.newaxis,:]/np.linalg.norm(vec)**2
+                            X = X - Xproj
+
+                    sc = np.zeros((na,))
+                    for ia,alpha in enumerate(alphas):
+                        linreg = sklearn.linear_model.Ridge(alpha=alpha,normalize=True)
+                        reg1 = linreg.fit(X,y)
+                        scores = sklearn.model_selection.cross_validate(linreg,X,y,cv=5)
+                        pred = sklearn.model_selection.cross_val_predict(linreg,X,y,cv=5)
+                        sc[ia] = scores['test_score'].mean()
+                    best_alpha = np.argmax(sc)
+                    linreg = sklearn.linear_model.Ridge(alpha=alphas[best_alpha],normalize=True)
+
+                    reg[(iexpt,isize,iangle)] = linreg.fit(X,y)
+                    if orth_from_smallest:
+                        veci = reg[(iexpt,isize,iangle)].coef_.copy()
+                        for jsize in range(isize):
+                            vecj = reg[(iexpt,jsize,iangle)].coef_
+                            coefproj = veci.dot(vecj)*vecj/np.linalg.norm(vecj)**2
+                            reg[(iexpt,isize,iangle)].coef_ = veci - coefproj
+                    # reg[(iexpt,isize,iangle)] = linreg.fit(X,y[np.random.permutation(y.shape[0])])
+
+            for isize in range(nsize):
+                for iangle in range(nangle):
+                    X,y = XX_test[(iexpt,isize,iangle)],yy_test[(iexpt,isize,iangle)]
+                    for icontrast in range(ncontrast):
+                        thisX = X[y==icontrast]
+                        # print((iexpt,isize,icontrast,iangle,thisX.shape[0]))
+                        for jsize in range(nsize):
+                            reg_score[(iexpt,jsize,isize,icontrast,iangle)] = reg[(iexpt,jsize,iangle)].predict(thisX)
+                            reg_score_mean[iexpt][jsize,isize,icontrast,iangle] = reg_score[(iexpt,jsize,isize,icontrast,iangle)].mean()
+
+    return reg,reg_score,reg_score_mean
+
+class lin_predictor(object):
+    def __init__(self, w, ndim, nsize):
+        self.ndim = ndim
+        self.nsize = nsize
+        self.W = w[:ndim*nsize].reshape((ndim,nsize))
+        self.h = w[ndim*nsize:][np.newaxis,:]
+    def predict(self, X):
+        return X @ self.W + self.h
+
+def compute_indiv_orth_detector_axes(proc=None,Xtrain_extra=None,\
+        Xtest_extra=None,l2_penalty=1,orth_penalty=1):
+    # compute encoding axes based on training set trials
+    # this performs linear regression from principal components of training set ca imaging trials onto contrast ranks
+
+    def predict(X,w):
+        W = w[:ndim*nsize].reshape((ndim,nsize))
+        h = w[ndim*nsize:][np.newaxis,:]
+        return X @ W + h
+
+    Xtrain = compute_X(proc,training_data=True) # tuple keys (iexpt,isize,icontrast,iangle)
+    Xtest = compute_X(proc,training_data=False)
+
+    if not Xtrain_extra is None:
+        for key in Xtrain:
+            Xtrain[key] = np.concatenate((Xtrain[key],Xtrain_extra[key]),axis=1)
+            Xtest[key] = np.concatenate((Xtest[key],Xtest_extra[key]),axis=1)
+            # Xtrain[key] = zscore_(Xtrain[key],axis=0)
+            # Xtest[key] = zscore_(Xtest[key],axis=0)
+            # Xtrain[key] = Xtrain_extra[key].copy()
+            # Xtest[key] = Xtest_extra[key].copy()
+
+    nexpt = len(proc)
+
+    reg = {}
+    reg_score = {}
+    reg_score_mean = [None for _ in range(nexpt)]
+
+    XX,yy = compute_XX_yy_indiv_orth_detector(Xtrain,proc) # should change these to make sure it works on Nt x Nd matrices, 
+    # where Nt is number of trials and Nd is cutoff == 20
+    XX_test,yy_test = compute_XX_yy_indiv_orth_detector(Xtest,proc) 
+
+    for iexpt in range(nexpt):
+        if (iexpt,0) in XX:
+            nsize = len(proc[iexpt]['usize'])
+            ncontrast = len(proc[iexpt]['ucontrast'])
+            nangle = len(proc[iexpt]['uangle'])
+            ndim = proc[iexpt]['cutoffs'][0]
+            assert(nangle==4)
+            reg_score_mean[iexpt] = np.zeros((nsize,nsize,ncontrast,nangle))
+            for iangle in range(nangle):
+                X,y = XX[(iexpt,iangle)].copy(),yy[(iexpt,iangle)].copy()
+                
+                def cost(w):
+                    W = w[:ndim*nsize].reshape((ndim,nsize))
+                    h = w[ndim*nsize:][np.newaxis,:]
+                    sqerr_term = np.sum((y - predict(X,w))**2)
+                    l2_term = l2_penalty*np.sum(W**2)
+                    orth_mat = (W.T @ W)**2
+                    orth_term = orth_penalty*(np.sum(orth_mat) - np.trace(orth_mat))
+                    # try:
+                    #     print('sq term: %f'%float(sqerr_term))
+                    #     print('l2 term: %f'%float(l2_term))
+                    #     print('orth term: %f'%float(orth_term))
+                    # except:
+                    #     pass
+
+                    cost = sqerr_term + l2_term + orth_term
+                    return cost
+
+                linreg = sklearn.linear_model.LinearRegression()
+                linreg.fit(X,y)
+                w0 = np.concatenate((linreg.coef_.T.flatten(),linreg.intercept_))
+                result = sop.minimize(cost,w0,jac=grad(cost))
+
+                reg[(iexpt,iangle)] = lin_predictor(result.x,ndim,nsize)
+                # reg[(iexpt,isize,iangle)] = linreg.fit(X,y[np.random.permutation(y.shape[0])])
+
+            for isize in range(nsize):
+                for iangle in range(nangle):
+                    X,y = XX_test[(iexpt,iangle)],yy_test[(iexpt,iangle)]
+                    for icontrast in range(ncontrast):
+                        if icontrast == 0:
+                            thisX = X[y[:,0]==0]
+                        else:
+                            if isize < nsize-1:
+                                thisX = X[(y[:,0]==icontrast) & (y[:,isize]>0) & (y[:,isize+1]==0)]
+                            else:
+                                thisX = X[(y[:,0]==icontrast) & (y[:,isize]>0)]
+                        # print((iexpt,isize,icontrast,iangle,thisX.shape[0]))
+                        for jsize in range(nsize):
+                            reg_score[(iexpt,jsize,isize,icontrast,iangle)] = reg[(iexpt,iangle)].predict(thisX)[:,jsize]
+                            reg_score_mean[iexpt][jsize,isize,icontrast,iangle] = reg_score[(iexpt,jsize,isize,icontrast,iangle)].mean()
+
+    return reg,reg_score,reg_score_mean
 
 def compute_encoding_axis_auroc(reg,proc):
     return compute_encoding_axis_fn(reg,proc,ut.compute_auroc)
@@ -1077,7 +1252,7 @@ def compute_encoding_axis_fn(reg,proc,fn):
                             auroc[iexpt][isize,icontrast,iangle] = np.nan
     return auroc
 
-def compute_encoding_axis_projections(reg,proc,training_data=False,project_all=False):
+def compute_encoding_axis_projections(reg,proc,training_data=False,project_all=False,use_cutoffs=True):
 
     # use regression trained on training set to predict 
     # contrast for both sets of population activity vectors
@@ -1087,7 +1262,8 @@ def compute_encoding_axis_projections(reg,proc,training_data=False,project_all=F
     icutoff = 0
     
     for iexpt in range(len(proc)):
-        if not reg[iexpt][icutoff] is None:
+        this_reg = reg[iexpt][icutoff]
+        if not this_reg is None:
             cutoff = proc[iexpt]['cutoffs'][icutoff]
             desired_outputs = ['angle','size','contrast','running','sigma','v','uangle','usize','ucontrast','train']
             angle,size,contrast,running,sigma,v,uangle[iexpt],\
@@ -1116,11 +1292,61 @@ def compute_encoding_axis_projections(reg,proc,training_data=False,project_all=F
                                 Y1 = np.zeros((nsize,nangle,this_no))
                                 for jsize in range(nsize):
                                     for jangle in range(nangle):
-                                        y1 = reg[iexpt][icutoff][jsize][jangle].predict(X1)
+                                        y1 = this_reg[jsize][jangle].predict(X1)
                                         Y1[jsize,jangle] = y1
                                 proj[(iexpt,isize,icontrast,iangle)] = Y1
                             else:
-                                y1 = reg[iexpt][icutoff][isize][iangle].predict(X1)
+                                y1 = this_reg[isize][iangle].predict(X1)
+                                proj[(iexpt,isize,icontrast,iangle)] = y1
+                        else:
+                            proj[(iexpt,isize,icontrast,iangle)] = np.array(())
+    return proj
+
+def compute_encoding_axis_projections_dict(reg,proc,training_data=False,project_all=False,use_cutoffs=True):
+
+    # use regression trained on training set to predict 
+    # contrast for both sets of population activity vectors
+
+    proj = {}#[None for k in range(len(proc))]
+    uangle,usize,ucontrast = [[None for k in range(len(proc))] for iparam in range(3)]
+    icutoff = 0
+    
+    for iexpt in range(len(proc)):
+        this_reg = reg
+        if not this_reg is None:
+            cutoff = proc[iexpt]['cutoffs'][icutoff]
+            desired_outputs = ['angle','size','contrast','running','sigma','v','uangle','usize','ucontrast','train']
+            angle,size,contrast,running,sigma,v,uangle[iexpt],\
+                usize[iexpt],ucontrast[iexpt],train \
+                    = [proc[iexpt][output].copy() for output in desired_outputs]
+            if training_data:
+                train = ~train # if you want training_data projections, then pretend training is 
+                #test data and vice versa
+            zero_contrast = ut.k_and(contrast==0,running,~train) #,eye_dist < np.nanpercentile(eye_dist,50))
+            nsize = len(usize[iexpt])
+            ncontrast = len(ucontrast[iexpt])
+            nangle = len(uangle[iexpt])
+            for isize in range(nsize):
+                for icontrast in range(ncontrast):
+                    for iangle in range(nangle):
+                        if ucontrast[iexpt][icontrast]==0:
+                            this_contrast = zero_contrast.copy()
+                        else:
+                            this_contrast = ut.k_and(angle==iangle,size==isize,
+                                contrast==icontrast,running,~train) 
+                            #,eye_dist < np.nanpercentile(eye_dist,50))
+                        if this_contrast.sum():
+                            X1 = (np.diag(sigma[:cutoff]) @ v[:cutoff,:]).T[this_contrast]
+                            if project_all:
+                                this_no = this_contrast.sum()
+                                Y1 = np.zeros((nsize,nangle,this_no))
+                                for jsize in range(nsize):
+                                    for jangle in range(nangle):
+                                        y1 = this_reg[jsize][jangle].predict(X1)
+                                        Y1[jsize,jangle] = y1
+                                proj[(iexpt,isize,icontrast,iangle)] = Y1
+                            else:
+                                y1 = this_reg[isize][iangle].predict(X1)
                                 proj[(iexpt,isize,icontrast,iangle)] = y1
                         else:
                             proj[(iexpt,isize,icontrast,iangle)] = np.array(())

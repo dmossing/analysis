@@ -10,7 +10,7 @@ import h5py
 import pyute as ut
 import sklearn
 # from importlib import reload
-reload(ut)
+# reload(ut)
 import scipy.ndimage.filters as sfi
 import scipy.stats as sst
 import scipy.ndimage.measurements as snm
