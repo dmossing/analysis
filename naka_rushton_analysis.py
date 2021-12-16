@@ -430,7 +430,8 @@ def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen
 
 class ayaz_model(object):
     # runs fitting if theta is None
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False,run_fitting=True):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,
+            norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False,run_fitting=True):
         self.data = data
         self.usize = usize        
         self.ucontrast = ucontrast
@@ -526,8 +527,10 @@ class ayaz_model(object):
             print(str((itype,iexpt))+' unsuccessful')
 
 class ayaz_opto_model(ayaz_model):
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,ulight=np.arange(2),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
-        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,theta=theta,delta0=delta0,two_n=two_n,run_fitting=False)
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,
+            ulight=np.arange(2),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
+        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,
+            theta=theta,delta0=delta0,two_n=two_n,run_fitting=False)
         self.ulight = ulight
         self.nlight = len(ulight)
         self.fit()
@@ -561,11 +564,14 @@ class ayaz_opto_model(ayaz_model):
     #    return opto_pred
 
 class ayaz_ori_model(ayaz_model):
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,uangle=np.arange(0,360,45),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
-        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,theta=theta,delta0=delta0,two_n=two_n)
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,
+            uangle=np.arange(0,360,45),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
+        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,
+            theta=theta,delta0=delta0,two_n=two_n)
         self.uangle = uangle
 
-def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,deriv=False,deriv_axis=2):
+def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4],ninterp=101,usize=np.array((5,8,13,22,36,60)),
+        ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,deriv=False,deriv_axis=2):
     ucontrast_interp = np.linspace(0,1,ninterp)
     this_nsize = len(these_sizes)
     this_ucontrast = ucontrast_interp
@@ -612,7 +618,8 @@ def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4
         plt.gca().set_ylim(bottom=0)
     plt.tight_layout()
 
-def plot_interp_size_tuning(ams=None,data=None,theta=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
+def plot_interp_size_tuning(ams=None,data=None,theta=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),
+        ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
     usize_interp = np.linspace(0,usize[-1],ninterp)
     this_ncontrast = len(these_contrasts)
     this_usize = usize_interp
