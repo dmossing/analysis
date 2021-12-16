@@ -1329,7 +1329,7 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
 
                 trialdict = {}
                 for iparam,param in enumerate(sc0['stimulus_parameters']):
-                    this_info = sc0[param][:][stim_id[iparam]]
+                    this_info = sc0[param][:][stim_id[iparam].astype('int')]
                     trialdict[param.decode('UTF-8')] = this_info
                 trialdict['running'] = trialrun
                 trialdict['dilated'] = trialpupil
@@ -2122,7 +2122,8 @@ def circ_align_to_entry(data,entry,axis=1):
     return data_aligned
 
 def circ_align_to_entry_axiswise(data,entry,based_axis=0,entry_axis=1):
-    # circ shift ith dim of data along axis such that corresponding index entry is at the 0th position
+    # circ shift (entry_axis)th dim of data along axis such that corresponding entry (where the entry is defined 
+    # per-index along the (based_axis)th dimension) is at the 0th position
     data_t = np.moveaxis(data,based_axis,0)
     data_aligned_t = circ_align_to_entry(data_t,entry,axis=entry_axis)
     data_aligned = np.moveaxis(data_aligned_t,0,based_axis)
@@ -2162,9 +2163,10 @@ def zero_origin(cmd='y'):
     if 'x' in cmd:
         plt.gca().set_xlim(left=0)
 
-def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1):
+def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1,bar_alpha_frac=0.5,show_dots=True):
     # plot bar with bootstrapped error bars and dots, jittered by epsilon, dot size s, transparency alpha on everything
     # make data a list, if it is not
+    # elements of data taken to be 1-D arrays
     if not isinstance(data,list):
         data = [data]
     if not isinstance(s,list):
@@ -2175,10 +2177,11 @@ def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=4
         tick_labels = ['' for d in data]
     for itype in range(len(data)):
         mn = np.nanmean(data[itype],0)
-        plt.bar((itype,),mn,color=colors[itype],alpha=0.5*alpha,edgecolor='k')
+        plt.bar((itype,),mn,color=colors[itype],alpha=bar_alpha_frac*alpha,edgecolor='k')
         lb,ub = bootstrap(data[itype][~np.isnan(data[itype])],pct=pct,axis=0,fn=np.mean)
-        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k',alpha=alpha)
-        plt.scatter(itype*np.ones_like(data[itype])+epsilon*np.random.randn(data[itype].shape[0]),data[itype],\
+        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k',alpha=bar_alpha_frac*alpha)
+        if show_dots:
+            plt.scatter(itype*np.ones_like(data[itype])+epsilon*np.random.randn(data[itype].shape[0]),data[itype],\
                     facecolor=colors[itype],linewidth=1,edgecolor='k',s=s[itype],alpha=alpha)
     plt.xticks(np.arange(len(data)),tick_labels)
 

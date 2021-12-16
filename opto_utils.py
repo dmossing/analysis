@@ -413,7 +413,8 @@ def compute_intercept_(animal_data,axis=0):
     y = np.reshape(y,(y.shape[0]*y.shape[1],-1))
     return compute_intercept(x,y,axis=axis)
 
-def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1,equate_0=False):
+def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',
+        equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1,equate_0=False,linewidth=1):
     if xlabel is None:
         xlabel = 'PC event rate, light off'
     if ylabel is None:
@@ -443,12 +444,13 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     ub_YY = np.nanpercentile(YY,84,axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
     plt.fill_between(xx[:,0],lb_YY,ub_YY,alpha=0.5*alpha,facecolor=opto_color)
-    plt.plot(xx[:,0],mn_YY,c=opto_color,alpha=alpha)
+    plt.plot(xx[:,0],mn_YY,c=opto_color,alpha=alpha,linewidth=linewidth)
     plt.errorbar(mn[:,:,0].flatten(),mn[:,:,1].flatten(),xerr=xerr,yerr=yerr,fmt='none',zorder=1,c='k',alpha=0.5*alpha)
     sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha,equate_0=equate_0)
     plt.xlabel(xlabel)
 
-def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,flipxy=False,xmin=None,xmax=None):
+def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,flipxy=False,\
+            xmin=None,xmax=None,linestyle='solid'):
     if xmin is None:
         xmin = animal_data.transpose()[0].min()
     if xmax is None:
@@ -479,11 +481,11 @@ def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=
     #print((np.nanmean(lb_YY),np.nanmean(ub_YY)))
     if not isinstance(c,list) or len(c) == 1:
         plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
-        plt.plot(xx,mn_YY,c=c,alpha=alpha)
+        plt.plot(xx,mn_YY,c=c,alpha=alpha,linestyle=linestyle)
     elif len(c) == 2:
         for isign,this_sign in enumerate([xx < 0, xx >= 0]):
             plt.fill_between(xx[this_sign],lb_YY[this_sign],ub_YY[this_sign],alpha=0.5*alpha,facecolor=c[isign])
-            plt.plot(xx[this_sign],mn_YY[this_sign],c=c[isign],alpha=alpha)
+            plt.plot(xx[this_sign],mn_YY[this_sign],c=c[isign],alpha=alpha,linestyle=linestyle)
     #if flipxy:
     #else:
     #    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)

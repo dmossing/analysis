@@ -117,6 +117,7 @@ def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0
     do_saving(save_string)
     _,p = sst.wilcoxon(mimis[:,0],mimis[:,1])
     print('p-value: '+str(p))
+    print('%d/%d higher'%((mimis[:,1]>mimis[:,0]).sum(),mimis.shape[0]))
 
 def plot_mi_errorbars(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,log_xaxis=True,xaxis=None,save_string=''):
     # make error bar plot, one black curve indicating metric with light off (calculated on xdata_norm)
@@ -224,7 +225,7 @@ def scatter_size_contrast_x_dx(xdata_norm,ydata_norm,ylim=(-0.12,0.8),save_strin
     plt.tight_layout()
     do_saving(save_string)
 
-def plot_size_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_contrasts=[1,5],bfactors=[0.5,1],ylim=None,save_string='',log_xaxis=False):
+def plot_size_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_contrasts=[1,5],bfactors=[0.5,1],ylim=None,save_string='',log_xaxis=False,save=True):
     usize = np.array((5,8,13,25,36,60))
     usize0 = np.concatenate(((0,),usize))
     if not log_xaxis:
@@ -248,9 +249,10 @@ def plot_size_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_contrasts=[1,5
         plt.tight_layout()
         if not ylim is None:
             plt.ylim(ylim)
-        do_saving(save_string % this_contrast)
+        if save:
+            do_saving(save_string % this_contrast)
 
-def plot_contrast_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_sizes=[0,5],bfactors=[0.5,1],ylim=None,save_string='',log_xaxis=True):
+def plot_contrast_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_sizes=[0,5],bfactors=[0.5,1],ylim=None,save_string='',log_xaxis=True,save=True):
     ucontrast = np.array((0,6,12,25,50,100))
     if log_xaxis:
         ux = np.arange(ucontrast.shape[0])
@@ -269,9 +271,10 @@ def plot_contrast_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_sizes=[0,5
         plt.tight_layout()
         if not ylim is None:
             plt.ylim(ylim)
-        do_saving(save_string % this_size)
+        if save:
+            do_saving(save_string % this_size)
 
-def scatter_csi(xdata_norm,ydata_norm,alpha=1,save_string='',c=None):
+def scatter_csi(xdata_norm,ydata_norm,alpha=1,save_string='',c=None,save=True):
     this_scsstanimal = np.stack((xdata_norm,ydata_norm),axis=3)
     cmax = 6
     csisst = np.zeros((this_scsstanimal.shape[0],this_scsstanimal.shape[1],this_scsstanimal.shape[3]))
@@ -291,10 +294,11 @@ def scatter_csi(xdata_norm,ydata_norm,alpha=1,save_string='',c=None):
     plt.xlabel(r'CSI, light off')
     plt.ylabel(r'CSI, light on')
     plt.tight_layout()
-    plt.savefig(save_string)
+    if save:
+        plt.savefig(save_string)
     print(sst.wilcoxon(to_plot[:,:,0].mean(1),to_plot[:,:,1].mean(1)))
 
-def plot_smi_errorbars(xdata_norm,ydata_norm,c=None,save_string=''):
+def plot_smi_errorbars(xdata_norm,ydata_norm,c=None,save_string='',save=True):
     # run plot_mi_errorbars using SMI as the metric
     ucontrast = np.array((0,6,12,25,50,100))
     first_ind = 1
@@ -303,9 +307,10 @@ def plot_smi_errorbars(xdata_norm,ydata_norm,c=None,save_string=''):
     plt.xlabel('contrast (%)')
     plt.ylabel('SMI')
     plt.tight_layout()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
 
-def plot_csi_errorbars(xdata_norm,ydata_norm,c=None,save_string=''):
+def plot_csi_errorbars(xdata_norm,ydata_norm,c=None,save_string='',save=True):
     # run plot_mi_errorbars using CSI as the metric
     usize = np.array((5,8,13,25,36,60))
     first_ind = 0
@@ -315,7 +320,8 @@ def plot_csi_errorbars(xdata_norm,ydata_norm,c=None,save_string=''):
     plt.xlabel('size ($^o$)')
     plt.ylabel('CSI')
     plt.tight_layout()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
 
 def plot_smimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',save=True,**opt):
     # run plot_mimi_bars_with_lines using SMI as the metric
@@ -365,7 +371,8 @@ def run_mi_plotting(network_resps,target_bin,plot_mi_fn=plot_smi_errorbars,plot_
             plot_mi_fn(xdata_norm,ydata_norm,**opt)
 
 def do_saving(save_string):
-    if save_string[-3:] == 'jpg':
-        plt.savefig(save_string,dpi=300)
-    else:
-        plt.savefig(save_string)
+    if len(save_string):
+        if save_string[-3:] == 'jpg':
+            plt.savefig(save_string,dpi=300)
+        else:
+            plt.savefig(save_string)
