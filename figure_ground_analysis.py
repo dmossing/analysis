@@ -8,6 +8,7 @@ import h5py
 # from oasis.functions import deconvolve
 # from oasis import oasisAR1, oasisAR2
 import pyute as ut
+import ca_processing as cap
 import analysis_template as at
 from importlib import reload
 reload(ut)
@@ -21,8 +22,8 @@ order = ['ctrl','fig','grnd','iso','cross']
 
 def analyze_figure_ground(datafiles,stimfile,retfile=None,frame_adjust=None,rg=None,nbefore=4,nafter=4):
     nbydepth = get_nbydepth(datafiles)
-    #trialwise,ctrialwise,strialwise,dfof,straces = ut.gen_precise_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter)
+    #trialwise,ctrialwise,strialwise,dfof,straces = cap.gen_precise_trialwise(datafiles,frame_adjust=frame_adjust)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = cap.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter)
     trialwise_t_offset = proc1['trialwise_t_offset']
     raw_trialwise = proc1['raw_trialwise']
     neuropil_trialwise = proc1['neuropil_trialwise'] 

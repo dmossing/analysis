@@ -2,6 +2,7 @@
 
 import numpy as np
 import pyute as ut
+import ca_processing as cap
 import os
 import h5py
 
@@ -88,7 +89,7 @@ def analyze(datafiles,stimfile,frame_adjust=None,rg=(1,0),nbefore=nbefore,nafter
     nplanes = len(nbydepth)
 
     # get trialized fluorescence data
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff) # , trialwise_t_offset
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = cap.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff) # , trialwise_t_offset
 
     # load stimulus data
     #result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]

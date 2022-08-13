@@ -8,6 +8,7 @@ import h5py
 # from oasis.functions import deconvolve
 # from oasis import oasisAR1, oasisAR2
 import pyute as ut
+import ca_processing as cap
 import analysis_template as at
 # from importlib import reload
 import scipy.ndimage.filters as sfi
@@ -84,7 +85,7 @@ def analyze_size_contrast(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(
         criterion = lambda x: np.abs(x)>100
     nbydepth = get_nbydepth(datafiles)
 #     trialwise,ctrialwise,strialwise = gen_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff) # , trialwise_t_offset
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc1 = cap.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff) # , trialwise_t_offset
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
     
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]

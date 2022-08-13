@@ -8,6 +8,7 @@ import h5py
 #from oasis.functions import deconvolve
 #from oasis import oasisAR1, oasisAR2
 import pyute as ut
+import ca_processing as cap
 import scipy.stats as sst
 import scipy.ndimage.filters as sfi
 import analysis_template as at
@@ -25,7 +26,7 @@ def analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=lambda x: x>
         nbydepth[i] = corrected.shape[0]
 #         with h5py.File(datafile,mode='r') as f:
 #             nbydepth[i] = (f['corrected'][:].T.shape[0])
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = cap.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
 
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
@@ -291,7 +292,7 @@ def do_process(thisfold,thisfile,rg=(2,-10),nbefore=8,nafter=8,criterion=lambda 
 
     ret,paramdict,pval,trialrun,has_inverse,locinds = analyze_precise_retinotopy(datafiles,stimfile,retfile,criterion=criterion,rg=rg,nbefore=nbefore,nafter=nafter)
     nbydepth = get_nbydepth(datafiles)
-    trialwise,ctrialwise,strialwise,dfof,_,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
+    trialwise,ctrialwise,strialwise,dfof,_,dtrialwise,trialwise_t_offset = cap.gen_precise_trialwise(datafiles,rg=rg,nbefore=nbefore,nafter=nafter)
 #     traces,ctraces,straces,dfof,baseline = rt.gen_traces(datafiles)
     spont = strialwise[:,trialrun>100,:nbefore].mean(-1).mean(-1)
     proc = {}

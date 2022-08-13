@@ -8,7 +8,7 @@ import h5py
 from oasis.functions import deconvolve
 from oasis import oasisAR1, oasisAR2
 import pyute as ut
-
+import ca_processing as cap
 from importlib import reload
 reload(ut)
 import scipy.ndimage.filters as sfi
@@ -80,7 +80,7 @@ def analyze_luminance(datafiles,stimfile,retfile=None,frame_adjust=None,rg=(1,0)
         criterion = lambda x: np.abs(x)>100
     nbydepth = get_nbydepth(datafiles)
 #     trialwise,ctrialwise,strialwise = gen_trialwise(datafiles,frame_adjust=frame_adjust)
-    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = ut.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff)
+    trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,trialwise_t_offset = cap.gen_precise_trialwise(datafiles,rg=rg,frame_adjust=frame_adjust,nbefore=nbefore,nafter=nafter,blcutoff=blcutoff)
     zstrialwise = sst.zscore(strialwise.reshape((strialwise.shape[0],-1)).T).T.reshape(strialwise.shape)
     
     result = sio.loadmat(stimfile,squeeze_me=True)['result'][()]
