@@ -809,117 +809,6 @@ def safe_get_(matfile,var,h5=False):
     else:
         return None
 
-def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None,frame_adjust=None):
-    
-    def tack_on(to_add,existing):
-        try:
-            existing = np.concatenate((existing,to_add),axis=0)
-        except:
-            existing = to_add.copy()
-        return existing
-    
-    def process(to_add,uncorrected,neuropil,roilines):
-
-        import oasis.functions as ofun
-
-        to_add_copy = to_add.copy()
-        to_add = interp_nans(to_add,axis=-1)
-        to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
-#        to_add[to_add<0] = 0
-        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-        baseline = np.repeat(baseline,ds,axis=1)
-        if baseline.shape[1]>to_add.shape[1]:
-            baseline = baseline[:,:to_add.shape[1]]
-        #to_correct = to_add<0 # commented out 19/2/5
-        #to_correct = baseline<0 # changed 19/2/4 # commented out 19/2/5
-        #to_add[to_correct] = to_add[to_correct] - baseline[to_correct] # commented out 19/2/5
-        #baseline[to_correct] = 0 # commented out 19/2/5
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        this_dfof = np.zeros_like(to_add)
-        for i in range(c.shape[0]):
-            #try:
-            fudge = 5e-2*np.nanmax(to_add[i])
-            if to_add[i].max()>0:
-                this_dfof[i] = (to_add[i]-baseline[i,:])/np.maximum(fudge,baseline[i,:])
-            else:
-                print('roi '+str(i)+' all zeros')
-            c[i],s[i],_,_,_  = ofun.deconvolve(this_dfof[i].astype(np.float64),penalty=1)
-            #except:
-            #    print("couldn't do "+str(i))
-        #to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        #cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        #ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        #dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        to_add,trialwise_t_offset = precise_trialize_no_interp(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        raw_traces,_ = precise_trialize_no_interp(uncorrected,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        neuropil,_ = precise_trialize_no_interp(neuropil,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        cc,_ = precise_trialize_no_interp(c,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        ss,_ = precise_trialize_no_interp(s,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        dd,_ = precise_trialize_no_interp(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        return to_add,cc,ss,this_dfof,s,dd,trialwise_t_offset,raw_traces,neuropil
-        
-    trialwise = np.array(())
-    ctrialwise = np.array(())
-    strialwise = np.array(())
-    dtrialwise = np.array(())
-    dfof = np.array(())
-    straces = np.array(())
-    trialwise_t_offset = np.array(())
-    proc = {}
-    proc['raw_trialwise'] = np.array(())
-    proc['neuropil_trialwise'] = np.array(())
-    proc['trialwise_t_offset'] = np.array(())
-    for datafile in datafiles:
-        thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
-        info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
-        frm = info['frame'][()]
-        line = info['line'][()]
-        event_id = info['event_id'][()]
-        ignore_first = 0
-        ignore_last = 0
-        while event_id[0]==2:
-            event_id = event_id[1:]
-            frm = frm[1:]
-            line = line[1:]
-            ignore_first = ignore_first+1
-        while event_id[-1]==2:
-            event_id = event_id[:-1]
-            frm = frm[:-1]
-            line = line[:-1]
-            ignore_last = ignore_last+1
-        if not rg is None:
-            thisrg = (rg[0]-ignore_first,rg[1]+ignore_last)
-            print(thisrg)
-            frm = frm[thisrg[0]:frm.size+thisrg[1]]
-            line = line[thisrg[0]:line.size+thisrg[1]]
-        else:
-            frm = frm[event_id==1]
-            line = line[event_id==1]
-        if not frame_adjust is None:
-            frm = frame_adjust(frm)
-            line = frame_adjust(line)
-        (to_add,ctr,uncorrected,neuropil) = loadmat(datafile,('corrected','ctr','Data','Neuropil'))
-        print(datafile)
-        print(to_add.shape)
-        nlines = loadmat(datafile,'msk').shape[0]
-        roilines = ctr[0] + nlines*thisdepth
-        #to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
-        to_add,c,s,this_dfof,this_straces,dtr,tt,uncorrected,neuropil = process(to_add,uncorrected,neuropil,roilines)
-        trialwise = tack_on(to_add,trialwise)
-        ctrialwise = tack_on(c,ctrialwise)
-        strialwise = tack_on(s,strialwise)
-        dtrialwise = tack_on(dtr,dtrialwise)
-        dfof = tack_on(this_dfof,dfof)
-        straces = tack_on(this_straces,straces)
-        #trialwise_t_offset = tack_on(tt,trialwise_t_offset)
-        proc['raw_trialwise'] = tack_on(uncorrected,proc['raw_trialwise'])
-        proc['neuropil_trialwise'] = tack_on(neuropil,proc['neuropil_trialwise'])
-        proc['trialwise_t_offset'] = tack_on(tt,proc['trialwise_t_offset'])
-
-    #return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
-    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc # trialwise_t_offset
-
 def norm_to_mean(arr,arr_mn=None):
     if arr_mn is None:
         arr_mn = arr
@@ -934,7 +823,7 @@ def norm_middle_axes_to_mean(arr,arr_mn=None):
         arr_mn = arr.copy()
     arr_mn_flat = arr_mn.reshape((arr_mn.shape[0],-1,arr_mn.shape[-1]))
     mn = np.nanmean(arr_mn_flat,axis=1)
-    slicer = [slice(None)] + [np.newaxis]*(arr.ndim-2) + [slice(None)]
+    slicer = tuple([slice(None)] + [np.newaxis]*(arr.ndim-2) + [slice(None)])
     arr_norm = arr/mn[slicer]
     return arr_norm
 
