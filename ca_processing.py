@@ -1,29 +1,9 @@
 import oasis.functions as ofun
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 import numpy as np
-import sklearn.cluster as skc
-import os
-import scipy.misc as smi
-import scipy.io as sio
-import h5py
 import scipy.ndimage.filters as sfi
-import oasis.functions as ofun
 #from oasis.functions import deconvolve
-import scipy.optimize as sop
-import scipy.ndimage.measurements as snm
 import re
-import pickle as pkl
-import glob
-import fnmatch
-import shutil
-import pandas as pd
-import scipy.stats as sst
-from pympler import asizeof
-import sklearn.metrics as skm
-import sklearn
-import scipy.interpolate as sip
-import naka_rushton_analysis as nra
+import pyute as ut
 
 def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=False,normalize_tavg=False):
     # convert neuropil-corrected calcium traces to df/f. compute baseline as
@@ -62,10 +42,10 @@ def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,naf
         s = np.zeros_like(to_add)
         b = np.zeros((to_add.shape[0],))
         g = np.zeros((to_add.shape[0],2))
-    to_add = trialize(to_add,frm,nbefore,nafter)
-    c = trialize(c,frm,nbefore,nafter)
-    s = trialize(s,frm,nbefore,nafter)
-    d = trialize(this_dfof,frm,nbefore,nafter)
+    to_add = ut.trialize(to_add,frm,nbefore,nafter)
+    c = ut.trialize(c,frm,nbefore,nafter)
+    s = ut.trialize(s,frm,nbefore,nafter)
+    d = ut.trialize(this_dfof,frm,nbefore,nafter)
     return to_add,c,s,d,b,g #,this_dfof #(non-trialized)
 
 def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None,frame_adjust=None):
@@ -82,7 +62,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         # import oasis.functions as ofun
 
         to_add_copy = to_add.copy()
-        to_add = interp_nans(to_add,axis=-1)
+        to_add = ut.interp_nans(to_add,axis=-1)
         to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
 #        to_add[to_add<0] = 0
         baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
@@ -110,12 +90,12 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         #cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         #ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
         #dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        to_add,trialwise_t_offset = precise_trialize_no_interp(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        raw_traces,_ = precise_trialize_no_interp(uncorrected,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        neuropil,_ = precise_trialize_no_interp(neuropil,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        cc,_ = precise_trialize_no_interp(c,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        ss,_ = precise_trialize_no_interp(s,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        dd,_ = precise_trialize_no_interp(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        to_add,trialwise_t_offset = ut.precise_trialize_no_interp(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        raw_traces,_ = ut.precise_trialize_no_interp(uncorrected,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        neuropil,_ = ut.precise_trialize_no_interp(neuropil,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        cc,_ = ut.precise_trialize_no_interp(c,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        ss,_ = ut.precise_trialize_no_interp(s,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
+        dd,_ = ut.precise_trialize_no_interp(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
         return to_add,cc,ss,this_dfof,s,dd,trialwise_t_offset,raw_traces,neuropil
         
     trialwise = np.array(())
@@ -131,7 +111,7 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
     proc['trialwise_t_offset'] = np.array(())
     for datafile in datafiles:
         thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
-        info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
+        info = ut.loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
         frm = info['frame'][()]
         line = info['line'][()]
         event_id = info['event_id'][()]
@@ -158,10 +138,10 @@ def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds
         if not frame_adjust is None:
             frm = frame_adjust(frm)
             line = frame_adjust(line)
-        (to_add,ctr,uncorrected,neuropil) = loadmat(datafile,('corrected','ctr','Data','Neuropil'))
+        (to_add,ctr,uncorrected,neuropil) = ut.loadmat(datafile,('corrected','ctr','Data','Neuropil'))
         print(datafile)
         print(to_add.shape)
-        nlines = loadmat(datafile,'msk').shape[0]
+        nlines = ut.loadmat(datafile,'msk').shape[0]
         roilines = ctr[0] + nlines*thisdepth
         #to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
         to_add,c,s,this_dfof,this_straces,dtr,tt,uncorrected,neuropil = process(to_add,uncorrected,neuropil,roilines)

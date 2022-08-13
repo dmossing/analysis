@@ -330,51 +330,6 @@ def resample(signal1,trig1,trig2):
         signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
     return signal2[frametrig2[0]:frametrig2[-1]]
 
-def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=False,normalize_tavg=False):
-    # convert neuropil-corrected calcium traces to df/f. compute baseline as
-    # blcutoff percentile filter, over a moving window of blspan frame, down
-    # sampled by a factor of ds. Deconvolve using OASIS, and trialize
-    # b_nonneg: whether to constrain baseline to be nonnegative
-    # g0: if not none, pre-defined AR(1) parameter
-    
-    import oasis.functions as ofun
-
-    to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
-    if to_add.max():
-        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-        topline = sfi.percentile_filter(to_add[:,::ds],99,(1,int(blspan/ds))) # dan added 18/10/30
-        baseline = np.maximum(baseline,topline/10) # dan added 18/10/30
-        baseline = np.repeat(baseline,ds,axis=1)
-        if baseline.shape[1]>to_add.shape[1]:
-            baseline = baseline[:,:to_add.shape[1]]
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        b = np.zeros((to_add.shape[0],))
-        g = np.zeros((to_add.shape[0],))
-        this_dfof = np.zeros_like(to_add)
-        for i in range(c.shape[0]):
-            this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
-            this_dfof[i][np.isnan(this_dfof[i])] = 0
-            y = this_dfof[i].astype(np.float64)
-            c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=g0)
-            if reestimate_noise:
-                sn = ofun.GetSn(y-c[i])
-                c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=(g[i],),sn=sn)
-            if normalize_tavg:
-                s[i] = s[i]/(1-g[i])
-
-    else:
-        this_dfof = np.zeros_like(to_add)
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        b = np.zeros((to_add.shape[0],))
-        g = np.zeros((to_add.shape[0],2))
-    to_add = trialize(to_add,frm,nbefore,nafter)
-    c = trialize(c,frm,nbefore,nafter)
-    s = trialize(s,frm,nbefore,nafter)
-    d = trialize(this_dfof,frm,nbefore,nafter)
-    return to_add,c,s,d,b,g #,this_dfof #(non-trialized)
-
 def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None):
     
     def tack_on(to_add,existing):
