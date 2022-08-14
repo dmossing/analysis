@@ -1,9 +1,12 @@
-import oasis.functions as ofun
 import numpy as np
 import scipy.ndimage.filters as sfi
 #from oasis.functions import deconvolve
 import re
 import pyute as ut
+try:
+    import oasis.functions as ofun
+except:
+    raise ImportWarning('oasis not found. Will not be possible to process raw ca traces.')
 
 def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=False,normalize_tavg=False):
     # convert neuropil-corrected calcium traces to df/f. compute baseline as
