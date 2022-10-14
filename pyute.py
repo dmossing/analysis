@@ -24,7 +24,8 @@ from pympler import asizeof
 import sklearn.metrics as skm
 import sklearn
 import scipy.interpolate as sip
-import naka_rushton_analysis as nra
+from collections.abc import Callable
+import pickle
 
 def norm01(arr,dim=1):
     # normalize each row of arr to [0,1] 
@@ -769,7 +770,7 @@ def norm_to_mean(arr,arr_mn=None):
         arr_mn = arr
     arr_mn_flat = arr_mn.reshape((arr_mn.shape[0],-1))
     mn = np.nanmean(arr_mn_flat,axis=1)
-    slicer = [slice(None)] + [np.newaxis]*(arr.ndim-1)
+    slicer = tuple([slice(None)] + [np.newaxis]*(arr.ndim-1))
     arr_norm = arr/mn[slicer]
     return arr_norm
 
@@ -845,7 +846,12 @@ def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,mark
     if colors is None:
         colors = plt.cm.viridis(np.linspace(0,1,nlines))
     for i in range(nlines):
-        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize,alpha=alpha)
+        this_color = colors[i].copy()
+        if isinstance(colors, np.ndarray) and colors.ndim == 2:
+            # print(this_color.shape)
+            this_color = this_color[None]
+        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],
+            c=this_color,linewidth=linewidth,markersize=markersize,alpha=alpha)
 
 def plot_sem_errorbars_hillel(x,mn_tgt,sem_tgt,colors=None,linewidth=None,markersize=None,delta=0,alpha=1):
     lb_tgt = mn_tgt - sem_tgt
@@ -882,25 +888,42 @@ def parse_options(opt,opt_keys,*args):
 
     return opt
 
+def errors_from_mean_lower_upper(mn_tgt, lb_tgt, ub_tgt):
+    # from a mean, lower and upper bound (e.g. from bootstrap conf. interval)
+    # return an errorbar usable in matplotlib plotting
+    # 2 x (shape of input arrays)
+    errorplus = ub_tgt-mn_tgt
+    errorminus = mn_tgt-lb_tgt
+    errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
+    return errors
+
 def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None,markersize=None,alpha=1):
     opt_keys = ['c','linestyle','linewidth','markersize','alpha']
     if not plot_options is None:
         opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
         c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
 
-    print('linewidth: %d'%linewidth)
+    # print('linewidth: %d'%linewidth)
+    errors = errors_from_mean_lower_upper(mn_tgt,lb_tgt,ub_tgt)
+
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
-    errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
+    old_errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
+
+    assert(np.all(errors.flatten()==old_errors.flatten()))
+
     #if ~isinstance(c,str):
     #    cc = c[np.newaxis]
     #else:
     #    cc = c
     cc = c.copy()
+    # print(cc.shape)
+    if isinstance(c, np.ndarray) and c.ndim == 2:
+        c = cc[0]
     #plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
     plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle='none',alpha=alpha) #,fmt=None)
     if linewidth>0:
-        print('plotting')
+        # print('plotting')
         plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
     plt.scatter(x,mn_tgt,c=cc,s=markersize,alpha=alpha)
 
@@ -2060,27 +2083,35 @@ def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired
         interp[slc] = sip.interp1d(usize,arr[tuple(slc)])(desired_usize)
     return interp
 
-def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
-    # plot an interpolated function, with dots and percentile errorbars from the original data
-    plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+def plot_parametric_fn_pct_errorbars(*args):
+    # raise error; now moved to naka_rushton_analysis.py
+    raise Exception('plot_parametric_fn_pct_errorbars is now in naka_rushton_analysis.py')
 
-def plot_parametric_fn_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
-    # plot an interpolated function, with dots and errorbars from the original data
-    if errorstyle == 'pct':
-        mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
-    elif errorstyle == 'bs':
-        mean_fn = lambda y: bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
-    xinterp = np.linspace(x.min(),x.max(),101)
-    if colors is None:
-        colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
-    for iconn in range(cpl.shape[1]):
-        params,_ = nra.fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
-        to_plot = nra.two_asymptote_fn(xinterp,*params[0])
-        plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
-    if errorstyle == 'pct':
-        plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
-    elif errorstyle=='bs':
-        plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+def plot_parametric_fn_errorbars(*args):
+    # raise error; now moved to naka_rushton_analysis.py
+    raise Exception('plot_parametric_fn_errorbars is now in naka_rushton_analysis.py')
+
+# def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
+#     # plot an interpolated function, with dots and percentile errorbars from the original data
+#     plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+
+# def plot_parametric_fn_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+#     # plot an interpolated function, with dots and errorbars from the original data
+#     if errorstyle == 'pct':
+#         mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
+#     elif errorstyle == 'bs':
+#         mean_fn = lambda y: bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
+#     xinterp = np.linspace(x.min(),x.max(),101)
+#     if colors is None:
+#         colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
+#     for iconn in range(cpl.shape[1]):
+#         params,_ = nra.fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
+#         to_plot = nra.two_asymptote_fn(xinterp,*params[0])
+#         plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
+#     if errorstyle == 'pct':
+#         plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+#     elif errorstyle=='bs':
+#         plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
 
 def apply_fn_to_nested_list(fn,ind_list,data):
     # given a single lists of lists as argument to a function, return a single list of lists as respective outputs
@@ -2125,7 +2156,8 @@ def apply_fn_to_nested_lists(fn,ind_list,*args):
     return to_return
 
 def apply_fn_to_nested_lists_single_out(fn,ind_list,*args):
-    # given multiple lists of lists as arguments to a function, return a single list of lists as respective outputs
+    # given multiple lists of lists as arguments to a function, return a single 
+    # list of lists as respective outputs
     if not len(ind_list):
         to_return = fn(*args)
     else:
@@ -2141,7 +2173,8 @@ def apply_fn_to_nested_lists_single_out(fn,ind_list,*args):
     return to_return
 
 def apply_fn_to_nested_lists_no_out(fn,ind_list,*args):
-    # given multiple lists of lists as arguments to a function, return a single list of lists as respective outputs
+    # given multiple lists of lists as arguments to a function, return a single list 
+    # of lists as respective outputs
     if not len(ind_list):
         fn(*args)
     else:
@@ -2159,3 +2192,73 @@ def list_of_lists_dim(list_of_lists):
         return (len(list_of_lists),) + list_of_lists_dim(list_of_lists[0])
     else:
         return ()
+
+def load_by_filename(filename):
+    # supports .mat, .pkl, .npy
+    if not (filename.endswith('.mat') or filename.endswith('.pkl') or filename.endswith('.npy')):
+        raise ValueError('filename must end with .mat, .pkl, or .npy')
+    if filename.endswith('.mat'):
+        return loadmat(filename)
+    elif filename.endswith('.pkl'):
+        return pickle.load(open(filename,'rb'))
+    elif filename.endswith('.npy'):
+        return np.load(filename)[()]
+
+def save_by_filename(filename, data):
+    # supports .mat, .pkl, .npy
+    if not (filename.endswith('.mat') or filename.endswith('.pkl') or filename.endswith('.npy')):
+        raise ValueError('filename must end with .mat, .pkl, or .npy')
+    if filename.endswith('.mat'):
+        sio.savemat(filename,data)
+    elif filename.endswith('.pkl'):
+        pickle.dump(data,open(filename,'wb'))
+    elif filename.endswith('.npy'):
+        np.save(filename,data)
+
+def compute_or_load_cached(
+    cache_file: str,
+    compute_fn: Callable,
+    # invalidate_cache: bool = False,
+    **kwargs,
+):
+    # check if cache_file is present; if not, run compute_fn and save to cache_file
+
+    if os.path.exists(cache_file):# and not invalidate_cache:
+        print('loading from cache...')
+        result = load_by_filename(cache_file)
+    else:
+        print('computing...')
+        result = compute_fn(**kwargs)
+        save_by_filename(cache_file, result)
+    return result
+
+def bootstrap_multi_arg(arrs, fn, axis=0, nreps=1000, pct=(2.5,97.5)):
+    # note: seems to break if axis != 0 (!)
+    np.random.seed(0)
+    # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
+    # and report percentiles pct
+    # make sure all but the leading axis dimensions match
+    assert(np.all([np.all(arr.shape[1:] == arrs[0].shape[1:]) for arr in arrs]))
+    Ns = [arr.shape[axis] for arr in arrs]
+    cs = [np.random.choice(np.arange(N),size=(N,nreps)) for N in Ns]
+    L = len(arrs[0].shape)
+    resamps = []
+    for arr, c in zip(arrs, cs):
+        resamp=np.rollaxis(arr,axis,0)
+        resamp=resamp[c]
+        resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
+        resamp=np.rollaxis(resamp,0,L+1)
+        resamps.append(resamp)
+    stat = fn(*resamps,axis=axis)
+    #lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
+    #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
+    return tuple([np.nanpercentile(stat,p,axis=-1) for p in pct])
+
+def bootstrap_min(arr1, arr2, axis=0, nreps=1000, pct=(2.5, 97.5)):
+    # arr1 a (n,d1,d2,...) array, arr2 a (n,d1,d2,...) array
+    assert(np.all(arr1.shape[1:] == arr2.shape[1:]))
+    def min_of_means(*args, axis=0):
+        means = [np.nanmean(arg,axis=axis) for arg in args]
+        return np.nanmin(means,axis=0)
+    return bootstrap_multi_arg((arr1,arr2), min_of_means, 
+        axis=axis, nreps=nreps, pct=pct)

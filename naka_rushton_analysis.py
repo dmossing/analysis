@@ -369,7 +369,7 @@ def two_asymptote_fn(x,*params):
     factor = 1/(1+np.exp((x-x0)/lam))
     return factor*as1 + (1-factor)*as2
 
-def fit_opt_params_two_asymptote_fn(x,R):
+def fit_opt_params_two_asymptote_fn(x,R,epsilon=1e-8):
     # left asymptote: y = x*a1 + b1
     # right asymptote: y = x*a2 + b2
     # around x = x0, interpolate sigmoidally
@@ -384,7 +384,7 @@ def fit_opt_params_two_asymptote_fn(x,R):
     a2_0 = (R[:,-1]-R[:,-2])/(x[-1]-x[-2])
     b2_0 = R[:,-1] - a2_0[:]*x[-1]
     lam_0 = 0.1*(x[1]-x[0])*np.ones((nsizes,))
-    bds = [(-np.inf,np.inf) for _ in range(5)] + [(0,np.inf)]
+    bds = [(-np.inf,np.inf) for _ in range(5)] + [(epsilon,np.inf)]
     #bds = zip_pairs(bds)
     params_0 = np.concatenate([z[:,np.newaxis] for z in (x0_0,a1_0,b1_0,a2_0,b2_0,lam_0)],axis=1)
 
@@ -770,3 +770,25 @@ def compute_pseudo_c50(ams_sst,slope_thresh=0.5):
                         if cinfl.size:
                             plt.scatter(100*cinterp[cinfl],cslope[cinfl],c=csize[isize])
     return pseudo_c50sst
+
+def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=fit_opt_params_two_asymptote_fn,plot_fn=two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
+    # plot an interpolated function, with dots and percentile errorbars from the original data
+    plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+
+def plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_opt_params_two_asymptote_fn,plot_fn=two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+    # plot an interpolated function, with dots and errorbars from the original data
+    if errorstyle == 'pct':
+        mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
+    elif errorstyle == 'bs':
+        mean_fn = lambda y: ut.bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
+    xinterp = np.linspace(x.min(),x.max(),101)
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
+    for iconn in range(cpl.shape[1]):
+        params,_ = fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
+        to_plot = two_asymptote_fn(xinterp,*params[0])
+        plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
+    if errorstyle == 'pct':
+        ut.plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+    elif errorstyle=='bs':
+        ut.plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)

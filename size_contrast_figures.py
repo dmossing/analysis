@@ -374,11 +374,12 @@ class ca_imaging(object):
         return self.compute_mis(lbl='c50',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,
             exptwise=exptwise)
 
-    def compute_smis(self,first_ind=1,last_ind=5,exptwise=True,xaxis=None,norm_to_max=False):
+    def compute_smis(self,first_ind=1,last_ind=5,exptwise=True,xaxis=None,
+            norm_to_max=False, big_ind=-1):
         # compute Surround Modulation Index, defined as the response at maximum
         # size divided by the response at preferred size, starting at contrast
         # first_ind (0 is 0% contrast) and ending at contrast last_ind
-        mi_fn = smi_fn
+        mi_fn = lambda *args: smi_fn(*args, big_ind=big_ind)
         return self.compute_mis(lbl='smi',first_ind=first_ind,last_ind=last_ind,mi_fn=mi_fn,
             exptwise=exptwise,xaxis=xaxis,norm_to_max=norm_to_max)
 
@@ -493,17 +494,17 @@ class ca_imaging(object):
         plt.tight_layout()
         plt.savefig('figures/avg_correlation_coefficient_btw_expts_by_celltype.eps')
 
-    def plot_c50_vs_size(self,c50s,colors,savefile=None):
+    def plot_c50_vs_size(self,c50s,colors,savefile=None,**kwargs):
         # plot size in deg on the x axis, and c50s on the y axis
-        bootstrap_opaque_plot_transparent(self.usize,c50s,colors)
+        bootstrap_opaque_plot_transparent(self.usize,c50s,colors,**kwargs)
         plt.xlabel('size ($^o$)')
         plt.ylabel('$C_{50}$ (%)')
         plt.tight_layout()
         savefig(savefile)
 
-    def plot_csi_vs_size(self,csis,colors,savefile=None,xticks=None):
+    def plot_csi_vs_size(self,csis,colors,savefile=None,xticks=None,**kwargs):
         # plot size in deg on the x axis, and contrast sensitivity index on the y axis
-        bootstrap_opaque_plot_transparent(self.usize,csis,colors)
+        bootstrap_opaque_plot_transparent(self.usize,csis,colors,**kwargs)
         if not xticks is None:
             plt.xticks(xticks)
         plt.xlabel('size ($^o$)')
@@ -511,24 +512,24 @@ class ca_imaging(object):
         plt.tight_layout()
         savefig(savefile)
 
-    def plot_smi_vs_contrast_semilogx(self,smis,colors,savefile=None):
+    def plot_smi_vs_contrast_semilogx(self,smis,colors,savefile=None,**kwargs):
         # using quasi-semilogx, plot contrast on the x axis, and surround modulation index
         #  on the y axis
         x = np.arange(1,6)
         to_plot = smis
-        bootstrap_opaque_plot_transparent(x,to_plot[:,1:],colors)
+        bootstrap_opaque_plot_transparent(x,to_plot[:,1:],colors,**kwargs)
         plt.xticks(x,self.ucontrast[1:])
         plt.xlabel('contrast (%)')
         plt.ylabel('SMI = \n resp. to 60$^o$/max resp.')
         plt.tight_layout()
         savefig(savefile)
 
-    def plot_smi_vs_contrast_semilogx_roiwise(self,smis,colors,savefile=None):
+    def plot_smi_vs_contrast_semilogx_roiwise(self,smis,colors,savefile=None,**kwargs):
         # using quasi-semilogx, plot contrast on the x axis, and surround modulation index,
         # but computing SMI for each ROI separately, and then averaging across ROIs
         x = np.arange(1,6)
         to_plot = self.avg_by_expt(smis)
-        bootstrap_opaque_plot_transparent(x,to_plot[:,1:],colors)
+        bootstrap_opaque_plot_transparent(x,to_plot[:,1:],colors,**kwargs)
         plt.xticks(x,self.ucontrast[1:])
         plt.xlabel('contrast (%)')
         plt.ylabel('SMI = \n resp. to 60$^o$/max resp.')
@@ -592,20 +593,23 @@ class ca_imaging(object):
         plt.savefig('figures/spont_event_rate_vip_sst.jpg',dpi=300)
         sst.mannwhitneyu(ratio[isst][~np.isnan(ratio[isst])],ratio[ivip][~np.isnan(ratio[ivip])])
 
-    def gen_rsexpt_filenames(self,filebase,rsexpt_inds=[0,1,2]):
+    def gen_rsexpt_filenames(self,filebase,rsexpt_inds=[0,1,2],save=True):
         # generate filenames for list of lists, with formatting string filebase, where rsexpt_inds specifies the order in which
         # rsexpt_dim_lbls are invoked in filebase. E.g. [1,0] indicates rsexpt_dim_lbls[1] appears first and rsexpt_dim_lbls[0] 
         # appears second
         lbls = [getattr(self,'%s_lbls'%self.rsexpt_dim_lbls[ind]) for ind in rsexpt_inds]
         tiled_lbls = [tile_list_of_lists(lbl,self.rsexpt_dims,axis=ind) for lbl,ind in zip(lbls,rsexpt_inds)]
-        gen_filenames_ = lambda *args: gen_filenames(filebase,*args)
+        gen_filenames_ = lambda *args: gen_filenames(filebase,*args,save=save)
         filenames = ut.apply_fn_to_nested_lists_single_out(gen_filenames_,[None,None,None],*tiled_lbls)
         return filenames
 
-def gen_filenames(filebase,*args):
+def gen_filenames(filebase,*args,save=True):
     # generate filenames from formatting string with enough blanks for args
-    assert(filebase.count('%s')==len(args))
-    return filebase % args
+    if save:
+        assert(filebase.count('%s')==len(args))
+        return filebase % args
+    else:
+        return None
 
 def gen_2d_colors(this_ncontrast,celltype_colors=None):
     # given a list of celltype colors, build a list of arrays shading those colors down to black, in this_ncontrast steps
@@ -691,7 +695,7 @@ def mean_normalize(to_plot):
     mn = np.nanmean(to_plot.reshape((to_plot.shape[0],-1)),-1)
     shp = to_plot.shape
     slicer = [slice(None)] + [np.newaxis for s in shp[1:]]
-    normed = to_plot/mn[slicer]
+    normed = to_plot/mn[tuple(slicer)]
     return normed
 
 
@@ -775,9 +779,9 @@ def mi_preprocess(data,subtract_min=True,avg_last=True):
         to_return = to_return - np.nanmin(np.nanmin(to_return,1),1)[:,np.newaxis,np.newaxis]
     return to_return
 
-def smi_fn(data,subtract_min=True,avg_last=True):
+def smi_fn(data,subtract_min=True,avg_last=True, big_ind=-1):
     this_data = mi_preprocess(data,subtract_min=subtract_min,avg_last=avg_last)#[:,:,first_ind:last_ind+1]
-    return this_data[:,-1,:]/np.nanmax(this_data,1)
+    return this_data[:,big_ind,:]/np.nanmax(this_data,1)
 
 def csi_fn(data,subtract_min=True,avg_last=True):
     this_data = mi_preprocess(data,subtract_min=subtract_min,avg_last=avg_last)#[:,:,first_ind:last_ind+1]
@@ -830,7 +834,7 @@ def compute_mimi(mi,axis=1,first_ind=1,last_ind=-1):
     first_slicer,last_slicer = [[slice(None) for _ in mi.shape] for _ in range(2)]
     first_slicer[axis] = first_ind
     last_slicer[axis] = last_ind
-    return mi[first_slicer] - mi[last_slicer]
+    return mi[tuple(first_slicer)] - mi[tuple(last_slicer)]
 
 def compute_misc(mi,first_ind=0,last_ind=-1,pval=False):
     # compute spearman correlation coefficient between the value mi and the index of mi
@@ -878,15 +882,16 @@ def compute_mislope(mi,first_ind=0,last_ind=-1,pval=False,xaxis=None,
 
 class fig_gen(object):
     # class to generate figures, given parameters opt and data_obj of class ca_imaging
-    def __init__(self,opt,data_obj):
-        self.savefiles = data_obj.gen_rsexpt_filenames(opt['filebase'],opt['rsexpt_inds'])
+    def __init__(self,opt,data_obj,save=True):
+        self.save = save
+        self.savefiles = data_obj.gen_rsexpt_filenames(opt['filebase'],opt['rsexpt_inds'],save=self.save)
         this_fn = lambda *args: opt['fn'](*args, **opt['add_kwargs'])
         attr_args = [getattr(data_obj,attr) for attr in opt['attr_args']]
         ut.apply_fn_to_nested_lists_no_out(this_fn,opt['ind_list'],*attr_args,self.savefiles)
 
 class pc_c50mi_bars(fig_gen):
     # class to generate figure of c50mi bars
-    def __init__(self,data_obj,use_mi=True):
+    def __init__(self, data_obj, use_mi=True, save=True):
         opt = {}
         opt['filebase'] = 'figures/%s_c50mi_bars_%s.jpg'
         opt['rsexpt_inds'] = [1,0]#(lbls[itype],alignment_lbls[ialign])
@@ -896,7 +901,7 @@ class pc_c50mi_bars(fig_gen):
         if not use_mi:
             opt['attr_args'][0] = 'c50scs'
         opt['add_kwargs'] = {'usizes':[data_obj.usize[data_obj.c50_first_ind],data_obj.usize[data_obj.c50_last_ind]],'use_mi':use_mi}
-        super().__init__(opt,data_obj)
+        super().__init__(opt, data_obj, save=save)
     def single_fn(self,c50mis,colors,full_celltype_lbl,savefile,usizes=[5,36],use_mi=True):
         plt.figure(figsize=(2.5,2.5))
         plot_bar_with_dots(c50mis,colors)
@@ -908,11 +913,12 @@ class pc_c50mi_bars(fig_gen):
         plt.xlim((-1,1))
         ut.erase_top_right()
         plt.tight_layout()
-        savefig(savefile.replace('pc_l23','pc'))
+        if not savefile is None:
+            savefig(savefile.replace('pc_l23','pc'))
 
 class pc_smimi_bars(fig_gen):
     # class to generate figure of smimi bars
-    def __init__(self,data_obj,mi_type='mi',ylim=None):
+    def __init__(self,data_obj,mi_type='mi',ylim=None, save=True):
         opt = {}
         opt['filebase'] = 'figures/%s_smimi_bars_%s.jpg'
         opt['rsexpt_inds'] = [1,0]#(lbls[itype],alignment_lbls[ialign])
@@ -927,7 +933,8 @@ class pc_smimi_bars(fig_gen):
         data_obj.ucontrast[data_obj.smi_last_ind]],
         'mi_type':mi_type,
         'ylim':ylim}
-        super().__init__(opt,data_obj)
+        super().__init__(opt, data_obj, save=save)
+
     def single_fn(self,smimis,colors,full_cellmi_type_lbl,savefile,ucontrasts=[6,100],mi_type='mi',ylim=None):
         plt.figure(figsize=(2.5,2.5))
         plot_bar_with_dots(smimis,colors)
@@ -943,11 +950,12 @@ class pc_smimi_bars(fig_gen):
         plt.xlim((-1,1))
         ut.erase_top_right()
         plt.tight_layout()
-        savefig(savefile.replace('pc_l23','pc'))
+        if not savefile is None:
+            savefig(savefile.replace('pc_l23','pc'))
 
 class pc_csi_bars(fig_gen):
     # class to generate figure of csi bars
-    def __init__(self,data_obj,mi_type='mi'):
+    def __init__(self,data_obj,mi_type='mi', save=True):
         opt = {}
         opt['filebase'] = 'figures/%s_csi_bars_%s.jpg'
         opt['rsexpt_inds'] = [1,0]#(lbls[itype],alignment_lbls[ialign])
@@ -959,7 +967,7 @@ class pc_csi_bars(fig_gen):
         elif mi_type == 'slope':
             opt['attr_args'][0] = 'csislopes'
         opt['add_kwargs'] = {'usizes':[data_obj.usize[data_obj.csi_first_ind],data_obj.usize[data_obj.csi_last_ind]],'mi_type':mi_type}
-        super().__init__(opt,data_obj)
+        super().__init__(opt,data_obj, save=save)
     def single_fn(self,csimis,colors,full_celltype_lbl,savefile,usizes=[5,36],mi_type='mi'):
         plt.figure(figsize=(2.5,2.5))
         plot_bar_with_dots(csimis,colors)
@@ -973,7 +981,8 @@ class pc_csi_bars(fig_gen):
         plt.xlim((-1,1))
         ut.erase_top_right()
         plt.tight_layout()
-        savefig(savefile.replace('pc_l23','pc'))
+        if not savefile is None:
+            savefig(savefile.replace('pc_l23','pc'))
 
 def plot_bar_with_dots(smimi,colors=None,epsilon=0.05,alpha=0.5,pct=(16,84)):
     # plot a series of bars (smimi can be a list), where the top of the 
@@ -993,12 +1002,13 @@ def plot_bar_with_dots(smimi,colors=None,epsilon=0.05,alpha=0.5,pct=(16,84)):
         _,p = sst.wilcoxon(data[~np.isnan(data)])
         print('p-value: %f'%p)
 
-def bootstrap_opaque_plot_transparent(x,Y,colors,savefile=None,alpha=0.2):
+def bootstrap_opaque_plot_transparent(x,Y,colors,savefile=None,alpha=0.2,new_fig=True):
     # plot transparent lines, indicating indiv. imaging sessions, with opacity
     # alpha, and bold lines, indicating average across sessions.
     # Y vs x
-    plt.figure(figsize=(2.5,2.5))
-    plt.plot(x,Y.T,alpha=0.2,c=colors)
+    if new_fig:
+        plt.figure(figsize=(2.5,2.5))
+    plt.plot(x,Y.T,alpha=alpha,c=colors)
     ut.plot_bootstrapped_errorbars_hillel(x,Y[:,np.newaxis],pct=(16,84),colors=colors[np.newaxis])
     ut.erase_top_right()
 
@@ -1212,14 +1222,14 @@ def compute_diff_avg(zdata,axis=0):
     slicer = [slice(None) for idim in range(len(zdata.shape))]
     for axind in [0,-1]:
         slicer[axis] = axind
-        zdata_diff_avg[slicer] = zdata_diff[slicer]
+        zdata_diff_avg[tuple(slicer)] = zdata_diff[tuple(slicer)]
     slicer1 = slicer.copy()
     slicer1[axis] = slice(1,-1)
     slicer2 = slicer.copy()
     slicer2[axis] = slice(None,-1)
     slicer3 = slicer.copy()
     slicer3[axis] = slice(1,None)
-    zdata_diff_avg[slicer1] = 0.5*zdata_diff[slicer2]+0.5*zdata_diff[slicer3]
+    zdata_diff_avg[tuple(slicer1)] = 0.5*zdata_diff[tuple(slicer2)]+0.5*zdata_diff[tuple(slicer3)]
     return zdata_diff_avg
 
 def compute_slope_avg(tdata,zdata,axis=0):
@@ -1235,12 +1245,12 @@ def compute_slope_avg(tdata,zdata,axis=0):
     slicer = [slice(None) for idim in range(len(zdata.shape))]
     for axind in [0,-1]:
         slicer[axis] = axind
-        zdata_slope_avg[slicer] = zdata_slope[slicer]
+        zdata_slope_avg[tuple(slicer)] = zdata_slope[tuple(slicer)]
     slicer1 = slicer.copy()
     slicer1[axis] = slice(1,-1)
     slicer2 = slicer.copy()
     slicer2[axis] = slice(None,-1)
     slicer3 = slicer.copy()
     slicer3[axis] = slice(1,None)
-    zdata_slope_avg[slicer1] = 0.5*zdata_slope[slicer2]+0.5*zdata_slope[slicer3]
+    zdata_slope_avg[tuple(slicer1)] = 0.5*zdata_slope[tuple(slicer2)]+0.5*zdata_slope[tuple(slicer3)]
     return zdata_slope_avg

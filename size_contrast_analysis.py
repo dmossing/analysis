@@ -29,6 +29,9 @@ blspan = 3000
 nbefore = 4
 nafter = 4
 
+default_dot_scale = 10
+default_colormap = plt.cm.viridis
+
 def get_nbydepth(datafiles):
     nbydepth = np.zeros((len(datafiles),))
     for i,datafile in enumerate(datafiles):
@@ -694,7 +697,9 @@ def show_size_contrast(arr,show_labels=True,usize=np.array((5,8,13,22,36,60)),uc
         plt.xlabel('contrast (%)')
         plt.ylabel('size ($^o$)')
 
-def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,edgecolors='k'):
+def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,
+        square=True,equate_0=False,dot_scale=10,colormap=plt.cm.viridis,mn=None,
+        mx=None,edgecolors='k', dot_size_offset=0):
     if len(y1.shape)==2:
         nsize,ncontrast = y1.shape
     z = [y.reshape((nsize,ncontrast)) for y in [y1,y2]]
@@ -709,9 +714,11 @@ def scatter_size_contrast(y1,y2,nsize=5,ncontrast=6,alpha=1,equality_line=True,s
         z = [z[idim][:,1:] for idim in range(2)]
         colors = colors[1:]
     if equate_0:
-        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*dot_scale,alpha=alpha,edgecolors=edgecolors,linewidths=1)
+        plt.scatter(zero[0],zero[1],c=zero_color,s=(nsize+1)*dot_scale + dot_size_offset,alpha=alpha,
+            edgecolors=edgecolors,linewidths=1)
     for s in range(nsize):
-        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*dot_scale,alpha=alpha,edgecolors=edgecolors,linewidths=1)
+        plt.scatter(z[0][s],z[1][s],c=colors,s=(s+1)*dot_scale + dot_size_offset,alpha=alpha,
+            edgecolors=edgecolors,linewidths=1)
     if equality_line:
         plt.plot((mn,mx),(mn,mx),c='k')
     if square:
@@ -747,25 +754,167 @@ def scatter3d_size_contrast(y1,y2,y3,nsize=5,ncontrast=6,alpha=1,equality_line=T
         ax.set_ylim((mn-wiggle,mx+wiggle))
         ax.set_zlim((mn-wiggle,mx+wiggle))
 
-def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1,edgecolors='k'):
-    def compute_mean_sem(x):
-        xmean = np.nanmean(x,0)
-        n_non_nan = np.sum(~np.isnan(x),0)
-        xsem = np.nanstd(x,0)/np.sqrt(n_non_nan)
-        return xmean,xsem
-    def compute_mean_sem_zero_nonzero(x):
-        xmean,xsem = compute_mean_sem(x)
-        lkat = ~np.isnan(xsem[:,0])
-        xmean[lkat,0] = np.nanmean(xmean[lkat,0])
-        xsem[lkat,0] = np.sqrt(np.nansum(xsem[lkat,0]**2))/np.sum(lkat)
-        return xmean,xsem
-    if equate_0:
-        xmean,xsem = compute_mean_sem_zero_nonzero(x)
-        ymean,ysem = compute_mean_sem_zero_nonzero(y)
+def equate_0_contrast(x):
+    processed_x = x.copy()
+    processed_x[:, :, 0] = np.nanmean(x[:, :, 0], 1)[:, None]
+    return processed_x
+
+def run_bootstrap(processed_x, fn=np.nanmean, axis=0, bs_nreps=1000, bs_pct=(16, 84)):
+    return ut.bootstrap(processed_x, fn=np.nanmean, axis=axis, 
+        nreps=bs_nreps, pct=(50,) + bs_pct)
+
+def run_bootstrap_min(processed_x1, processed_x2, axis=0, bs_nreps=1000, bs_pct=(16, 84)):
+    return ut.bootstrap_min(processed_x1, processed_x2, axis=axis, 
+        nreps=bs_nreps, pct=(50,) + bs_pct)
+
+def scatter_size_contrast_errorbar(x,y,equality_line=True,square=True,equate_0=False,
+        nsize=5,ncontrast=6,dot_scale=default_dot_scale,colormap=default_colormap,mn=None,mx=None,
+        alpha=1,edgecolors='k', use_bootstrap=False, bs_nreps=1000, bs_pct=(16, 84), dot_size_offset=0):
+    if use_bootstrap:
+        assert(len(bs_pct) == 2)
+        processed_x, processed_y = x.copy(), y.copy()
+        if equate_0:
+            # set all the 0 contrasts to the mean of the 0 contrasts
+            (processed_x, processed_y) = (
+                equate_0_contrast(processed_x), equate_0_contrast(processed_y)
+                )
+        (bootstrapped_x, bootstrapped_y) = (
+            run_bootstrap(processed_x), run_bootstrap(processed_y)
+        )
+        xmean, xlower, xupper = bootstrapped_x
+        ymean, ylower, yupper = bootstrapped_y
+        xerr = ut.errors_from_mean_lower_upper(*bootstrapped_x)
+        yerr = ut.errors_from_mean_lower_upper(*bootstrapped_y)
+        plt.errorbar(xmean.flatten(),ymean.flatten(),xerr=xerr.reshape((2, -1)), 
+            yerr=yerr.reshape((2, -1)),fmt='none',c='k',zorder=1,alpha=alpha)
     else:
-        xmean,xsem = compute_mean_sem(x)
-        ymean,ysem = compute_mean_sem(y)
-    plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1,alpha=alpha)
+        def compute_mean_sem(x):
+            xmean = np.nanmean(x,0)
+            n_non_nan = np.sum(~np.isnan(x),0)
+            xsem = np.nanstd(x,0)/np.sqrt(n_non_nan)
+            return xmean,xsem
+        def compute_mean_sem_zero_nonzero(x):
+            xmean,xsem = compute_mean_sem(x)
+            lkat = ~np.isnan(xsem[:,0])
+            xmean[lkat,0] = np.nanmean(xmean[lkat,0])
+            xsem[lkat,0] = np.sqrt(np.nansum(xsem[lkat,0]**2))/np.sum(lkat)
+            return xmean,xsem
+        if equate_0:
+            xmean,xsem = compute_mean_sem_zero_nonzero(x)
+            ymean,ysem = compute_mean_sem_zero_nonzero(y)
+        else:
+            xmean,xsem = compute_mean_sem(x)
+            ymean,ysem = compute_mean_sem(y)
+        plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1,alpha=alpha)
+    scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,
+        equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale, dot_size_offset=dot_size_offset,
+        colormap=colormap,mn=mn,mx=mx,alpha=alpha,edgecolors=edgecolors)
+
+def truncate_with_rg(default_len, rg):
+    this_len = default_len
+    if not rg[0] is None and rg[0] > 0:
+        this_len = this_len - rg[0]
+    if not rg[1] is None and rg[1] < default_len:
+        # use modulo to handle negative indices
+        rg1_mod = rg[1] % default_len
+        this_len = this_len - (default_len - rg1_mod)
+    return this_len
+
+def relative_to_absolute_rg(default_len, rg):
+    rg0 = (rg[0] % default_len) if not rg[0] is None else 0
+    rg1 = (rg[1] % default_len) if ((not rg[1] is None) and (not rg[1] is default_len)) else default_len
+    return rg0, rg1
+
+def rescale_with_rg(default_len, rg):
+    linspace_gap = 1 / (default_len - 1)
+    this_len = truncate_with_rg(default_len, rg)
+    rg0, rg1 = relative_to_absolute_rg(default_len, rg)
+    assert (rg1 - rg0) == this_len
+    this_xtransform = lambda x: rg0 * linspace_gap + (this_len - 1) / (default_len - 1) * x
+    return this_xtransform
+
+
+def scatter_size_contrast_errorbar_rg(x, y, **kwargs):
+    if not 'nsize' in kwargs:
+        kwargs['nsize'] = x.shape[-2]
+    if not 'ncontrast' in kwargs:
+        kwargs['ncontrast'] = x.shape[-1]
+
+    if 'colormap' in kwargs:
+        colormap = kwargs['colormap']
+    else:
+        colormap = default_colormap
+
+    if 'isize' in kwargs:
+
+        isize = kwargs['isize']
+        del kwargs['isize']
+
+        dot_size_offset = (isize) * default_dot_scale
+        kwargs['dot_size_offset'] = dot_size_offset
+
+    if 'icontrast' in kwargs:
+        assert('ncontrast' in kwargs)
+
+        icontrast = kwargs['icontrast']
+        del kwargs['icontrast']
+
+        ncontrast = kwargs['ncontrast']
+        this_colormap = lambda x: colormap(np.linspace(0, 1, ncontrast))[icontrast]
+        kwargs['colormap'] = this_colormap
+    
+    if 'size_rg' in kwargs:
+        assert('nsize' in kwargs)
+
+        size_rg = kwargs['size_rg']
+        del kwargs['size_rg']
+
+        nsize = kwargs['nsize']
+        rg0, rg1 = relative_to_absolute_rg(nsize, size_rg)
+        kwargs['dot_size_offset'] = default_dot_scale * rg0
+        kwargs['nsize'] = truncate_with_rg(nsize, size_rg)
+        
+    
+    if 'contrast_rg' in kwargs:
+        # new colormap maps range(0, ncontrast-1) to range(1,ncontrast)
+        assert('ncontrast' in kwargs)
+
+        ncontrast = kwargs['ncontrast']
+
+        contrast_rg = kwargs['contrast_rg']
+        del kwargs['contrast_rg']
+
+        this_ncontrast = truncate_with_rg(ncontrast, contrast_rg)
+        rescale_fn = rescale_with_rg(ncontrast, contrast_rg)
+        this_colormap = lambda x: colormap(rescale_fn(x))
+        kwargs['colormap'] = this_colormap
+
+    scatter_size_contrast_errorbar(x, y, **kwargs)
+
+def scatter_size_contrast_min_errorbar(x,ys,equality_line=True,square=True,
+        equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,
+        mn=None,mx=None,alpha=1,edgecolors='k', use_bootstrap=True, bs_pct=(16, 84)):
+    if not use_bootstrap:
+        raise Exception('only bootstrap implemented')
+    assert(len(bs_pct) == 2)
+    processed_x, processed_ys = x.copy(), [y.copy() for y in ys]
+    if equate_0:
+        # set all the 0 contrasts to the mean of the 0 contrasts
+        (processed_x, processed_ys) = (
+            equate_0_contrast(processed_x), [
+                equate_0_contrast(processed_y) for processed_y in processed_ys
+            ]
+        )
+    (bootstrapped_x, bootstrapped_y) = (
+        run_bootstrap(processed_x), run_bootstrap_min(*processed_ys)
+    )
+    xmean, xlower, xupper = bootstrapped_x
+    ymean, ylower, yupper = bootstrapped_y
+    xerr = ut.errors_from_mean_lower_upper(*bootstrapped_x)
+    yerr = ut.errors_from_mean_lower_upper(*bootstrapped_y)
+    plt.errorbar(xmean.flatten(),ymean.flatten(),xerr=xerr.reshape((2, -1)), 
+        yerr=yerr.reshape((2, -1)),fmt='none',c='k',zorder=1,alpha=alpha)
+    # plt.errorbar(xmean.flatten(),ymean.flatten(),yerr=ysem.flatten(),xerr=xsem.flatten(),fmt='none',c='k',zorder=1,alpha=alpha)
     scatter_size_contrast(xmean,ymean,equality_line=equality_line,square=square,equate_0=equate_0,nsize=nsize,ncontrast=ncontrast,dot_scale=dot_scale,colormap=colormap,mn=mn,mx=mx,alpha=alpha,edgecolors=edgecolors)
 
 def scatter_size_contrast_pct_errorbar(x,y,equality_line=True,square=True,equate_0=False,nsize=5,ncontrast=6,dot_scale=10,colormap=plt.cm.viridis,mn=None,mx=None,alpha=1):

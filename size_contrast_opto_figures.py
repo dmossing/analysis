@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-
+# %%
 import numpy as np
 import pyute as ut
 import opto_utils
@@ -101,25 +101,43 @@ def compute_summary_sc_aligned(tuning,exptlist,displacement,cands=None,other_can
         expt_ids_aligned = np.concatenate((expt_ids_aligned,iexpt*np.ones((scs[this_ipart][centered & unlabeled].shape[0],))))
     return scbig_aligned,scanimal_aligned,semanimal_aligned,expt_ids_aligned
 
-def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,save_string='',**opt):
+def compute_mis(xdata_norm, ydata_norm, average=False, norm_first=False, mi_fn=scf.smi_fn):
+    if norm_first:
+        this_xdata_norm, this_ydata_norm = norm_x_y(xdata_norm, ydata_norm)
+    else:
+        this_xdata_norm, this_ydata_norm = xdata_norm, ydata_norm
+    mi = np.stack([mi_fn(x[:,:,:,np.newaxis]) for x in preprocess(this_xdata_norm,this_ydata_norm,average=average)],axis=-1)
+    return mi
+
+def compute_mimis(xdata_norm, ydata_norm, first_ind=0, average=False, norm_first=False, mi_fn=scf.smi_fn, **opt):
+    mi = compute_mis(xdata_norm, ydata_norm, average=average, norm_first=norm_first, mi_fn=mi_fn)
+    mimis = compute_slopes(mi, first_ind=first_ind, **opt)
+    return mimis
+
+def plot_mimi_bars_with_lines(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,save_string='',save=True,**opt):
     # make a bar plot, one black bar indicating metric with light off (calculated on xdata_norm)
     # and one colorful bar (c) indicating metric with light on (calculated on ydata_norm)
     # transparent lines indicate individual model fits
     # metric is computed using mi_fn
     # first_ind refers to the first index to use when computing the modulation index on the metric (here, slope)
     # 'average' indicates whether to average across model fits before plotting
+
     mi = np.stack([mi_fn(x[:,:,:,np.newaxis]) for x in preprocess(xdata_norm,ydata_norm,average=average)],axis=-1)
     mimis = compute_slopes(mi,first_ind=first_ind,**opt)
+
+    # mimis = compute_mimis(xdata_norm,ydata_norm,first_ind=first_ind,average=average,**opt)
+
     plt.figure(figsize=(2.5,2.5))
     colors = [np.array((0,0,0))[np.newaxis],c[np.newaxis]]
     ut.plot_bars_with_lines(mimis,colors=colors,alpha=0.05,errorstyle='pct')
     ut.erase_top_right()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
     _,p = sst.wilcoxon(mimis[:,0],mimis[:,1])
     print('p-value: '+str(p))
     print('%d/%d higher'%((mimis[:,1]>mimis[:,0]).sum(),mimis.shape[0]))
 
-def plot_mi_errorbars(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,log_xaxis=True,xaxis=None,save_string=''):
+def plot_mi_errorbars(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,average=False,log_xaxis=True,xaxis=None,save_string='',save=True):
     # make error bar plot, one black curve indicating metric with light off (calculated on xdata_norm)
     # and one colorful curve (c) indicating metric with light on (calculated on ydata_norm)
     # metric is computed using mi_fn
@@ -135,7 +153,8 @@ def plot_mi_errorbars(xdata_norm,ydata_norm,mi_fn=scf.smi_fn,first_ind=0,c=None,
             xaxis = np.arange(to_plot.shape[2])
         ut.plot_pct_errorbars_hillel(xaxis,to_plot,colors=color,pct=(16,84))#,markersize=10)
     ut.erase_top_right()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
 
 def gen_stim_light_df(arr):
     arr = arr[np.sum(np.sum(arr>0,-1),-1)>0]
@@ -213,7 +232,7 @@ def gen_size_contrast_light_df(arr):
     
     return df_is_nan,df_non_nan
 
-def scatter_size_contrast_x_dx(xdata_norm,ydata_norm,ylim=(-0.12,0.8),save_string='',c=None):
+def scatter_size_contrast_x_dx(xdata_norm,ydata_norm,ylim=(-0.12,0.8),save_string='',c=None,save=True):
     plt.figure(figsize=(2.5,2.5))
     sca.scatter_size_contrast_errorbar(xdata_norm,ydata_norm-xdata_norm,equality_line=False,square=False)
     plt.axhline(0,c='k',linestyle='dashed')
@@ -223,7 +242,8 @@ def scatter_size_contrast_x_dx(xdata_norm,ydata_norm,ylim=(-0.12,0.8),save_strin
     plt.xlabel('baseline SST firing rate/mean')
     plt.ylabel('$\Delta$ SST firing rate/mean, \n VIP silencing')
     plt.tight_layout()
-    do_saving(save_string)
+    if save:
+        do_saving(save_string)
 
 def plot_size_tuning_errorbars(xdata_norm,ydata_norm,c=None,these_contrasts=[1,5],bfactors=[0.5,1],ylim=None,save_string='',log_xaxis=False,save=True):
     usize = np.array((5,8,13,25,36,60))
@@ -341,7 +361,21 @@ def plot_csimi_bars_with_lines(xdata_norm,ydata_norm,c=None,save_string='',save=
     if save:
         do_saving(save_string)
 
-def run_mi_plotting(network_resps,target_bin,plot_mi_fn=plot_smi_errorbars,plot_mi_lbl='pc_smi_vs_contrast_l4',ext='eps',iconns=[0,2,3,4],itype=0,opt={}):
+def norm_x_y(xdata, ydata):
+    ydata_norm = ydata/xdata.mean(1).mean(1)[:,np.newaxis,np.newaxis]
+    xdata_norm = xdata/xdata.mean(1).mean(1)[:,np.newaxis,np.newaxis]
+    return xdata_norm, ydata_norm
+
+def run_mi_plotting(
+        network_resps,
+        target_bin,
+        plot_mi_fn=plot_smi_errorbars,
+        plot_mi_lbl='pc_smi_vs_contrast_l4',
+        ext='eps',
+        iconns=[0,2,3,4],
+        itype=0,
+        **opt
+    ):
     # run a plotting function e.g. plot_mi_errorbars, or plot_mimi_bars_with_lines
     # on each of many opto stim directions, and many perturbations of the modeled network
     # with a given desired metric, plotting the outcome of that metric on PCs
@@ -355,16 +389,21 @@ def run_mi_plotting(network_resps,target_bin,plot_mi_fn=plot_smi_errorbars,plot_
     conn_lbls = ['baseline','pcpc_deleted','pcpv_deleted','pcvip_deleted','pcsst_deleted','']
     cs = [np.array((1,0.8,0)),np.array((1,0,0))]
     for iconn in iconns:#[0,2,3,4]:
-        ihigh = int(np.round(np.mean(target_bin[lkat])))#np.minimum(np.maximum(target_bin[lkat],0),20)#np.maximum(target_bin[lkat]-2,15)#ilight_drmax[2][iconn][lkat]
-        ilow = ihigh#30-ihigh#4#ilight_drmax[1][iconn][lkat]
+        if isinstance(target_bin, tuple):
+            ilow = int(np.round(np.mean(target_bin[0][lkat])))
+            ihigh = int(np.round(np.mean(target_bin[1][lkat])))#np.minimum(np.maximum(target_bin[lkat],0),20)#np.maximum(target_bin[lkat]-2,15)#ilight_drmax[2][iconn][lkat]
+        else:
+            ihigh = int(np.round(np.mean(target_bin[lkat])))#np.minimum(np.maximum(target_bin[lkat],0),20)#np.maximum(target_bin[lkat]-2,15)#ilight_drmax[2][iconn][lkat]
+            ilow = ihigh#30-ihigh#4#ilight_drmax[1][iconn][lkat]
         idir = 0
         xdata = network_resps[idir][iconn][lkat][:,ibaseline,:,itype].reshape((-1,6,6))
-        xdata_norm = xdata/xdata.mean(1).mean(1)[:,np.newaxis,np.newaxis]
+        # xdata_norm = xdata/xdata.mean(1).mean(1)[:,np.newaxis,np.newaxis]
         ylims = [None,None]
         for idir,ilight,light_lbl,c,ylim in zip([1,2],[ilow,ihigh],light_lbls,cs,ylims):
             #ydata = network_resps[idir][iconn][lkat][:,:,:,itype][np.arange(lkat.sum()),ilight].reshape((-1,6,6))
             ydata = network_resps[idir][iconn][lkat][:,ilight,:,itype].reshape((-1,6,6))
-            ydata_norm = ydata/xdata.mean(1).mean(1)[:,np.newaxis,np.newaxis]
+            xdata_norm, ydata_norm = norm_x_y(xdata, ydata)
+            # ydata_norm = ydata/xdata.mean(1).mean(1)[:,np.newaxis,np.newaxis]
             save_string = 'figures/%s_%s_%s.%s'%(plot_mi_lbl,light_lbl,conn_lbls[iconn],ext)
             opt['c'] = cs[idir-1]
             opt['save_string'] = save_string
@@ -376,3 +415,12 @@ def do_saving(save_string):
             plt.savefig(save_string,dpi=300)
         else:
             plt.savefig(save_string)
+
+def compute_df_wrapper(dsfile='', keylist=[]):
+    df,roi_info,trial_info = ut.compute_tavg_dataframe(dsfile,expttype='size_contrast_opto_0',keylist=keylist)
+    output = {
+        'df':df,
+        'roi_info':roi_info,
+        'trial_info':trial_info
+    }
+    return output

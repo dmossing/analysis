@@ -192,7 +192,7 @@ def show_roi_boundaries(red_green,msk,ctr=None,frame_width=25,show_outline=True)
     
 def norm_to_mean_light_off(sc):
     ndim = len(sc.shape)
-    slicer = [slice(None) for idim in range(ndim)]
+    # slicer = [slice(None) for idim in range(ndim)]
     mean_light_off = sc.copy()
     while len(mean_light_off.shape)>2:
         mean_light_off = np.nanmean(mean_light_off,1)
@@ -275,7 +275,7 @@ def sort_by_pref_dir(rs,ori_axis=3):
         for iroi in range(nroi):
             order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
             slicer[ori_axis-1] = order
-            rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
+            rs_sort[ir][iroi] = rs_sort[ir][iroi][tuple(slicer)]
     return rs_sort
 
 def sort_both_by_pref_dir(rs,other,ori_axis=3,return_pref_dir=False):
@@ -322,10 +322,10 @@ def sort_all_by_pref_dir(rs,*others,return_pref_dir=False):
         for iroi in range(nroi):
             order = np.array(list(np.arange(pref_dir[ir][iroi],nori))+list(np.arange(0,pref_dir[ir][iroi])))
             slicer[ori_axis-1] = order
-            rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
+            rs_sort[ir][iroi] = rs_sort[ir][iroi][tuple(slicer)]
             for iother in range(len(others)):
                 other_slicers[iother][other_ori_axes[iother]-1] = order
-                others_sort[iother][ir][iroi] = others_sort[iother][ir][iroi][other_slicers[iother]]
+                others_sort[iother][ir][iroi] = others_sort[iother][ir][iroi][tuple(other_slicers[iother])]
     if not return_pref_dir:
         return [rs_sort]+others_sort
     else:
