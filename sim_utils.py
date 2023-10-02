@@ -16,8 +16,9 @@ import size_contrast_analysis as sca
 import scipy.stats as sst
 
 default_running_pct_cutoff = 0.4
+default_run_speed_cutoff = 10
 
-def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,fill_nans_under_cutoff=False):
+def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,fill_nans_under_cutoff=False,run_speed_cutoff=default_run_speed_cutoff):
     # take in an HDF5 data struct, and convert to an n-dimensional matrix
     # describing the tuning curve of each neuron. For size-contrast stimuli, 
     # the dimensions of this matrix are ROI index x size x contrast x direction x time. 
@@ -40,9 +41,9 @@ def compute_tuning(dsfile,datafield='decon',running=True,expttype='size_contrast
                 nbefore = sc0['nbefore'][()]
                 nafter = sc0['nafter'][()]
                 if running:
-                    trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>10 #
+                    trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)>run_speed_cutoff #
                 else:
-                    trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)<10
+                    trialrun = sc0['running_speed_cm_s'][:,nbefore:-nafter].mean(-1)<run_speed_cutoff
                 #print(sc0['running_speed_cm_s'].shape)
                 print(np.nanmean(trialrun))
                 if np.nanmean(trialrun)>running_pct_cutoff:
@@ -110,7 +111,7 @@ def get_ret_info(dsfile,expttype='size_contrast_0'):
                             'ret_map_loc':ret_map_loc,'amplitude':amplitude}
     return ret_info
 
-def compute_tunings(dsnames,datafield='decon',running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,fill_nans_under_cutoff=False):
+def compute_tunings(dsnames,datafield='decon',running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,fill_nans_under_cutoff=False,run_speed_cutoff=default_run_speed_cutoff):
     # compute tuning as above, for each of a list of HDF5 files each corresponding to a particular cell type
     tunings = []
     uparams = []
@@ -118,7 +119,7 @@ def compute_tunings(dsnames,datafield='decon',running=True,expttype='size_contra
     pvals = []
     for dsname in dsnames:
         print(dsname)
-        this_tuning,this_uparam,this_displacement,this_pval = compute_tuning(dsname,datafield=datafield,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,fill_nans_under_cutoff=fill_nans_under_cutoff)
+        this_tuning,this_uparam,this_displacement,this_pval = compute_tuning(dsname,datafield=datafield,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,fill_nans_under_cutoff=fill_nans_under_cutoff,run_speed_cutoff=run_speed_cutoff)
         tunings.append(this_tuning)
         uparams.append(this_uparam)
         displacements.append(this_displacement)
@@ -239,7 +240,7 @@ def gen_rspatial(dsnames=None,selection=None,dcutoffs=[0,5,10,15],pval_cutoff=0.
             rs[icelltype].append(raligned)
     return rs
 
-def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff):
+def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,fill_nans_under_cutoff=False,run_speed_cutoff=default_run_speed_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -250,7 +251,7 @@ def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,ru
     nbefore = 8
     nafter = 8
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,fill_nans_under_cutoff=fill_nans_under_cutoff,run_speed_cutoff=default_run_speed_cutoff)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -274,7 +275,7 @@ def gen_rs(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,slices=None,ru
         rs.append([raligned,rmisaligned])
     return rs
 
-def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff):
+def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,modal_uparam=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,run_speed_cutoff=default_run_speed_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -285,7 +286,7 @@ def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,m
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,run_speed_cutoff=default_run_speed_cutoff)
     
     rs = []
     for icelltype in range(len(tunings)):
@@ -321,7 +322,7 @@ def gen_rs_modal_uparam(dsnames=None,selection=None,dcutoff=5,pval_cutoff=0.05,m
         rs.append(this_rs)
     return rs
 
-def gen_rs_modal_uparam_all(dsnames=None,selection=None,modal_uparam=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff):
+def gen_rs_modal_uparam_all(dsnames=None,selection=None,modal_uparam=None,running=True,expttype='size_contrast_0',running_pct_cutoff=default_running_pct_cutoff,run_speed_cutoff=default_run_speed_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -332,7 +333,7 @@ def gen_rs_modal_uparam_all(dsnames=None,selection=None,modal_uparam=None,runnin
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,run_speed_cutoff=default_run_speed_cutoff)
     nrois = look_up_nrois(dsnames)
     
     rs = []
@@ -380,7 +381,7 @@ def gen_rs_modal_uparam_ori(dsnames=None,selection=None,modal_uparam=None,runnin
     
     nparam = np.array([mu.shape[0] for mu in modal_uparam])
         
-    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype)
+    tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,run_speed_cutoff=default_run_speed_cutoff)
     nrois = look_up_nrois(dsnames)
     
     #aligned = [include_aligned(d,dcutoff,p,pval_cutoff,less=True) for d,p in zip(these_displacements,these_pvals)]
@@ -428,7 +429,7 @@ def gen_rs_modal_uparam_ori(dsnames=None,selection=None,modal_uparam=None,runnin
         displacements.append(this_displacement)
     return rs,rexpts,displacements
 
-def gen_rs_modal_uparam_ori_behavior(dsnames=None,selection=None,modal_uparam=None,expttype='size_contrast_0',running_pct_cutoff=0.2):
+def gen_rs_modal_uparam_ori_behavior(dsnames=None,selection=None,modal_uparam=None,expttype='size_contrast_0',running_pct_cutoff=0.2,run_speed_cutoff=default_run_speed_cutoff):
     # same specifically for case of two spatial pixels
     if dsnames is None:
         dsnames = default_dsnames()
@@ -445,7 +446,7 @@ def gen_rs_modal_uparam_ori_behavior(dsnames=None,selection=None,modal_uparam=No
     displacements = [[] for irun in range(len(runnings))]
         
     for irun,running in enumerate(runnings):
-        tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,fill_nans_under_cutoff=True)
+        tunings,uparams,displacements,pvals = compute_tunings(dsnames,running=running,expttype=expttype,running_pct_cutoff=running_pct_cutoff,fill_nans_under_cutoff=True,run_speed_cutoff=default_run_speed_cutoff)
         nrois = look_up_nrois(dsnames)
     
         for icelltype in range(len(tunings)):
@@ -601,13 +602,21 @@ def assign_from_uparam(modal,modal_uparam,this,this_uparam):
 #         a = a[slc]
 #     return a
 
-def gen_size_tuning(sc):
+def gen_size_tuning(sc,combiner=np.nanmean):
     # sc: (nroi,nsize,ncontrast)
     # add 0% contrast stimulus as if it were a 0 degree size
-    gray = np.tile(np.nanmean(sc[:,:,0],1)[:,np.newaxis,np.newaxis],(1,1,sc.shape[2]))
+    gray = np.tile(combiner(sc[:,:,0],axis=1)[:,np.newaxis,np.newaxis],(1,1,sc.shape[2]))
     to_plot = np.concatenate((gray,sc),axis=1)
     print(to_plot.shape)
     return to_plot
+
+def gen_size_tuning_sem(sc_sem):
+    # sc_sem: (nroi,nsize,ncontrast)
+    # add 0% contrast stimulus as if it were a 0 degree size
+    # combine sems as sqrt(mean(sc_sem**2))
+    def combiner(sem,axis=1):
+        return np.sqrt(np.nanmean(sem**2,axis=axis))
+    return gen_size_tuning(sc_sem,combiner=combiner)
 
 def plot_size_tuning_by_contrast(arr):
     usize = np.array((0,5,8,13,22,36))

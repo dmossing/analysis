@@ -1,4 +1,4 @@
-function fold_smooth_eye_tracks(foldname,dry_run,filt_area,filt_ctr)
+function fold_smooth_eye_tracks(foldname,dry_run,filt_area,filt_ctr,nsm)
 if nargin < 2
     dry_run = false;
 end
@@ -7,6 +7,9 @@ if nargin < 3
 end
 if nargin < 4
     filt_ctr = 9;
+end
+if nargin < 5
+    nsm = 3;
 end
 d = dir(foldname);
 forbidden = {'.','..','Duplicate','.DS_Store','new_tree'};
@@ -19,7 +22,12 @@ if ~dry_run
                 tic
                 load([foldname '/eye_tracking_' d(i).name '.mat'],'ctr','area','props','ctr2','area2','props2','hulls');
                 toc
-                [ctr_sm,area_sm] = smooth_eye_tracks(thisfold,props2,filt_area,filt_ctr);
+                props3 = props2;
+                for ism=1:nsm
+                    [ctr_sm,area_sm] = smooth_eye_tracks(thisfold,props3,filt_area,filt_ctr);
+                    props3(:,3) = area_sm;
+                    props3(:,4:5) = ctr_sm;
+                end
                 save([foldname '/eye_tracking_' d(i).name '.mat'],'ctr_sm','area_sm','-append')
             end
         end

@@ -192,7 +192,7 @@ def show_roi_boundaries(red_green,msk,ctr=None,frame_width=25,show_outline=True)
     
 def norm_to_mean_light_off(sc):
     ndim = len(sc.shape)
-    slicer = [slice(None) for idim in range(ndim)]
+    # slicer = [slice(None) for idim in range(ndim)]
     mean_light_off = sc.copy()
     while len(mean_light_off.shape)>2:
         mean_light_off = np.nanmean(mean_light_off,1)
@@ -275,11 +275,11 @@ def sort_by_pref_dir(rs,ori_axis=3):
         for iroi in range(nroi):
             order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
             slicer[ori_axis-1] = order
-            rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
+            rs_sort[ir][iroi] = rs_sort[ir][iroi][tuple(slicer)]
     return rs_sort
 
-def sort_both_by_pref_dir(rs,other,ori_axis=3):
-    return sort_all_by_pref_dir((rs,ori_axis),(other,ori_axis))
+def sort_both_by_pref_dir(rs,other,ori_axis=3,return_pref_dir=False):
+    return sort_all_by_pref_dir((rs,ori_axis),(other,ori_axis),return_pref_dir=return_pref_dir)
     #rs_sort = rs.copy()
     #other_sort = other.copy()
     #for ir in range(len(rs_sort)):
@@ -301,8 +301,9 @@ def sort_both_by_pref_dir(rs,other,ori_axis=3):
     #        other_sort[ir][iroi] = other_sort[ir][iroi][slicer]
     #return rs_sort,other_sort
 
-def sort_all_by_pref_dir(rs,*others):
+def sort_all_by_pref_dir(rs,*others,return_pref_dir=False):
     rs_sort = rs[0].copy()
+    pref_dir = [None for _ in rs_sort]
     ori_axis = rs[1]
     others_sort = [other[0].copy() for other in others]
     other_ori_axes = [other[1] for other in others]
@@ -315,17 +316,20 @@ def sort_all_by_pref_dir(rs,*others):
             rs_ori = np.nanmean(rs_ori,idim) #np.nanmean(rs_ori,1)
         nroi = rs_ori.shape[0]
         nori = rs_ori.shape[1]
-        pref_dir = np.argmax(rs_ori,axis=1)
+        pref_dir[ir] = np.argmax(rs_ori,axis=1)
         slicer = [slice(None) for idim in range(len(rs_sort[ir].shape)-1)]
         other_slicers = [[slice(None) for idim in range(len(other_sort[ir].shape)-1)] for other_sort in others_sort]
         for iroi in range(nroi):
-            order = np.array(list(np.arange(pref_dir[iroi],nori))+list(np.arange(0,pref_dir[iroi])))
+            order = np.array(list(np.arange(pref_dir[ir][iroi],nori))+list(np.arange(0,pref_dir[ir][iroi])))
             slicer[ori_axis-1] = order
-            rs_sort[ir][iroi] = rs_sort[ir][iroi][slicer]
+            rs_sort[ir][iroi] = rs_sort[ir][iroi][tuple(slicer)]
             for iother in range(len(others)):
                 other_slicers[iother][other_ori_axes[iother]-1] = order
-                others_sort[iother][ir][iroi] = others_sort[iother][ir][iroi][other_slicers[iother]]
-    return [rs_sort]+others_sort
+                others_sort[iother][ir][iroi] = others_sort[iother][ir][iroi][tuple(other_slicers[iother])]
+    if not return_pref_dir:
+        return [rs_sort]+others_sort
+    else:
+        return [rs_sort]+others_sort+[pref_dir]
 
 def fix_fg_dir(rs):
     rs_sort = rs.copy()
@@ -409,13 +413,14 @@ def compute_intercept_(animal_data,axis=0):
     y = np.reshape(y,(y.shape[0]*y.shape[1],-1))
     return compute_intercept(x,y,axis=axis)
 
-def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1,equate_0=False):
+def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=None,opto_color='b',
+        equality_line=True,square=True,xlabel=None,ylabel=None,alpha=1,equate_0=False,linewidth=1):
     if xlabel is None:
         xlabel = 'PC event rate, light off'
     if ylabel is None:
         ylabel = 'PC event rate, light on'
+    this_animal_data = animal_data.copy()
     if equate_0:
-        this_animal_data = animal_data.copy()
         this_animal_data[:,:,0] = animal_data[:,:,0].mean(1)[:,np.newaxis]
     lb,ub,mn = ut.bootstrap(this_animal_data,pct=pct+(50,),fn=np.nanmean,axis=0)
     stats = ut.bootstat(this_animal_data,fns=[compute_slope_w_intercept_,compute_intercept_])
@@ -439,26 +444,32 @@ def scatter_size_contrast_errorbar(animal_data,pct=(16,84),mn_plot=None,mx_plot=
     ub_YY = np.nanpercentile(YY,84,axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
     plt.fill_between(xx[:,0],lb_YY,ub_YY,alpha=0.5*alpha,facecolor=opto_color)
-    plt.plot(xx[:,0],mn_YY,c=opto_color,alpha=alpha)
+    plt.plot(xx[:,0],mn_YY,c=opto_color,alpha=alpha,linewidth=linewidth)
     plt.errorbar(mn[:,:,0].flatten(),mn[:,:,1].flatten(),xerr=xerr,yerr=yerr,fmt='none',zorder=1,c='k',alpha=0.5*alpha)
     sca.scatter_size_contrast(mn[:,:,0],mn[:,:,1],equality_line=equality_line,square=square,alpha=alpha,equate_0=equate_0)
     plt.xlabel(xlabel)
-    plt.ylabel(ylabel)
 
-def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,flipxy=False,xmin=None,xmax=None):
+def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=(16,84),incl_intercept=True,flipxy=False,\
+            xmin=None,xmax=None,linestyle='solid'):
     if xmin is None:
         xmin = animal_data.transpose()[0].min()
     if xmax is None:
         xmax = animal_data.transpose()[0].max()
     xx = np.linspace(xmin,xmax,101)
     if incl_intercept:
-        stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_,compute_intercept_],nreps=nreps)#,nreps=nreps)#_equal_cond
+        try:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_,compute_intercept_],nreps=nreps)#,nreps=nreps)#_equal_cond
+        except:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_w_intercept_cols,compute_intercept_cols],nreps=nreps)#,nreps=nreps)#_equal_cond
         #print('animal data shape: '+str(animal_data.shape))
         #print('stats shape: '+str([s.shape for s in stats]))
         #print(stats)
         YY = xx[:,np.newaxis]*stats[0]+stats[1]
     else:
-        stats = ut.bootstat(animal_data,fns=[compute_slope_],nreps=nreps)#_equal_cond
+        try:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_],nreps=nreps)#_equal_cond
+        except:
+            stats = ut.bootstat(animal_data,fns=[compute_slope_cols],nreps=nreps)#_equal_cond
         if flipxy:
             YY = xx[:,np.newaxis]*1/stats[0]
         else:
@@ -468,11 +479,17 @@ def plot_bootstrapped_regression_lines(animal_data,c='k',alpha=1,nreps=1000,pct=
     ub_YY = np.nanpercentile(YY,pct[1],axis=1)
     mn_YY = np.nanpercentile(YY,50,axis=1)
     #print((np.nanmean(lb_YY),np.nanmean(ub_YY)))
-    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
-    plt.plot(xx,mn_YY,c=c,alpha=alpha)
+    if not isinstance(c,list) or len(c) == 1:
+        plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
+        plt.plot(xx,mn_YY,c=c,alpha=alpha,linestyle=linestyle)
+    elif len(c) == 2:
+        for isign,this_sign in enumerate([xx < 0, xx >= 0]):
+            plt.fill_between(xx[this_sign],lb_YY[this_sign],ub_YY[this_sign],alpha=0.5*alpha,facecolor=c[isign])
+            plt.plot(xx[this_sign],mn_YY[this_sign],c=c[isign],alpha=alpha,linestyle=linestyle)
     #if flipxy:
     #else:
     #    plt.fill_between(xx,lb_YY,ub_YY,alpha=0.5*alpha,facecolor=c)
+    return stats
 
 def zip_pairs(list_of_pairs):
     lb = [lp[0] for lp in list_of_pairs]

@@ -9,7 +9,7 @@ import scipy.misc as smi
 import scipy.io as sio
 import h5py
 import scipy.ndimage.filters as sfi
-import oasis.functions as ofun
+# import oasis.functions as ofun
 #from oasis.functions import deconvolve
 import scipy.optimize as sop
 import scipy.ndimage.measurements as snm
@@ -24,9 +24,11 @@ from pympler import asizeof
 import sklearn.metrics as skm
 import sklearn
 import scipy.interpolate as sip
+from collections.abc import Callable
+import pickle
 
 def norm01(arr,dim=1):
-    # normalize each row of arr to [0,1]
+    # normalize each row of arr to [0,1] 
     dim = np.minimum(dim,len(arr.shape)-1)
     try:
         mnm = arr.min(dim)[:,np.newaxis]
@@ -70,6 +72,7 @@ def zscore(arr):
     return (arr-mn)/st
 
 def threeand(a,b,c):
+    # logical_and of three variables # equivalent to a & b & c
     return k_and(a,b,c)
 
 def print_multipage(args,fn,filename):
@@ -327,48 +330,6 @@ def resample(signal1,trig1,trig2):
         ptno2 = frametrig2[i+1]-frametrig2[i]
         signal2[frametrig2[i]:frametrig2[i+1]] = np.interp(np.linspace(0,1,ptno2),np.linspace(0,1,ptno1),signal1[frametrig1[i]:frametrig1[i+1]])
     return signal2[frametrig2[0]:frametrig2[-1]]
-
-def process_ca_traces(to_add,ds=10,blspan=3000,blcutoff=1,frm=None,nbefore=4,nafter=4,b_nonneg=True,g0=(None,),reestimate_noise=False,normalize_tavg=False):
-    # convert neuropil-corrected calcium traces to df/f. compute baseline as
-    # blcutoff percentile filter, over a moving window of blspan frame, down
-    # sampled by a factor of ds. Deconvolve using OASIS, and trialize
-    # b_nonneg: whether to constrain baseline to be nonnegative
-    # g0: if not none, pre-defined AR(1) parameter
-    to_add[np.isnan(to_add)] = np.nanmin(to_add) #0
-    if to_add.max():
-        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-        topline = sfi.percentile_filter(to_add[:,::ds],99,(1,int(blspan/ds))) # dan added 18/10/30
-        baseline = np.maximum(baseline,topline/10) # dan added 18/10/30
-        baseline = np.repeat(baseline,ds,axis=1)
-        if baseline.shape[1]>to_add.shape[1]:
-            baseline = baseline[:,:to_add.shape[1]]
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        b = np.zeros((to_add.shape[0],))
-        g = np.zeros((to_add.shape[0],))
-        this_dfof = np.zeros_like(to_add)
-        for i in range(c.shape[0]):
-            this_dfof[i] = (to_add[i]-baseline[i,:])/baseline[i,:]
-            this_dfof[i][np.isnan(this_dfof[i])] = 0
-            y = this_dfof[i].astype(np.float64)
-            c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=g0)
-            if reestimate_noise:
-                sn = ofun.GetSn(y-c[i])
-                c[i],s[i],b[i],g[i],_  = ofun.deconvolve(y,penalty=1,b_nonneg=b_nonneg,g=(g[i],),sn=sn)
-            if normalize_tavg:
-                s[i] = s[i]/(1-g[i])
-
-    else:
-        this_dfof = np.zeros_like(to_add)
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        b = np.zeros((to_add.shape[0],))
-        g = np.zeros((to_add.shape[0],2))
-    to_add = trialize(to_add,frm,nbefore,nafter)
-    c = trialize(c,frm,nbefore,nafter)
-    s = trialize(s,frm,nbefore,nafter)
-    d = trialize(this_dfof,frm,nbefore,nafter)
-    return to_add,c,s,d,b,g #,this_dfof #(non-trialized)
 
 def gen_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None):
     
@@ -804,113 +765,23 @@ def safe_get_(matfile,var,h5=False):
     else:
         return None
 
-def gen_precise_trialwise(datafiles,nbefore=4,nafter=8,blcutoff=1,blspan=3000,ds=10,rg=None,frame_adjust=None):
-    
-    def tack_on(to_add,existing):
-        try:
-            existing = np.concatenate((existing,to_add),axis=0)
-        except:
-            existing = to_add.copy()
-        return existing
-    
-    def process(to_add,uncorrected,neuropil,roilines):
-        to_add_copy = to_add.copy()
-        to_add = interp_nans(to_add,axis=-1)
-        to_add[np.isnan(to_add)] = np.minimum(np.nanmin(to_add),0)
-#        to_add[to_add<0] = 0
-        baseline = sfi.percentile_filter(to_add[:,::ds],blcutoff,(1,int(blspan/ds)))
-        baseline = np.repeat(baseline,ds,axis=1)
-        if baseline.shape[1]>to_add.shape[1]:
-            baseline = baseline[:,:to_add.shape[1]]
-        #to_correct = to_add<0 # commented out 19/2/5
-        #to_correct = baseline<0 # changed 19/2/4 # commented out 19/2/5
-        #to_add[to_correct] = to_add[to_correct] - baseline[to_correct] # commented out 19/2/5
-        #baseline[to_correct] = 0 # commented out 19/2/5
-        c = np.zeros_like(to_add)
-        s = np.zeros_like(to_add)
-        this_dfof = np.zeros_like(to_add)
-        for i in range(c.shape[0]):
-            #try:
-            fudge = 5e-2*np.nanmax(to_add[i])
-            if to_add[i].max()>0:
-                this_dfof[i] = (to_add[i]-baseline[i,:])/np.maximum(fudge,baseline[i,:])
-            else:
-                print('roi '+str(i)+' all zeros')
-            c[i],s[i],_,_,_  = ofun.deconvolve(this_dfof[i].astype(np.float64),penalty=1)
-            #except:
-            #    print("couldn't do "+str(i))
-        #to_add = precise_trialize(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        #cc = precise_trialize(c,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        #ss = precise_trialize(s,frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        #dd = precise_trialize(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter)
-        to_add,trialwise_t_offset = precise_trialize_no_interp(to_add,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        raw_traces,_ = precise_trialize_no_interp(uncorrected,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        neuropil,_ = precise_trialize_no_interp(neuropil,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        cc,_ = precise_trialize_no_interp(c,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        ss,_ = precise_trialize_no_interp(s,frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        dd,_ = precise_trialize_no_interp(this_dfof.astype(np.float64),frm,line,roilines,nbefore=nbefore,nafter=nafter,nplanes=len(datafiles))
-        return to_add,cc,ss,this_dfof,s,dd,trialwise_t_offset,raw_traces,neuropil
-        
-    trialwise = np.array(())
-    ctrialwise = np.array(())
-    strialwise = np.array(())
-    dtrialwise = np.array(())
-    dfof = np.array(())
-    straces = np.array(())
-    trialwise_t_offset = np.array(())
-    proc = {}
-    proc['raw_trialwise'] = np.array(())
-    proc['neuropil_trialwise'] = np.array(())
-    proc['trialwise_t_offset'] = np.array(())
-    for datafile in datafiles:
-        thisdepth = int(datafile.split('_ot_')[-1].split('.rois')[0])
-        info = loadmat(re.sub('_ot_[0-9]*.rois','.mat',datafile),'info')
-        frm = info['frame'][()]
-        line = info['line'][()]
-        event_id = info['event_id'][()]
-        ignore_first = 0
-        ignore_last = 0
-        while event_id[0]==2:
-            event_id = event_id[1:]
-            frm = frm[1:]
-            line = line[1:]
-            ignore_first = ignore_first+1
-        while event_id[-1]==2:
-            event_id = event_id[:-1]
-            frm = frm[:-1]
-            line = line[:-1]
-            ignore_last = ignore_last+1
-        if not rg is None:
-            thisrg = (rg[0]-ignore_first,rg[1]+ignore_last)
-            print(thisrg)
-            frm = frm[thisrg[0]:frm.size+thisrg[1]]
-            line = line[thisrg[0]:line.size+thisrg[1]]
-        else:
-            frm = frm[event_id==1]
-            line = line[event_id==1]
-        if not frame_adjust is None:
-            frm = frame_adjust(frm)
-            line = frame_adjust(line)
-        (to_add,ctr,uncorrected,neuropil) = loadmat(datafile,('corrected','ctr','Data','Neuropil'))
-        print(datafile)
-        print(to_add.shape)
-        nlines = loadmat(datafile,'msk').shape[0]
-        roilines = ctr[0] + nlines*thisdepth
-        #to_add,c,s,this_dfof,this_straces,dtr = process(to_add,roilines)
-        to_add,c,s,this_dfof,this_straces,dtr,tt,uncorrected,neuropil = process(to_add,uncorrected,neuropil,roilines)
-        trialwise = tack_on(to_add,trialwise)
-        ctrialwise = tack_on(c,ctrialwise)
-        strialwise = tack_on(s,strialwise)
-        dtrialwise = tack_on(dtr,dtrialwise)
-        dfof = tack_on(this_dfof,dfof)
-        straces = tack_on(this_straces,straces)
-        #trialwise_t_offset = tack_on(tt,trialwise_t_offset)
-        proc['raw_trialwise'] = tack_on(uncorrected,proc['raw_trialwise'])
-        proc['neuropil_trialwise'] = tack_on(neuropil,proc['neuropil_trialwise'])
-        proc['trialwise_t_offset'] = tack_on(tt,proc['trialwise_t_offset'])
+def norm_to_mean(arr,arr_mn=None):
+    if arr_mn is None:
+        arr_mn = arr
+    arr_mn_flat = arr_mn.reshape((arr_mn.shape[0],-1))
+    mn = np.nanmean(arr_mn_flat,axis=1)
+    slicer = tuple([slice(None)] + [np.newaxis]*(arr.ndim-1))
+    arr_norm = arr/mn[slicer]
+    return arr_norm
 
-    #return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise
-    return trialwise,ctrialwise,strialwise,dfof,straces,dtrialwise,proc # trialwise_t_offset
+def norm_middle_axes_to_mean(arr,arr_mn=None):
+    if arr_mn is None:
+        arr_mn = arr.copy()
+    arr_mn_flat = arr_mn.reshape((arr_mn.shape[0],-1,arr_mn.shape[-1]))
+    mn = np.nanmean(arr_mn_flat,axis=1)
+    slicer = tuple([slice(None)] + [np.newaxis]*(arr.ndim-2) + [slice(None)])
+    arr_norm = arr/mn[slicer]
+    return arr_norm
 
 def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     if colors is None:
@@ -921,7 +792,7 @@ def plot_errorbars(x,mn_tgt,lb_tgt,ub_tgt,colors=None):
     for i in range(mn_tgt.shape[0]):
         plt.errorbar(x,mn_tgt[i],yerr=errors[:,i,:],c=colors[i])
 
-def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,alpha=1):
+def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidth=1.5,markersize=None,norm_to_max=False,alpha=1,delta=0):
     # rows of arr: repetitions to be averaged
     # columns of arr: lines to be plotted
     mn_tgt = np.nanmean(arr,0)
@@ -933,9 +804,9 @@ def plot_bootstrapped_errorbars_hillel(x,arr,pct=(2.5,97.5),colors=None,linewidt
         mn_tgt = mn_tgt - baseline
         lb_tgt = lb_tgt - baseline
         ub_tgt = ub_tgt - baseline
-        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
+        plot_errorbars_hillel(x,mn_tgt/normby,lb_tgt/normby,ub_tgt/normby,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha,delta=delta)
     else:
-        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha)
+        plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=colors,linewidth=linewidth,markersize=markersize,alpha=alpha,delta=delta)
 
 def plot_std_errorbars_hillel(x,arr,colors=None,linewidth=None,markersize=None,norm_to_max=False,alpha=1):
     # rows of arr: repetitions to be averaged
@@ -975,7 +846,12 @@ def plot_errorbars_hillel(x,mn_tgt,lb_tgt,ub_tgt,colors=None,linewidth=None,mark
     if colors is None:
         colors = plt.cm.viridis(np.linspace(0,1,nlines))
     for i in range(nlines):
-        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],c=colors[i],linewidth=linewidth,markersize=markersize,alpha=alpha)
+        this_color = colors[i].copy()
+        if isinstance(colors, np.ndarray) and colors.ndim == 2:
+            # print(this_color.shape)
+            this_color = this_color[None]
+        plot_errorbar_hillel(x+deltas[i],mn_tgt[i],lb_tgt[i],ub_tgt[i],
+            c=this_color,linewidth=linewidth,markersize=markersize,alpha=alpha)
 
 def plot_sem_errorbars_hillel(x,mn_tgt,sem_tgt,colors=None,linewidth=None,markersize=None,delta=0,alpha=1):
     lb_tgt = mn_tgt - sem_tgt
@@ -1012,25 +888,42 @@ def parse_options(opt,opt_keys,*args):
 
     return opt
 
+def errors_from_mean_lower_upper(mn_tgt, lb_tgt, ub_tgt):
+    # from a mean, lower and upper bound (e.g. from bootstrap conf. interval)
+    # return an errorbar usable in matplotlib plotting
+    # 2 x (shape of input arrays)
+    errorplus = ub_tgt-mn_tgt
+    errorminus = mn_tgt-lb_tgt
+    errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
+    return errors
+
 def plot_errorbar_hillel(x,mn_tgt,lb_tgt,ub_tgt,plot_options=None,c=None,linestyle=None,linewidth=None,markersize=None,alpha=1):
     opt_keys = ['c','linestyle','linewidth','markersize','alpha']
     if not plot_options is None:
         opt = parse_options(plot_options,opt_keys,c,linestyle,linewidth,markersize)
         c,linestyle,linewidth,markersize = [opt[key] for key in opt_keys]
 
-    print('linewidth: %d'%linewidth)
+    # print('linewidth: %d'%linewidth)
+    errors = errors_from_mean_lower_upper(mn_tgt,lb_tgt,ub_tgt)
+
     errorplus = ub_tgt-mn_tgt
     errorminus = mn_tgt-lb_tgt
-    errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
+    old_errors = np.concatenate((errorminus[np.newaxis],errorplus[np.newaxis]),axis=0)
+
+    assert(np.all(errors.flatten()==old_errors.flatten()))
+
     #if ~isinstance(c,str):
     #    cc = c[np.newaxis]
     #else:
     #    cc = c
     cc = c.copy()
+    # print(cc.shape)
+    if isinstance(c, np.ndarray) and c.ndim == 2:
+        c = cc[0]
     #plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle=linestyle,alpha=alpha) #,fmt=None)
     plt.errorbar(x,mn_tgt,yerr=errors,c=cc,linestyle='none',alpha=alpha) #,fmt=None)
     if linewidth>0:
-        print('plotting')
+        # print('plotting')
         plt.plot(x,mn_tgt,c=c,linestyle=linestyle,linewidth=linewidth,alpha=alpha)
     plt.scatter(x,mn_tgt,c=cc,s=markersize,alpha=alpha)
 
@@ -1303,7 +1196,7 @@ def compute_tavg_dataframe(dsfile,expttype='size_contrast_0',datafield='decon',n
 
                 trialdict = {}
                 for iparam,param in enumerate(sc0['stimulus_parameters']):
-                    this_info = sc0[param][:][stim_id[iparam]]
+                    this_info = sc0[param][:][stim_id[iparam].astype('int')]
                     trialdict[param.decode('UTF-8')] = this_info
                 trialdict['running'] = trialrun
                 trialdict['dilated'] = trialpupil
@@ -1698,6 +1591,7 @@ def gen_big_bool(bool_list):
     return big_ind
 
 def set_lims(*arrs,wiggle_pct=0.05):
+    # set the axis limits based on the extreme values of arrs, + wiggle_pct % extra space on each side
     mn = np.inf
     mx = -np.inf
     for arr in arrs:
@@ -1708,6 +1602,7 @@ def set_lims(*arrs,wiggle_pct=0.05):
     plt.ylim((mn-wiggle,mx+wiggle))
 
 def pca_denoise(arr,Npc):
+    # PCA denoising using the first Npc principal components of array
     u,s,vh = np.linalg.svd(arr.T,full_matrices=False)
     return (u[:,:Npc] @ np.diag(s[:Npc]) @ vh[:Npc,:]).T
 
@@ -1715,6 +1610,25 @@ def bar_pdf(data,bins=None,alpha=1,**kwargs):
     # probability density function bar plot
     h,_ = np.histogram(data,bins=bins)
     plt.bar(0.5*(bins[:-1]+bins[1:]),h/h.sum(),width=bins[1]-bins[0],alpha=alpha,**kwargs)
+
+def bar_pdf_sig(data,bins=None,alpha=1,sig=None,sig_above=True,sig_facecolor='w',**kwargs):
+    # probability density function bar plot
+    if sig is None:
+        bar_pdf(data,bins=None,alpha=1,**kwargs)
+    else:
+        h_insig,_ = np.histogram(data[~sig],bins=bins)
+        h_sig,_ = np.histogram(data[sig],bins=bins)
+        n = h_insig.sum() + h_sig.sum()
+        if sig_above:
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_insig/n,width=bins[1]-bins[0],alpha=alpha,**kwargs)
+            new_kwargs = kwargs
+            new_kwargs['facecolor'] = sig_facecolor
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_sig/n,bottom=h_insig/n,width=bins[1]-bins[0],alpha=alpha,**new_kwargs)
+        else:
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_insig/n,bottom=h_sig/n,width=bins[1]-bins[0],alpha=alpha,**kwargs)
+            new_kwargs = kwargs
+            new_kwargs['facecolor'] = sig_facecolor
+            plt.bar(0.5*(bins[:-1]+bins[1:]),h_sig/n,width=bins[1]-bins[0],alpha=alpha,**new_kwargs)
 
 def line_pdf(data,bins=None,**kwargs):
     # probability density function line plot
@@ -1727,6 +1641,9 @@ def line_cdf(data,bins=None):
     plt.plot(0.5*(bins[:-1]+bins[1:]),np.cumsum(h)/h.sum())
 
 def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac=0.5): 
+    # given a dataframe, compute mean (tuning) for each roi and stimulus condition,
+    # across one of many random partitionings of the data, and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     selector_s1 = gen_nub_selector_s1() 
     selector_v1 = gen_nub_selector_v1() 
     keylist = list(trial_info.keys()) 
@@ -1739,7 +1656,8 @@ def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac
         train_test[key] = [None for ipartitioning in range(npartitionings)] 
         for ipartitioning in range(npartitionings): 
             train_test[key][ipartitioning] = select_trials(trial_info[key],selector,training_frac) 
-    tuning = pd.DataFrame() 
+    # tuning = pd.DataFrame() 
+    tuning_list = []
     ttls = ['s1_l4','s1_l23','v1_l4','v1_l23'] 
     selectors = [selector_s1, selector_s1, selector_v1, selector_v1] 
     tt = [{k:v[ipartitioning] for k,v in zip(train_test.keys(),train_test.values())} for ipartitioning in range(npartitionings)] 
@@ -1748,7 +1666,9 @@ def compute_tuning_many_partitionings(df,trial_info,npartitionings,training_frac
             new_tuning = compute_tuning_df(df.loc[df.area==ttl],trial_info,selector,include=tt[ipartitioning]) 
             new_tuning.insert(new_tuning.shape[1],'partitioning',ipartitioning) 
             #new_tuning['partitioning'] = ipartitioning 
-            tuning = tuning.append(new_tuning) 
+            # tuning = tuning.append(new_tuning)
+            tuning_list.append(new_tuning)
+    tuning = pd.concat(tuning_list,axis=0)
     return tuning
 
 def select_trials(trial_info,selector,training_frac,include_all=False,seed=0):
@@ -1791,11 +1711,15 @@ def select_trials(trial_info,selector,training_frac,include_all=False,seed=0):
     return train_test
 
 def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
+    # given a dataframe, compute mean (tuning) for each roi and stimulus condition,
+    # and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
     nexpt = len(expts)
-    tuning = pd.DataFrame()
+    # tuning = pd.DataFrame()
+    tuning_list = []
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -1830,10 +1754,14 @@ def compute_tuning_df(df,trial_info,selector,include=None,fn=np.nanmean):
             column_labels = pd.MultiIndex.from_product(shp,names=params[1:])
             index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
-            tuning = tuning.append(tip_df)
+            # tuning = tuning.append(tip_df)
+            tuning_list.append(tip_df)
+    tuning = pd.concat(tuning_list,axis=0)
     return tuning
 
 def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
+    # given a dictionary with keys given by the keys of trial_info, retrieve entry corresponding to key
+    # for each of those entries, and put them into a dataframe, which is returned
     tuning = {}
     params = list(selector.keys())
     if expts is None:
@@ -1872,6 +1800,9 @@ def get_key_trialwise(dicti,key,trial_info,selector,include=None,expts=None):
     return tuning
 
 def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=False):
+    # given a dataframe, return trialwise response (tuning) for each roi, stimulus condition,
+    # and trial, and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
@@ -1879,7 +1810,8 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=
     if return_dict:
         tuning = {}
     else:
-        tuning = pd.DataFrame()
+        # tuning = pd.DataFrame()
+        tuning_list = []
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -1923,17 +1855,24 @@ def compute_tuning_trialwise_df(df,trial_info,selector,include=None,return_dict=
                 column_labels = pd.MultiIndex.from_product(shp,names=params[1:]+['trial#'])
                 index = pd.MultiIndex.from_tuples([(expt,ipart,ii) for ii in range(tip.shape[0])],names=['session_id','partition','roi_index'])
                 tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
-                tuning = tuning.append(tip_df)
+                # tuning = tuning.append(tip_df)
+                tuning_list.append(tip_df)
+        if not return_dict:
+            tuning = pd.concat(tuning_list,axis=0)
     return tuning
 
 def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
+    # given a dataframe, compute mean (tuning), lower and upper bounds (lb,ub) for each roi and stimulus condition,
+    # and return them as dataframes
+    # NOTE: may be able to make this more efficient by preallocating the dataframes to be output
     params = list(selector.keys())
 #     expts = list(trial_info.keys())
     expts = df.session_id.unique()
     nexpt = len(expts)
-    tuning = pd.DataFrame()
-    lb = pd.DataFrame()
-    ub = pd.DataFrame()
+    # tuning = pd.DataFrame()
+    # lb = pd.DataFrame()
+    # ub = pd.DataFrame()
+    tuning_list,lb_list,ub_list = [[] for _ in range(3)]
     if include is None:
         include = {expt:None for expt in expts}
     for iexpt,expt in enumerate(expts):
@@ -1973,12 +1912,19 @@ def compute_tuning_lb_ub_df(df,trial_info,selector,include=None,pct=(16,84)):
             tip_df = pd.DataFrame(tip.reshape((tip.shape[0],-1)),index=index,columns=column_labels)
             tip_lb_df = pd.DataFrame(tip_lb.reshape((tip_lb.shape[0],-1)),index=index,columns=column_labels)
             tip_ub_df = pd.DataFrame(tip_ub.reshape((tip_ub.shape[0],-1)),index=index,columns=column_labels)
-            tuning = tuning.append(tip_df)
-            lb = lb.append(tip_lb_df)
-            ub = ub.append(tip_ub_df)
+            # tuning = tuning.append(tip_df)
+            # lb = lb.append(tip_lb_df)
+            # ub = ub.append(tip_ub_df)
+            tuning_list.append(tip_df)
+            lb_list.append(tip_lb_df)
+            ub_list.append(tip_ub_df)
+    tuning = pd.concat(tuning_list,axis=0)
+    lb = pd.concat(lb_list,axis=0)
+    ub = pd.concat(ub_list,axis=0)
     return tuning,lb,ub
 
 def erase_top_right():
+    # delete top and right borders of bounding box in current axes
     plt.gca().spines['right'].set_visible(False)
     plt.gca().spines['top'].set_visible(False)
 
@@ -1992,6 +1938,7 @@ def compute_osi(arr,ori=np.arange(0,360,45)):
     return np.sqrt(costerm**2+sinterm**2)/sumterm
 
 def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light on'],alpha=0.5,epsilon=0.1,errorstyle='sem',pct=(16,84),plot_lines=True):
+    # plot sets of bars with lines connecting them, lines corresponding to repetitions, and bars corresponding to means
     nx = data.shape[1]
     for ilight in range(nx):
         plt.bar((ilight,),np.nanmean(data,0)[ilight],color=colors[ilight],alpha=0.5)
@@ -2015,6 +1962,8 @@ def plot_bars_with_lines(data,colors=['k','r'],xticklabels=['light off','light o
         plt.xticks(np.arange(nx),xticklabels)
 
 def align_to_entry(data,entry,axis=1):
+    # circ shift each row of data along axis such that corresponding index entry is at the 0th position
+    # (axis entry ends up with len 2*original len - 1)
     shp = data.shape
     ndim = len(shp)
     naxis = shp[axis]
@@ -2027,6 +1976,7 @@ def align_to_entry(data,entry,axis=1):
     return data_aligned
 
 def circ_align_to_entry(data,entry,axis=1):
+    # circ shift each row of data along axis such that corresponding index entry is at the 0th position
     shp = data.shape
     ndim = len(shp)
     naxis = shp[axis]
@@ -2039,16 +1989,22 @@ def circ_align_to_entry(data,entry,axis=1):
     return data_aligned
 
 def circ_align_to_entry_axiswise(data,entry,based_axis=0,entry_axis=1):
+    # circ shift (entry_axis)th dim of data along axis such that corresponding entry (where the entry is defined 
+    # per-index along the (based_axis)th dimension) is at the 0th position
     data_t = np.moveaxis(data,based_axis,0)
     data_aligned_t = circ_align_to_entry(data_t,entry,axis=entry_axis)
     data_aligned = np.moveaxis(data_aligned_t,0,based_axis)
     return data_aligned
 
 def align_to_pref_size(sc):
+    # sc roi x size x contrast x orientation
+    # compute preferred index along axis 1 (size), averaged along the others, and shift 
+    # such that that index is at the 0th position (axis 1 ends up with len 2*original len - 1)
     prefsize = np.argmax(np.nanmean(np.nanmean(sc,-1),-1),axis=1)
     return align_to_entry(sc,prefsize,axis=1)
 
 def circ_align_to_pref(data,axis=1):
+    # compute preferred index along axis, and circ shift such that that index is at the 0th position
     ndim = len(data.shape)
     # roll axis of interest to second dimension
     data_t = data.transpose((0,axis)+tuple(np.setdiff1d(np.arange(1,ndim),axis)))
@@ -2062,17 +2018,24 @@ def circ_align_to_pref(data,axis=1):
     return data_aligned
 
 def imshow_hot_cold(arr,mx=None,interpolation='nearest'):
+    # show arr with colormap blue-white-red, centered around 0
     if mx is None:
         mx = np.nanmax(np.abs(arr))
     plt.imshow(arr,cmap='bwr',vmin=-mx,vmax=mx,interpolation=interpolation)
 
 def zero_origin(cmd='y'):
+    # set origin to zero ('xy'), or lower axis lim to 0 ('x' or 'y')
     if 'y' in cmd:
         plt.gca().set_ylim(bottom=0)
     if 'x' in cmd:
         plt.gca().set_xlim(left=0)
 
-def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1):
+def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=45,alpha=1,bar_alpha_frac=0.5,show_dots=True):
+    # plot bar with bootstrapped error bars and dots, jittered by epsilon, dot size s, transparency alpha on everything
+    # make data a list, if it is not
+    # elements of data taken to be 1-D arrays
+    if not isinstance(data,list):
+        data = [data]
     if not isinstance(s,list):
         s = [s for d in data]
     if colors is None:
@@ -2081,14 +2044,16 @@ def bar_with_dots(data,colors=None,tick_labels=None,pct=(16,84),epsilon=0.05,s=4
         tick_labels = ['' for d in data]
     for itype in range(len(data)):
         mn = np.nanmean(data[itype],0)
-        plt.bar((itype,),mn,color=colors[itype],alpha=0.5*alpha,edgecolor='k')
+        plt.bar((itype,),mn,color=colors[itype],alpha=bar_alpha_frac*alpha,edgecolor='k')
         lb,ub = bootstrap(data[itype][~np.isnan(data[itype])],pct=pct,axis=0,fn=np.mean)
-        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k',alpha=alpha)
-        plt.scatter(itype*np.ones_like(data[itype])+epsilon*np.random.randn(data[itype].shape[0]),data[itype],\
+        plt.errorbar((itype,),mn[np.newaxis],yerr=np.array((mn-lb,ub-mn))[:,np.newaxis],c='k',alpha=bar_alpha_frac*alpha)
+        if show_dots:
+            plt.scatter(itype*np.ones_like(data[itype])+epsilon*np.random.randn(data[itype].shape[0]),data[itype],\
                     facecolor=colors[itype],linewidth=1,edgecolor='k',s=s[itype],alpha=alpha)
     plt.xticks(np.arange(len(data)),tick_labels)
 
 def mult_apply(arr,fn,dims,keepdims=False):
+    # apply fn to arr along dims, and then either leave singleton dimensions along dims or squeeze them out (keepdims)
     arr_to_return = arr.copy()
     for dim in dims:
         arr_to_return = fn(arr_to_return,axis=dim,keepdims=True)
@@ -2099,6 +2064,7 @@ def mult_apply(arr,fn,dims,keepdims=False):
     return arr_to_return[slc]
 
 def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired_usize=np.logspace(np.log10(5),np.log10(60),4)):
+    # interpolate along axis, originally sampled at points usize, at new points desired_usize
     shp = list(arr.shape)
     desired_shp = shp.copy()
     assert(shp[axis]==len(usize))
@@ -2116,3 +2082,183 @@ def interp_axis(arr,axis=0,usize=np.logspace(np.log10(5),np.log10(60),6),desired
             slc[ithis] = unrav[iithis]
         interp[slc] = sip.interp1d(usize,arr[tuple(slc)])(desired_usize)
     return interp
+
+def plot_parametric_fn_pct_errorbars(*args):
+    # raise error; now moved to naka_rushton_analysis.py
+    raise Exception('plot_parametric_fn_pct_errorbars is now in naka_rushton_analysis.py')
+
+def plot_parametric_fn_errorbars(*args):
+    # raise error; now moved to naka_rushton_analysis.py
+    raise Exception('plot_parametric_fn_errorbars is now in naka_rushton_analysis.py')
+
+# def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
+#     # plot an interpolated function, with dots and percentile errorbars from the original data
+#     plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+
+# def plot_parametric_fn_errorbars(x,cpl,fit_fn=nra.fit_opt_params_two_asymptote_fn,plot_fn=nra.two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+#     # plot an interpolated function, with dots and errorbars from the original data
+#     if errorstyle == 'pct':
+#         mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
+#     elif errorstyle == 'bs':
+#         mean_fn = lambda y: bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
+#     xinterp = np.linspace(x.min(),x.max(),101)
+#     if colors is None:
+#         colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
+#     for iconn in range(cpl.shape[1]):
+#         params,_ = nra.fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
+#         to_plot = nra.two_asymptote_fn(xinterp,*params[0])
+#         plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
+#     if errorstyle == 'pct':
+#         plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+#     elif errorstyle=='bs':
+#         plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+
+def apply_fn_to_nested_list(fn,ind_list,data):
+    # given a single lists of lists as argument to a function, return a single list of lists as respective outputs
+    if not len(ind_list):
+        return fn(data)
+    else:
+        array_flag = isinstance(data,np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [data[i] for i in ind_list[0]]
+        else:
+            this_data = data
+        to_return = [apply_fn_to_nested_list(fn,ind_list[1:],td) for td in this_data]
+        if array_flag:
+            to_return = np.array(to_return)
+        return to_return
+
+def listzip(list_of_lists):
+    # given a list of lists L[i][j], swap indices to return L[j][i]
+    return [list(x) for x in list(zip(*list_of_lists))]
+
+def apply_fn_to_nested_lists(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return multiple lists of lists as respective outputs
+    if not len(ind_list):
+        to_return = fn(*args)
+    else:
+        array_flag = isinstance(args[0],np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = [list(x) for x in list(zip(*this_data))]
+        to_return = [apply_fn_to_nested_lists(fn,ind_list[1:],*td) for td in this_data]
+        #if np.isscalar(to_return[0]):
+        #    #print('is scalar')
+        #    to_return = listzip([[tr] for tr in to_return])
+        #else:
+        to_return = listzip(to_return)
+        #except:
+        #    to_return = list(zip([np.array(tr) for tr in to_return]))
+        if array_flag:
+            to_return = [np.array(tr) for tr in to_return]
+    return to_return
+
+def apply_fn_to_nested_lists_single_out(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return a single 
+    # list of lists as respective outputs
+    if not len(ind_list):
+        to_return = fn(*args)
+    else:
+        array_flag = isinstance(args[0],np.ndarray)
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = listzip(this_data)
+        to_return = [apply_fn_to_nested_lists_single_out(fn,ind_list[1:],*td) for td in this_data]
+        if array_flag:
+            to_return = [np.array(tr) for tr in to_return]
+    return to_return
+
+def apply_fn_to_nested_lists_no_out(fn,ind_list,*args):
+    # given multiple lists of lists as arguments to a function, return a single list 
+    # of lists as respective outputs
+    if not len(ind_list):
+        fn(*args)
+    else:
+        if not ind_list[0] is None:
+            this_data = [[arg[i] for i in ind_list[0]] for arg in args]
+        else:
+            this_data = args
+        this_data = listzip(this_data)
+        for td in this_data:
+            apply_fn_to_nested_lists_no_out(fn,ind_list[1:],*td)
+
+def list_of_lists_dim(list_of_lists):
+    # return the len of the list at each level in a list of lists
+    if isinstance(list_of_lists,list):
+        return (len(list_of_lists),) + list_of_lists_dim(list_of_lists[0])
+    else:
+        return ()
+
+def load_by_filename(filename):
+    # supports .mat, .pkl, .npy
+    if not (filename.endswith('.mat') or filename.endswith('.pkl') or filename.endswith('.npy')):
+        raise ValueError('filename must end with .mat, .pkl, or .npy')
+    if filename.endswith('.mat'):
+        return loadmat(filename)
+    elif filename.endswith('.pkl'):
+        return pickle.load(open(filename,'rb'))
+    elif filename.endswith('.npy'):
+        return np.load(filename)[()]
+
+def save_by_filename(filename, data):
+    # supports .mat, .pkl, .npy
+    if not (filename.endswith('.mat') or filename.endswith('.pkl') or filename.endswith('.npy')):
+        raise ValueError('filename must end with .mat, .pkl, or .npy')
+    if filename.endswith('.mat'):
+        sio.savemat(filename,data)
+    elif filename.endswith('.pkl'):
+        pickle.dump(data,open(filename,'wb'))
+    elif filename.endswith('.npy'):
+        np.save(filename,data)
+
+def compute_or_load_cached(
+    cache_file: str,
+    compute_fn: Callable,
+    # invalidate_cache: bool = False,
+    **kwargs,
+):
+    # check if cache_file is present; if not, run compute_fn and save to cache_file
+
+    if os.path.exists(cache_file):# and not invalidate_cache:
+        print('loading from cache...')
+        result = load_by_filename(cache_file)
+    else:
+        print('computing...')
+        result = compute_fn(**kwargs)
+        save_by_filename(cache_file, result)
+    return result
+
+def bootstrap_multi_arg(arrs, fn, axis=0, nreps=1000, pct=(2.5,97.5)):
+    # note: seems to break if axis != 0 (!)
+    np.random.seed(0)
+    # given arr 1D of size N, resample nreps sets of N of its elements with replacement. Compute fn on each of the samples
+    # and report percentiles pct
+    # make sure all but the leading axis dimensions match
+    assert(np.all([np.all(arr.shape[1:] == arrs[0].shape[1:]) for arr in arrs]))
+    Ns = [arr.shape[axis] for arr in arrs]
+    cs = [np.random.choice(np.arange(N),size=(N,nreps)) for N in Ns]
+    L = len(arrs[0].shape)
+    resamps = []
+    for arr, c in zip(arrs, cs):
+        resamp=np.rollaxis(arr,axis,0)
+        resamp=resamp[c]
+        resamp=np.rollaxis(resamp,0,axis+2) # plus 1 due to rollaxis syntax. +1 due to extra resampled axis
+        resamp=np.rollaxis(resamp,0,L+1)
+        resamps.append(resamp)
+    stat = fn(*resamps,axis=axis)
+    #lb = np.percentile(stat,pct[0],axis=-1) # resampled axis rolled to last position
+    #ub = np.percentile(stat,pct[1],axis=-1) # resampled axis rolled to last position
+    return tuple([np.nanpercentile(stat,p,axis=-1) for p in pct])
+
+def bootstrap_min(arr1, arr2, axis=0, nreps=1000, pct=(2.5, 97.5)):
+    # arr1 a (n,d1,d2,...) array, arr2 a (n,d1,d2,...) array
+    assert(np.all(arr1.shape[1:] == arr2.shape[1:]))
+    def min_of_means(*args, axis=0):
+        means = [np.nanmean(arg,axis=axis) for arg in args]
+        return np.nanmin(means,axis=0)
+    return bootstrap_multi_arg((arr1,arr2), min_of_means, 
+        axis=axis, nreps=nreps, pct=pct)

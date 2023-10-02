@@ -8,7 +8,9 @@ import numpy as np
 import pyute as ut
 import os
 
-def gen_movie(delta=100,scaley=0.5,spacebetween=5,source_fold=None,source_file=None,frame_file=None,offset=1000,frame_no=200,target_fold='/home/mossing/Documents/notebooks/temp/',frame_rg=(1,0)):
+def gen_movie(delta=100,scaley=0.5,spacebetween=5,source_fold=None,source_file=None,frame_file=None,offset=1000,frame_no=200,target_fold='/home/mossing/Documents/notebooks/temp/',frame_rg=(1,0),chunk_offset=None):
+    if chunk_offset is None:
+        chunk_offset = offset
     # source_fold and source_file are format strings, like 'whatever{0}whatever', where {0} specifies where a digit should go
 
     if source_fold is None or source_file is None:
@@ -17,7 +19,10 @@ def gen_movie(delta=100,scaley=0.5,spacebetween=5,source_fold=None,source_file=N
         source_file = make_suite2p_file(date,animalid,exptno)
 
     filenames = [(source_fold+'/'+source_file).format(n) for n in range(1,5)]
+    print('loading images')
+    print(filenames)
     imgs = [skio.MultiImage(filename) for filename in filenames]
+    print('done loading images')
 
     (Ny,Nx) = imgs[0][0].shape
 
@@ -25,16 +30,18 @@ def gen_movie(delta=100,scaley=0.5,spacebetween=5,source_fold=None,source_file=N
 
     frm_on = gen_frm_on(frame_file,rg=frame_rg)
 
-    warped = [skt.warp(imgs[n][offset],tr) for n in range(4)]
+    warped = [skt.warp(imgs[n][chunk_offset],tr) for n in range(4)]
     green_frame = np.vstack([x[:int(Ny/2+spacebetween)] for x in warped[::-1]])
     stim_on = gen_stim_on(green_frame.shape)
     
     if not os.path.exists(target_fold):
-        os.mkdir(target_fold)
+        os.makedirs(target_fold)
+
+    print('got here')
 
     for t in range(frame_no):
         print(t)
-        warped = [skt.warp(imgs[n][offset+t],tr) for n in range(4)]
+        warped = [skt.warp(imgs[n][chunk_offset+t],tr) for n in range(4)]
         green_frame = np.vstack([x[:int(Ny*scaley+spacebetween)] for x in warped[::-1]])
         green_frame = green_frame*(green_frame>0)
         red_frame = np.in1d(offset+t,frm_on)*stim_on

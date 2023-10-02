@@ -3,12 +3,14 @@ import autograd.numpy as np
 from autograd import grad,elementwise_grad,jacobian
 import scipy.optimize as sop
 import matplotlib.pyplot as plt
-import nub_utils
 import pyute as ut
+import nub_utils
 import sim_utils
 import size_contrast_analysis as sca
+from numpy import maximum as npmaximum
 
 # fit models of the form (a*(c/c50)^n + b)/((c/c50)^n + 1), where subsets of a, b, and c50 are allowed to vary for each size
+# this formulation is referred to below as the "vanilla Naka-Rushton function"
 
 #def fit_opt_params(c,r):
 #    a_0 = r.max()
@@ -20,6 +22,7 @@ import size_contrast_analysis as sca
 #    return params_opt['x']
 
 def fit_opt_params(c,R,Rsem=None):
+    # fit optimal parameters for the vanilla naka rushton model
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
@@ -41,6 +44,7 @@ def fit_opt_params(c,R,Rsem=None):
     return params_opt['x']
 
 def fit_opt_params_offset(c,R,Rsem=None):
+    # fit optimal parameters for the vanilla naka rushton model with constant additive offset
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
@@ -61,7 +65,8 @@ def fit_opt_params_offset(c,R,Rsem=None):
     params_opt = sop.least_squares(lambda params: compute_this_cost(params).flatten(),params_0,bounds=bds)
     return params_opt['x']
 
-def fit_opt_params_monotonic(c,R,Rsem=None):
+def fit_opt_params_monotonic(c,R,Rsem=None,clip_decreasing=False,clip_after=1):
+    # fit optimal parameters for the vanilla Naka-Rushton model up to the maximum value of R, and ignoring subsequent values
     nsizes = R.shape[0]
     cmax = (np.argmax(R,axis=1)).astype('int')
     for isize in range(R.shape[0]):
@@ -74,6 +79,12 @@ def fit_opt_params_monotonic(c,R,Rsem=None):
     bds_b = [(0,np.inf)]
     bds_c50 = [(0,cc+1) for cc in c[cmax]]
     bds_n = [(0,4) for ivar in range(1)]
+    if clip_decreasing:
+        for isize in range(nsizes):
+            #decreasing = (np.diff(R[isize])<0)
+            decreasing = (R[isize] < npmaximum.accumulate(R[isize]))
+            if np.any(decreasing):
+                R[isize,np.where(decreasing)[0][0]+1+clip_after:] = -1
     bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
     params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_0,)))
     if Rsem is None:
@@ -86,6 +97,7 @@ def fit_opt_params_monotonic(c,R,Rsem=None):
     return params_opt['x']
 
 def fit_opt_params_two_n_monotonic(c,R,Rsem=None):
+    # fit optimal parameters for the two-exponent Naka-Rushton model up to the maximum value of R, and ignoring subsequent values
     nsizes = R.shape[0]
     cmax = (np.argmax(R,axis=1)).astype('int')
     for isize in range(R.shape[0]):
@@ -130,6 +142,7 @@ def fit_opt_params_two_n_monotonic(c,R,Rsem=None):
 #    return (a*(c/c50)**n + b)/(1+(c/c50)**n)
 
 def naka_rushton(c,params,ncells):
+    # compute the vanilla naka rushton function for a given set of parameters, allowing ncells values of a and c50
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1:-1]
@@ -138,6 +151,7 @@ def naka_rushton(c,params,ncells):
     return (a[:,np.newaxis]*aux**n + b)/(1+aux**n)
 
 def naka_rushton_offset(c,params,ncells):
+    # compute the vanilla naka rushton function with additive offset for a given set of parameters, allowing ncells values of a and c50
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1:-1]
@@ -146,6 +160,7 @@ def naka_rushton_offset(c,params,ncells):
     return (a[:,np.newaxis]*aux**n)/(1+aux**n) + b
 
 def fit_opt_params_only_a(c,R):
+    # fit optimal parameters for the vanilla Naka-Rushton model, allowing only a, and not c50, to vary
     nsizes = R.shape[0]
     a_0 = R.max(1)
     b_0 = 0
@@ -156,6 +171,7 @@ def fit_opt_params_only_a(c,R):
     return params_opt['x']
 
 def naka_rushton_only_a(c,params,ncells):
+    # vanilla Naka-Rushton model, allowing only a, and not c50, to vary
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1]
@@ -187,6 +203,72 @@ def zip_pairs(list_of_pairs):
     ub = [lp[1] for lp in list_of_pairs]
     return (lb,ub)
 
+class nr_model(object):
+    # a Naka-Rushton-like model fit to data
+    def __init__(self,c,R,nr_fn,bd_fn,init_fn,Rsem=None):
+        self.c = c
+        self.non_nan_rows = ~np.all(np.isnan(R),axis=1)
+        self.data = R[self.non_nan_rows]
+        self.base_fn = nr_fn
+        self.nsizes = self.data.shape[0]
+        self.bds = bd_fn(self.c,self.data)
+        self.params_0 = init_fn(self.c,self.data)
+        if Rsem is None:
+            self.datasem = np.ones_like(self.data)
+        else:
+            self.datasem[self.datasem==0] = np.min(self.datasem[self.datasem>0])
+        if not np.all(np.isnan(self.data)):
+            self.fit()
+        else:
+            self.params_opt = np.nan*np.ones_like(self.params_0)
+    def compute_cost(self,params):
+        return (self.data-self.base_fn(self.c,params,self.nsizes))/self.datasem
+    def fit(self):
+        params_opt = sop.least_squares(lambda params: self.compute_cost(params).flatten(),self.params_0,bounds=self.bds)
+        self.params_opt = params_opt['x']
+        self.fn = lambda c,d: self.base_fn(c,self.params_opt,self.nsizes)
+
+class nr_two_n_model(nr_model):
+    def __init__(self,c,R):
+        super().__init__(c,R,naka_rushton_two_n,self.bd_fn,self.init_fn)
+    def bd_fn(self,c,R):
+        nsizes = R.shape[0]
+        bds_a = [(0,np.inf) for isize in range(nsizes)]
+        bds_b = [(0,np.inf)]
+        bds_c50 = [(0,np.max(c)) for isize in range(nsizes)]
+        bds_n = [(0,4) for ivar in range(2)]
+        bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_n)
+        return bds
+    def init_fn(self,c,R):
+        nsizes = R.shape[0]
+        a_0 = R.max(1)
+        b_0 = 0
+        c50_0 = c.max()/2*np.ones(nsizes)
+        n_top_0 = 2
+        n_bottom_0 = 2
+        params_0 = np.concatenate((a_0,(b_0,),c50_0,(n_top_0,),(n_bottom_0,)))
+        return params_0
+
+class nr_two_c50_model(nr_model):
+    def __init__(self,c,R):
+        super().__init__(c,R,naka_rushton_two_c50,self.bd_fn,self.init_fn)
+    def bd_fn(self,c,R):
+        nsizes = R.shape[0]
+        bds_a = [(0,np.inf) for isize in range(nsizes)]
+        bds_b = [(0,np.inf)]
+        bds_c50 = [(0,np.max(c)) for isize in range(nsizes)]
+        bds_n = [(0,4) for ivar in range(1)]
+        bds = zip_pairs(bds_a + bds_b + bds_c50 + bds_c50 + bds_n)
+        return bds
+    def init_fn(self,c,R):
+        nsizes = R.shape[0]
+        a_0 = R.max(1)
+        b_0 = 0
+        c50_0 = c.max()/2*np.ones(nsizes)
+        n_0 = 2
+        params_0 = np.concatenate((a_0,(b_0,),c50_0,c50_0,(n_0,)))
+        return params_0
+
 def fit_opt_params_two_n(c,R,Rsem=None):
     nsizes = R.shape[0]
     a_0 = R.max(1)
@@ -210,6 +292,7 @@ def fit_opt_params_two_n(c,R,Rsem=None):
     return params_opt['x']
 
 def naka_rushton_two_n(c,params,ncells):
+    # return a ncells x len(c) array of naka rushton function outputs as a function of contrast, for each "cell".
     a = params[:ncells]
     b = params[ncells]
     c50 = params[ncells+1:-2]
@@ -217,6 +300,18 @@ def naka_rushton_two_n(c,params,ncells):
     n_bottom = params[-1]
     aux = (c[np.newaxis]/c50[:,np.newaxis])
     return (a[:,np.newaxis]*aux**n_top + b)/(1+aux**n_bottom)
+
+def naka_rushton_two_c50(c,params,ncells):
+    # return a ncells x len(c) array of naka rushton function outputs as a function of contrast, for each "cell".
+    a = params[:ncells]
+    b = params[ncells]
+    c50top = params[ncells+1:2*ncells+1]
+    c50bottom = params[2*ncells+1:3*ncells+1]
+    n = params[-2]
+    r0 = params[-1]
+    aux_top = (c[np.newaxis]/c50top[:,np.newaxis])
+    aux_bottom = (c[np.newaxis]/c50bottom[:,np.newaxis])
+    return (a[:,np.newaxis]*aux_top**n + b)/(1+aux_top**n)/(1+aux_bottom**n) + r0
 
 def fit_opt_params_weibull(c,R,Rsem=None):
     nsizes = R.shape[0]
@@ -264,21 +359,32 @@ def weibull_one_size(c,*params):
     return weibull(c,np.array(params),1)[0]
 
 def two_asymptote_fn(x,*params):
+    # left asymptote: y = x*a1 + b1
+    # right asymptote: y = x*a2 + b2
+    # around x = x0, interpolate sigmoidally
+    # between the two asymptotes with length constant lam in x
     x0,a1,b1,a2,b2,lam = params
     as1 = a1*x + b1
     as2 = a2*x + b2
     factor = 1/(1+np.exp((x-x0)/lam))
     return factor*as1 + (1-factor)*as2
 
-def fit_opt_params_two_asymptote_fn(x,R):
+def fit_opt_params_two_asymptote_fn(x,R,epsilon=1e-8):
+    # left asymptote: y = x*a1 + b1
+    # right asymptote: y = x*a2 + b2
+    # around x = x0, interpolate sigmoidally
+    # between the two asymptotes with length constant lam in x
+    # given R, return optimal (x0,a1,b1,a2,b2,lam)
+    # R is a nsizes x len(x) array of responses
     nsizes = R.shape[0]
-    x0_0 = np.nanmean(x)*np.ones((nsizes,))
+    x0_0 = x[np.argsort(R,axis=1)[:,R.shape[1]//2]] # index of the median of R along each row
+    # x0_0 = np.mean(x)*np.ones((nsizes,))
     a1_0 = (R[:,1]-R[:,0])/(x[1]-x[0])
     b1_0 = R[:,0] - a1_0[:]*x[0]
     a2_0 = (R[:,-1]-R[:,-2])/(x[-1]-x[-2])
     b2_0 = R[:,-1] - a2_0[:]*x[-1]
-    lam_0 = 0.25*(x[-1]-x[0])*np.ones((nsizes,))
-    bds = [(-np.inf,np.inf) for _ in range(5)] + [(0,np.inf)]
+    lam_0 = 0.1*(x[1]-x[0])*np.ones((nsizes,))
+    bds = [(-np.inf,np.inf) for _ in range(5)] + [(epsilon,np.inf)]
     #bds = zip_pairs(bds)
     params_0 = np.concatenate([z[:,np.newaxis] for z in (x0_0,a1_0,b1_0,a2_0,b2_0,lam_0)],axis=1)
 
@@ -287,14 +393,14 @@ def fit_opt_params_two_asymptote_fn(x,R):
     pcov = np.nan*np.ones((nsizes,nvar,nvar))
     def f(*params):
         return two_asymptote_fn(x,*params) 
-    def fprime(x,*params):
-        return grad(f)(x,*params)
+    # def fprime(x,*params):
+    #     return grad(f)(x,*params)
     for isize in range(nsizes):
         def cost(params):
             return np.sum((R[isize] - f(*params))**2)
         def costprime(params):
             return grad(cost)(params)
-        res = sop.minimize(cost,x0=params_0[isize],bounds=bds,method='L-BFGS-B',jac=costprime)
+        res = sop.minimize(cost,x0=params_0[isize,:],bounds=bds,method='L-BFGS-B',jac=costprime)
         popt[isize] = res.x
         pcov[isize] = res.jac
         if not res.success:
@@ -308,6 +414,7 @@ def fit_opt_params_two_asymptote_fn(x,R):
     return popt,pcov
 
 def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen=10):
+    # plot the model and the data it was fit to
     ncells = mn.shape[0]
     nsizes = mn.shape[1]
     nrows = int(np.ceil(ncells/rowlen))
@@ -323,7 +430,8 @@ def plot_model_comparison(c,mn,lb,ub,fit_fn=naka_rushton_only_a,popt=None,rowlen
 
 class ayaz_model(object):
     # runs fitting if theta is None
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,
+            norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False,sub=False,run_fitting=True):
         self.data = data
         self.usize = usize        
         self.ucontrast = ucontrast
@@ -340,11 +448,24 @@ class ayaz_model(object):
         assert(self.data.shape[1]==len(usize))
         assert(self.data.shape[2]==len(ucontrast))
         if theta is None:
-            self.fit(theta0=theta0,delta0=delta0)
+            if run_fitting:
+                self.fit(theta0=theta0,delta0=delta0)
         else:
             self.theta = theta
+            # len(d) x len(c) output
             self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
-    def fit(self,theta0=None,delta0=0):
+
+    def fn_theta(self,c,d,theta):
+        modeled = nub_utils.ayaz_like_theta(c,d,theta,fn=self.base_fn)
+        return modeled
+
+    def predict(self,theta):
+        # given parameters theta, return the modeled values
+        modeled = self.fn_theta(self.ucontrast,self.usize,theta)
+        return modeled
+
+    def initialize(self,delta0=0):
+        # initialize theta with reasonable starting values
         r0 = np.nanmin(self.data)
         rd = 100
         rs = 100
@@ -353,24 +474,36 @@ class ayaz_model(object):
         m = 1
         n = 1#2
         delta = delta0
+        theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
+        return theta0
+
+    def bound(self):
+        # bounds for the model parameters theta
         mmin = 0.5
         mmax = 5
         smax = 180
-            
+        bds = sop.Bounds(np.zeros_like(self.theta0),np.inf*np.ones_like(self.theta0))
+#         bds.ub[4] = 0
+        bds.lb[11:14] = mmin
+        bds.ub[11:14] = mmax
+        bds.ub[7:11] = smax
+        bds.ub[4] = 0
+        return bds
+
+    def fit(self,theta0=None,delta0=0):
+        # fit the model to the data, starting from parameters theta0, or default theta0 if not specified
+        # if fit is successful, results are stored as fields in self
         def cost(theta):
-            modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,theta,fn=self.base_fn)
+            modeled = self.predict(theta)
             non_nan = ~np.isnan(self.data)
             return np.sum((modeled[np.newaxis] - self.data)[non_nan]**2)
-        
+
         if theta0 is None:
-            #theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
-            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
-        bds = sop.Bounds(np.zeros_like(theta0),np.inf*np.ones_like(theta0))
-#         bds.ub[4] = 0
-        bds.lb[-4:-1] = mmin
-        bds.ub[-4:-1] = mmax
-        bds.ub[-8:-4] = smax
-        bds.ub[4] = 0
+            theta0 = self.initialize(delta0=delta0)
+
+        self.theta0 = theta0
+        
+        bds = self.bound()
         
         if not self.norm_top:
             bds.ub[3] = 0
@@ -384,84 +517,61 @@ class ayaz_model(object):
         if res.success:
             self.theta = res.x
             self.cost = res.fun
-            self.modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
-            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+            self.modeled = self.predict(self.theta)#nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
+            #self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
+            self.fn = lambda c,d: self.fn_theta(c,d,self.theta)
             self.c50 = self.theta[5]**(-1/self.theta[-3])
             self.c50top = self.theta[3]**(-1/self.theta[-3])
             self.c50bottom = self.theta[6]**(-1/self.theta[-3])
         else:
             print(str((itype,iexpt))+' unsuccessful')
 
-class ayaz_ori_model(object):
-    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
-        self.data = data
-        self.usize = usize        
-        self.ucontrast = ucontrast
+class ayaz_opto_model(ayaz_model):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,
+            ulight=np.arange(2),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
+        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,
+            theta=theta,delta0=delta0,two_n=two_n,run_fitting=False)
+        self.ulight = ulight
+        self.nlight = len(ulight)
+        self.fit()
+    def initialize(self,delta0=0):
+        theta0 = super().initialize(delta0=delta0)
+        theta0 = np.concatenate((theta0,(0,)),axis=0)
+        return theta0
+    def bound(self):
+        bds = super().bound()
+        bds.lb[15] = -1
+        bds.ub[15] = np.inf
+        return bds
+    def fn_theta(self,c,d,theta):
+        theta_light = theta[-1]
+        r0 = theta[0]
+        no_opto_pred = super().fn_theta(c,d,theta[:-1]) - r0 # baseline subtracted prediction
+        opto_pred = np.tile(no_opto_pred[:,:,np.newaxis],(1,1,self.nlight))
+        opto_mult = np.array((1,1/(1 + theta_light)))[np.newaxis,np.newaxis,:]
+        opto_pred = opto_pred*opto_mult
+        opto_pred = opto_pred + r0
+        return opto_pred
+
+    #def predict(self,theta):
+    #    theta_light = theta[-1]
+    #    r0 = theta[0]
+    #    no_opto_pred = super().predict(theta[:-1]) - r0 # baseline subtracted prediction
+    #    opto_pred = np.tile(no_opto_pred[:,:,np.newaxis],(1,1,self.nlight))
+    #    opto_mult = np.array((1,1/(1 + theta_light)))[np.newaxis,np.newaxis,:]
+    #    opto_pred = opto_pred*opto_mult
+    #    opto_pred = opto_pred + r0
+    #    return opto_pred
+
+class ayaz_ori_model(ayaz_model):
+    def __init__(self,data,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,
+            uangle=np.arange(0,360,45),norm_top=False,norm_bottom=False,theta0=None,theta=None,delta0=0,two_n=False):
+        super().__init__(data,usize=usize,ucontrast=ucontrast,norm_top=norm_top,norm_bottom=norm_bottom,theta0=theta0,
+            theta=theta,delta0=delta0,two_n=two_n)
         self.uangle = uangle
-        self.norm_top = norm_top
-        self.norm_bottom = norm_bottom
-        if not two_n:
-            self.base_fn = nub_utils.ayaz_model_div_ind_n_offset
-        else:
-            self.base_fn = nub_utils.ayaz_model_div_ind_n_pm_offset
-        if len(data.shape)==2:
-            self.data = self.data[np.newaxis]
-        assert(self.data.shape[1]==len(usize))
-        assert(self.data.shape[2]==len(ucontrast))
-        if theta is None:
-            self.fit(theta0=theta0,delta0=delta0)
-        else:
-            self.theta = theta
-            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
-    def fit(self,theta0=None,delta0=0):
-        r0 = np.nanmin(self.data)
-        rd = 100
-        rs = 100
-        sd = 10
-        ss = 60
-        m = 1
-        n = 1#2
-        delta = delta0
-        mmin = 0.5
-        mmax = 5
-        smax = 180
-            
-        def cost(theta):
-            modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,theta,fn=self.base_fn)
-            non_nan = ~np.isnan(self.data)
-            return np.sum((modeled[np.newaxis] - self.data)[non_nan]**2)
-        
-        if theta0 is None:
-            #theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,1,2,delta))
-            theta0 = np.array((r0,0,rd,rs,0,rd,rs,sd,ss,sd,ss,m,n,n,delta))
-        bds = sop.Bounds(np.zeros_like(theta0),np.inf*np.ones_like(theta0))
-#         bds.ub[4] = 0
-        bds.lb[-4:-1] = mmin
-        bds.ub[-4:-1] = mmax
-        bds.ub[-8:-4] = smax
-        bds.ub[4] = 0
-        
-        if not self.norm_top:
-            bds.ub[3] = 0
-            theta0[3] = 0
-        
-        if not self.norm_bottom:
-            bds.ub[6] = 0
-            theta0[6] = 0
-            
-        res = sop.minimize(cost,theta0,method='L-BFGS-B',bounds=bds,jac=grad(cost))
-        if res.success:
-            self.theta = res.x
-            self.cost = res.fun
-            self.modeled = nub_utils.ayaz_like_theta(self.ucontrast,self.usize,self.theta,fn=self.base_fn)
-            self.fn = lambda c,d: nub_utils.ayaz_like_theta(c,d,self.theta,fn=self.base_fn)
-            self.c50 = self.theta[5]**(-1/self.theta[-3])
-            self.c50top = self.theta[3]**(-1/self.theta[-3])
-            self.c50bottom = self.theta[6]**(-1/self.theta[-3])
-        else:
-            print(str((itype,iexpt))+' unsuccessful')
 
-def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,deriv=False,deriv_axis=2):
+def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4],ninterp=101,usize=np.array((5,8,13,22,36,60)),
+        ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,deriv=False,deriv_axis=2):
     ucontrast_interp = np.linspace(0,1,ninterp)
     this_nsize = len(these_sizes)
     this_ucontrast = ucontrast_interp
@@ -508,7 +618,8 @@ def plot_interp_contrast_tuning(ams=None,data=None,theta=None,these_sizes=[0,2,4
         plt.gca().set_ylim(bottom=0)
     plt.tight_layout()
 
-def plot_interp_size_tuning(ams=None,data=None,theta=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
+def plot_interp_size_tuning(ams=None,data=None,theta=None,these_contrasts=[1,3,5],ninterp=101,usize=np.array((5,8,13,22,36,60)),
+        ucontrast=np.array((0,6,12,25,50,100))/100,colors=None,error_type='bs',deriv=False,deriv_axis=1,sub=False,two_n=False):
     usize_interp = np.linspace(0,usize[-1],ninterp)
     this_ncontrast = len(these_contrasts)
     this_usize = usize_interp
@@ -559,8 +670,75 @@ def plot_interp_size_tuning(ams=None,data=None,theta=None,these_contrasts=[1,3,5
         plt.gca().set_ylim(bottom=0)
     plt.tight_layout()
 
+def slope_c50_fn(crf,cinterp,thresh=0.5):
+    cslope = np.array([grad(crf)(cc) for cc in cinterp])
+    cmin = np.nanargmin(cslope)
+    cmax = np.nanargmax(cslope)
+    cinfl = cmax+np.where((cslope[cmax:])<slope_thresh*(cslope[cmax]))[0]
+    if cinfl.size:
+        cinfl = cinfl[0]
+        pseudo_c50 = cinterp[cinfl]
+    else:
+        print('could not do!')
+        print(cslope[cmax])
+    return pseudo_c50
+
+def numeric_c50_fn(crf,cinterp,thresh=0.5):
+    # compute a pseudo-c50 by finding the point past the peak slope, 
+    # where the sloep is below a threshold*peak slope
+    cval = np.array([crf(cc) for cc in cinterp])
+    decreasing = (np.diff(cval)<0)
+    if np.any(decreasing):
+        cval = cval[:np.where(decreasing)[0][0]+1]
+    cval_max = np.nanmax(cval)
+    cval_min = cval[0]
+    cinfl = np.where(cval-cval_min>=thresh*(cval_max-cval_min))[0]
+    if cinfl.size:
+        cinfl = cinfl[0]
+        pseudo_c50 = cinterp[cinfl]
+    else:
+        print('could not do!')
+        print(cval_max)
+    return pseudo_c50
+
+def compute_pseudo_c50_fn_size_x_contrast(ams,thresh=0.5,resolution=501,pseudo_c50_fn=slope_c50_fn):
+    if hasattr(ams,'ucontrast'):
+        max_contrast = ams.ucontrast.max()
+    else:
+        max_contrast = ams.c.max()
+    cinterp = np.linspace(0,max_contrast,resolution)
+    if hasattr(ams,'non_nan_rows'):
+        nsize = len(ams.non_nan_rows)
+        non_nan_rows = ams.non_nan_rows
+    else:
+        nsize = ams.data.shape[0] 
+        non_nan_rows = np.ones((nsize,),dtype='bool')
+    pseudo_c50 = np.nan*np.ones((nsize,))
+    if hasattr(ams,'usize'):
+        usize = ams.usize
+    else:
+        usize = np.ones((nsize,))
+    for isize in range(nsize):
+        if non_nan_rows[isize]:
+            crf = lambda c: ams.fn(np.array((c,)),usize[isize:isize+1])[0,0]
+            pseudo_c50[isize] = pseudo_c50_fn(crf,cinterp,thresh=thresh)
+            #cslope = np.array([grad(crf)(cc) for cc in cinterp])
+            #cmin = np.nanargmin(cslope)
+            #cmax = np.nanargmax(cslope)
+            #cinfl = cmax+np.where((cslope[cmax:])<slope_thresh*(cslope[cmax]))[0]
+            #if cinfl.size:
+            #    cinfl = cinfl[0]
+            #    pseudo_c50[isize] = cinterp[cinfl]
+            #else:
+            #    print('could not do: ')
+            #    print((isize,cmax))
+            #    print(cslope[cmax])
+        else:
+            pseudo_c50[isize] = np.nan
+    return pseudo_c50
+
 def compute_pseudo_c50(ams_sst,slope_thresh=0.5):
-    cinterp = cinterp = np.linspace(0,1,501)
+    cinterp = np.linspace(0,1,501)
     nexpt = len(ams_sst)
     nlight = len(ams_sst[0])
     nsize = len(ams_sst[0][0].usize)
@@ -592,3 +770,25 @@ def compute_pseudo_c50(ams_sst,slope_thresh=0.5):
                         if cinfl.size:
                             plt.scatter(100*cinterp[cinfl],cslope[cinfl],c=csize[isize])
     return pseudo_c50sst
+
+def plot_parametric_fn_pct_errorbars(x,cpl,fit_fn=fit_opt_params_two_asymptote_fn,plot_fn=two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0):
+    # plot an interpolated function, with dots and percentile errorbars from the original data
+    plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_fn,plot_fn=plot_fn,colors=colors,alpha=alpha,markersize=markersize,delta=delta,errorstyle='pct')
+
+def plot_parametric_fn_errorbars(x,cpl,fit_fn=fit_opt_params_two_asymptote_fn,plot_fn=two_asymptote_fn,colors=None,alpha=1,markersize=None,delta=0,errorstyle='pct'):
+    # plot an interpolated function, with dots and errorbars from the original data
+    if errorstyle == 'pct':
+        mean_fn = lambda y: np.nanpercentile(y,50,axis=0)
+    elif errorstyle == 'bs':
+        mean_fn = lambda y: ut.bootstrap(y,fn=np.nanmean,axis=0,pct=(50,))[0]
+    xinterp = np.linspace(x.min(),x.max(),101)
+    if colors is None:
+        colors = plt.cm.viridis(np.linspace(0,1,cpl.shape[1]))
+    for iconn in range(cpl.shape[1]):
+        params,_ = fit_opt_params_two_asymptote_fn(x,mean_fn(cpl[:,iconn])[np.newaxis])
+        to_plot = two_asymptote_fn(xinterp,*params[0])
+        plt.plot(xinterp,to_plot,c=colors[iconn],alpha=alpha)
+    if errorstyle == 'pct':
+        ut.plot_pct_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
+    elif errorstyle=='bs':
+        ut.plot_bootstrapped_errorbars_hillel(x,cpl,delta=delta,pct=(16,84),colors=colors,linewidth=0,alpha=alpha,markersize=markersize)
