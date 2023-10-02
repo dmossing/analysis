@@ -20,7 +20,7 @@ import scipy.optimize as sop
 import pdb
 import sklearn
 from autograd import elementwise_grad as egrad
-import naka_rushton_analysis as nra
+#import naka_rushton_analysis as nra
 import sim_utils
 
 blcutoff = 1
